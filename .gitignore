@@ -11,3 +11,6 @@ desktop.ini
 
 # Temporary & Log files
 *.log
+
+# Reference materials
+reference_screenshots/
