@@ -1,0 +1,2195 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autonomous Bottle-Cap Sorting Machine by Neil, Kahan and Shourya</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              orange: '#ff6b00',
+              cyan: '#00d2ff',
+              emerald: '#10b981',
+              dark: '#0a0d14',
+              card: '#111622',
+              cardhover: '#161e30',
+              border: 'rgba(255, 255, 255, 0.08)'
+            }
+          },
+          fontFamily: {
+            sans: ['Outfit', 'Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-[#0a0d14] text-slate-100 min-h-screen">
+
+  <!-- ==========================================
+       NAVIGATION BAR
+       ========================================== -->
+  <header class="sticky top-0 z-40 bg-[#0a0d14]/90 backdrop-blur-md border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-bold">
+          <i data-lucide="cpu" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-orange-400 bg-clip-text text-transparent">
+              CapSorter <span class="text-xs font-mono uppercase text-orange-400 px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/30">AutoRobotics</span>
+            </span>
+            <span class="text-xs font-mono text-slate-400 hidden sm:inline">• by Neil, Kahan and Shourya</span>
+          </div>
+          <div class="flex items-center gap-2 text-[11px] text-slate-400">
+            <span class="pulse-dot bg-emerald-400"></span>
+            <span>100% OFFLINE • DUAL-CONTROLLER</span>
+            <span class="text-slate-500 sm:hidden">• by Neil, Kahan and Shourya</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nav Links -->
+      <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
+        <a href="#overview" class="hover:text-orange-400 transition-colors">Overview</a>
+        <a href="#architecture" class="hover:text-orange-400 transition-colors">Architecture</a>
+        <a href="#mechanical" class="hover:text-orange-400 transition-colors">Mechanics</a>
+        <a href="#vision" class="hover:text-orange-400 transition-colors">Vision</a>
+        <a href="#electrical" class="hover:text-orange-400 transition-colors">Electrical</a>
+        <a href="#simulator" class="hover:text-cyan-400 transition-colors flex items-center gap-1.5 text-cyan-400">
+          <i data-lucide="play-circle" class="w-4 h-4"></i> Simulator
+        </a>
+        <a href="#bom" class="hover:text-orange-400 transition-colors">BOM</a>
+        <a href="#code" class="hover:text-orange-400 transition-colors">Firmware</a>
+      </nav>
+
+      <!-- CTA Buttons -->
+      <div class="flex items-center gap-3">
+        <button class="btn-open-poster px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-all">
+          <i data-lucide="file-image" class="w-4 h-4 text-orange-400"></i>
+          <span>Poster Diagram</span>
+        </button>
+        <a href="#simulator" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25 flex items-center gap-1.5 transition-all">
+          <i data-lucide="play" class="w-3.5 h-3.5"></i>
+          <span>Run Demo</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================
+       HERO SECTION
+       ========================================== -->
+  <section class="relative pt-12 pb-16 overflow-hidden">
+    <!-- Ambient Glow effects -->
+    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-orange-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+    <div class="absolute top-1/3 right-10 w-[400px] h-[300px] bg-cyan-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      
+      <div class="flex flex-col lg:flex-row items-center gap-12">
+        <!-- Hero Left Text -->
+        <div class="flex-1 text-center lg:text-left">
+          <div class="flex flex-wrap items-center justify-center lg:justify-start gap-2.5 mb-4">
+            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-orange-500/20 via-orange-500/15 to-amber-500/20 border border-orange-500/40 text-orange-300 text-xs font-mono font-bold uppercase tracking-wider shadow-md shadow-orange-500/10">
+              <i data-lucide="user-check" class="w-4 h-4 text-orange-400"></i>
+              <span>Made by Neil Shettigar</span>
+            </div>
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs font-mono uppercase tracking-wider">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span>Embedded Robotics Engineering Spec</span>
+            </div>
+          </div>
+          
+          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.1] mb-4">
+            Autonomous Bottle-Cap <br>
+            <span class="bg-gradient-to-r from-orange-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent">
+              Sorting Machine
+            </span>
+          </h1>
+
+          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 font-mono text-sm font-semibold mb-6">
+            <i data-lucide="code" class="w-4 h-4 text-orange-400"></i>
+            <span>Made by Neil Shettigar</span>
+          </div>
+
+          <p class="text-base sm:text-lg text-slate-300 max-w-2xl mb-8 leading-relaxed">
+            A vision-guided Cartesian pick-and-place robot featuring a dual-controller architecture: 
+            <strong class="text-cyan-300">Teensy 4.1</strong> edge computer vision, 
+            <strong class="text-emerald-300">Arduino Mega 2560</strong> real-time motion control, 
+            and <strong class="text-orange-300">ESP32-CAM</strong> acquisition. Operates 100% offline with fail-safe recovery.
+          </p>
+
+          <!-- Key Metrics Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
+              <span class="block text-xs font-mono text-slate-400">ENVELOPE</span>
+              <span class="text-lg font-bold text-white font-mono">500×500 mm</span>
+              <span class="text-[11px] text-orange-400 block">Height: 350-500mm</span>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
+              <span class="block text-xs font-mono text-slate-400">GRID WORKSPACE</span>
+              <span class="text-lg font-bold text-white font-mono">300×300 mm</span>
+              <span class="text-[11px] text-cyan-400 block">10×10 (30mm cells)</span>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
+              <span class="block text-xs font-mono text-slate-400">CYCLE TIME</span>
+              <span class="text-lg font-bold text-white font-mono">~4–6s / cap</span>
+              <span class="text-[11px] text-emerald-400 block">4 Color Sorting</span>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
+              <span class="block text-xs font-mono text-slate-400">CONNECTIVITY</span>
+              <span class="text-lg font-bold text-white font-mono">0% Cloud</span>
+              <span class="text-[11px] text-amber-400 block">Air-gapped Edge</span>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex flex-wrap items-center justify-center lg:justify-start gap-4">
+            <a href="#simulator" class="px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold flex items-center gap-2 shadow-lg shadow-orange-500/30 transition-all">
+              <i data-lucide="play" class="w-4 h-4"></i>
+              <span>Launch 2D Gantry Simulator</span>
+            </a>
+            <button class="btn-open-poster px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold border border-white/10 flex items-center gap-2 transition-all">
+              <i data-lucide="maximize-2" class="w-4 h-4 text-orange-400"></i>
+              <span>Open Master Infographic</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Hero Right: Interactive 3D Model Poster Preview -->
+        <div class="flex-1 w-full max-w-lg lg:max-w-none">
+          <div class="tech-card p-2 relative group cursor-pointer btn-open-poster">
+            <div class="relative overflow-hidden rounded-lg">
+              <img src="assets/system_poster.jpg" alt="Autonomous Bottle-Cap Sorting Machine Schematic" class="w-full h-auto object-cover transform group-hover:scale-[1.02] transition-transform duration-500">
+              <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-4">
+                <div class="flex items-center justify-between w-full">
+                  <div>
+                    <span class="text-xs font-mono text-orange-400 uppercase tracking-wider block">Full Architecture Poster</span>
+                    <span class="text-sm font-bold text-white">Click to inspect high-resolution diagram</span>
+                  </div>
+                  <span class="p-2 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/40">
+                    <i data-lucide="zoom-in" class="w-4 h-4"></i>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 01: SYSTEM OVERVIEW & 8 OBJECTIVES
+       ========================================== -->
+  <section id="overview" class="py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">01 / Functional Scope</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">System Overview & Objectives</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          The machine solves the classic automated bin-picking challenge with low-cost components, guaranteed offline uptime, and localized recovery.
+        </p>
+      </div>
+
+      <!-- 8 Core Objectives Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 mb-4">
+            <i data-lucide="box" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">500×500×500 mm Envelope</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Compact self-contained tabletop footprint constructed with 2020 aluminum extrusions and rigid 3D printed brackets.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
+            <i data-lucide="disc" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Standard Bottle Caps</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Engineered to handle common plastic beverage bottle caps with outer diameter between Ø28 mm and Ø32 mm.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-4">
+            <i data-lucide="grid" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">300×300 mm Grid Workspace</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            10 × 10 sorting grid (30 mm pitch) with matte neutral background and corner calibration markers.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4">
+            <i data-lucide="eye" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Automated Color & Position</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Embedded computer vision detects RGB/HSV color masks, calculates centroids, and maps pixels to millimeters.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 mb-4">
+            <i data-lucide="move" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Cartesian XY + Z Gripper</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Two NEMA 17 stepper motors on GT2 belts move the gantry; two MG90S metal-gear servos control vertical stroke and jaws.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
+            <i data-lucide="layers" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Designated Color Bins</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Four color-coded bins (Red, Yellow, Green, Blue) positioned outside the active grid area for unobstructed sorting.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-4">
+            <i data-lucide="wifi-off" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Zero Cloud / Air-Gapped</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Requires no laptop, Wi-Fi, internet connection, or external PC. All image processing executes locally on Teensy 4.1.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-4">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Fail-Safe Comms Recovery</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            If UART communication drops mid-pick, the Mega autonomously finishes depositing the held cap, retracts Z, and parks safely.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 02: DUAL-CONTROLLER ARCHITECTURE
+       ========================================== -->
+  <section id="architecture" class="py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="mb-12">
+        <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">02 / Controller Separation</span>
+        <h2 class="text-3xl sm:text-4xl font-bold text-white">System Architecture & Responsibilities</h2>
+        <p class="text-slate-400 text-sm max-w-2xl mt-2">
+          By segregating image processing from hard-real-time motor step generation, the system guarantees jitter-free stepper pulse timing and instant emergency-stop reaction.
+        </p>
+      </div>
+
+      <!-- Responsibilities Table -->
+      <div class="tech-card mb-10 overflow-hidden">
+        <div class="p-4 bg-slate-900/60 border-b border-white/5 flex items-center justify-between">
+          <span class="font-bold text-sm text-slate-200 flex items-center gap-2">
+            <i data-lucide="sliders" class="w-4 h-4 text-orange-400"></i>
+            Hardware Responsibilities Matrix
+          </span>
+          <span class="text-xs font-mono text-slate-400">5 Distinct Hardware Layers</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Controller / IC</th>
+                <th>Processor Specs</th>
+                <th>Primary Responsibility</th>
+                <th>Interface Bus</th>
+                <th>Operating Voltage</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-bold text-orange-400">ESP32-CAM</td>
+                <td class="font-mono text-xs">Xtensa LX6 @ 240 MHz + OV2640</td>
+                <td>Image acquisition of the 300×300 mm board (QVGA 320×240 RGB565 / JPEG). Captures on command.</td>
+                <td class="font-mono text-xs text-cyan-300">UART2 / SPI</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">3.3V Logic</span></td>
+              </tr>
+              <tr>
+                <td class="font-bold text-cyan-400">Teensy 4.1</td>
+                <td class="font-mono text-xs">ARM Cortex-M7 @ 600 MHz (1 MB RAM)</td>
+                <td>Embedded image processing, HSV colour segmentation, contour detection, planar homography, and sorting plan generation.</td>
+                <td class="font-mono text-xs text-cyan-300">UART1 & Serial2</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">3.3V Logic</span></td>
+              </tr>
+              <tr>
+                <td class="font-bold text-emerald-400">Arduino Mega 2560</td>
+                <td class="font-mono text-xs">ATmega2560 @ 16 MHz</td>
+                <td>Deterministic motion control, step pulse generation, homing routines, limit switch ISR, servo sequencing, and safety watchdog.</td>
+                <td class="font-mono text-xs text-emerald-300">UART1 & I2C</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-300 border border-amber-500/30">5V Logic</span></td>
+              </tr>
+              <tr>
+                <td class="font-bold text-purple-400">PCA9685</td>
+                <td class="font-mono text-xs">16-Channel 12-Bit PWM (I2C)</td>
+                <td>Generates jitter-free 50 Hz PWM timing for the two MG90S servos (Z-axis linkage & gripper jaws).</td>
+                <td class="font-mono text-xs text-purple-300">I2C (SDA/SCL)</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Logic / 5V V+</span></td>
+              </tr>
+              <tr>
+                <td class="font-bold text-slate-200">TMC2208 × 2</td>
+                <td class="font-mono text-xs">Trinamic SilentStepStick Driver</td>
+                <td>Drives the X and Y NEMA 17 stepper motors with StealthChop2 silence, up to 1/16 microstepping.</td>
+                <td class="font-mono text-xs text-slate-300">STEP / DIR / EN</td>
+                <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">12V VMOT / 5V VIO</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Overall Communication Visual Flow (matching Ref3 style) -->
+      <div class="tech-card p-6 relative">
+        <h3 class="text-sm font-mono text-orange-400 uppercase tracking-wider mb-6 flex items-center gap-2">
+          <i data-lucide="git-commit" class="w-4 h-4"></i>
+          Inter-Controller Communication Architecture
+        </h3>
+
+        <div class="flex flex-col items-center gap-4 max-w-2xl mx-auto">
+          
+          <!-- Node 1: ESP32-CAM -->
+          <div class="w-full p-4 rounded-xl bg-slate-900 border border-slate-700/60 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 shrink-0">
+              <i data-lucide="camera" class="w-6 h-6"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white text-base">ESP32-CAM (OV2640)</span>
+                <span class="badge-pill badge-orange text-[10px]">Image Acquisition</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">Captures QVGA 320×240 RGB565 frames of the sorting workspace</p>
+            </div>
+          </div>
+
+          <!-- Bus 1 -->
+          <div class="flex flex-col items-center text-slate-500 text-xs font-mono py-1">
+            <i data-lucide="arrow-down-up" class="w-4 h-4 text-orange-400"></i>
+            <span class="text-[11px] text-slate-400">Wired UART2 (921,600 Baud) • 3.3V Logic • Image Packets + Checksum</span>
+          </div>
+
+          <!-- Node 2: Teensy 4.1 -->
+          <div class="w-full p-4 rounded-xl bg-slate-900 border-2 border-emerald-500/40 glow-emerald flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <i data-lucide="cpu" class="w-6 h-6"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white text-base">Teensy 4.1 (600 MHz Cortex-M7)</span>
+                <span class="badge-pill badge-green text-[10px]">Vision & Planning</span>
+              </div>
+              <p class="text-xs text-slate-300 mt-0.5">Image decoding → Colour segmentation → Cap centre detection → Planar homography → Sorting plan</p>
+            </div>
+          </div>
+
+          <!-- Bus 2 with Level Shifter -->
+          <div class="flex flex-col items-center text-slate-500 text-xs font-mono py-1">
+            <i data-lucide="arrow-down-up" class="w-4 h-4 text-cyan-400"></i>
+            <span class="text-[11px] text-cyan-300 font-semibold">UART1 with 3.3V ⇄ 5V Logic Level Shifter (115,200 Baud)</span>
+            <span class="text-[10px] text-slate-400">Validated Sorting Instructions, ACK/NACK Packets, Safe Recovery Heartbeat</span>
+          </div>
+
+          <!-- Node 3: Arduino Mega 2560 -->
+          <div class="w-full p-4 rounded-xl bg-slate-900 border border-slate-700/60 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+              <i data-lucide="bot" class="w-6 h-6"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white text-base">Arduino Mega 2560</span>
+                <span class="badge-pill badge-cyan text-[10px]">Motion & Safety</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">Coordinates → STEP/DIR Pulses → Servo PWM → Pickup → Bin Placement → Fault Recovery</p>
+            </div>
+          </div>
+
+          <!-- Actuator Outputs -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full mt-2">
+            <div class="p-3 rounded-lg bg-slate-800/60 border border-white/5 flex items-center gap-3">
+              <i data-lucide="zap" class="w-4 h-4 text-orange-400"></i>
+              <div class="text-xs">
+                <strong class="text-slate-200 block">X & Y Stepper Motors</strong>
+                <span class="text-slate-400">2× NEMA 17 via TMC2208 (STEP/DIR)</span>
+              </div>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-800/60 border border-white/5 flex items-center gap-3">
+              <i data-lucide="grip" class="w-4 h-4 text-purple-400"></i>
+              <div class="text-xs">
+                <strong class="text-slate-200 block">Z-Axis Lift & Gripper Jaws</strong>
+                <span class="text-slate-400">2× MG90S via PCA9685 (I2C PWM)</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Design Rationale Callout -->
+        <div class="mt-6 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+          <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400 shrink-0 mt-0.5"></i>
+          <div class="text-xs text-slate-300 leading-relaxed">
+            <strong class="text-amber-300 block mb-1">Key Architectural Rule:</strong>
+            The ESP32-CAM only captures and transfers raw frames. The Teensy 4.1 performs all image calculations and plan generation. The Mega has zero vision overhead, focusing 100% on motion timing, limit switches, and physical safety.
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 03: MECHANICAL DESIGN & WORKSPACE
+       ========================================== -->
+  <section id="mechanical" class="py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">03 / Gantry & Kinematics</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Mechanical Design & Dimensions</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          A rigid, moving-bridge Cartesian gantry with guided vertical slider and parallel dual-finger gripper.
+        </p>
+      </div>
+
+      <!-- Main CAD & Layout Showcase -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
+        
+        <!-- CAD Render Image -->
+        <div class="lg:col-span-7 tech-card p-3">
+          <div class="relative rounded-lg overflow-hidden border border-white/5 bg-black/40">
+            <img src="assets/images/gantry_3axis_cad.png" alt="Cartesian 3-Axis Robot CAD Design" class="w-full h-auto object-contain max-h-[380px] mx-auto">
+            <div class="absolute bottom-2 left-2 px-2.5 py-1 rounded bg-black/70 backdrop-blur-sm text-[11px] font-mono text-slate-300 border border-white/10">
+              Moving-Bridge Cartesian Structure (500×500 mm Base)
+            </div>
+          </div>
+        </div>
+
+        <!-- Proposed Dimensions Table -->
+        <div class="lg:col-span-5 tech-card p-5 flex flex-col justify-between">
+          <div>
+            <h3 class="font-bold text-white text-base mb-3 flex items-center gap-2">
+              <i data-lucide="ruler" class="w-4 h-4 text-orange-400"></i>
+              Dimensional Engineering Targets
+            </h3>
+            <div class="space-y-2.5 text-xs">
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Overall Machine Envelope</span>
+                <span class="font-mono font-semibold text-white">500 × 500 × 500 mm</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Sorting Board Workspace</span>
+                <span class="font-mono font-semibold text-white">300 × 300 mm</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Grid Discretization</span>
+                <span class="font-mono font-semibold text-white">10 × 10 cells (100 positions)</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Grid Cell Pitch</span>
+                <span class="font-mono font-semibold text-white">30 × 30 mm</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Cap Outer Diameter</span>
+                <span class="font-mono font-semibold text-orange-400">Ø28 – 32 mm</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Z-Axis Vertical Stroke</span>
+                <span class="font-mono font-semibold text-cyan-400">30 – 50 mm</span>
+              </div>
+              <div class="flex justify-between py-1.5">
+                <span class="text-slate-400">Designated Colour Bins</span>
+                <span class="font-mono font-semibold text-emerald-400">4 Bins (External to Board)</span>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 p-3 rounded-lg bg-slate-900 border border-white/5 text-[11px] text-slate-400">
+            <strong>Travel Budget Note:</strong> Axis usable travel must account for carriage width, belt tensioner clearance, and reach into bin disposal slots.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 4 Axis Detailed Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        
+        <!-- X Axis Card -->
+        <div class="tech-card p-4 flex flex-col">
+          <div class="h-36 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3 flex items-center justify-center">
+            <img src="assets/images/axis_x_vslot.png" alt="X-Axis V-Slot Actuator" class="h-full object-contain p-2">
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-white text-base">X-Axis Linear Drive</h4>
+            <span class="badge-pill badge-orange text-[10px]">300mm Travel</span>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-1.5 flex-1">
+            <li>• 1× 40mm NEMA 17 (1.3 A / phase)</li>
+            <li>• 1× TMC2208 driver (StealthChop2)</li>
+            <li>• GT2 timing belt, 6 mm width</li>
+            <li>• 20-tooth GT2 pulley (40 mm/rev)</li>
+            <li>• Linear guide / V-wheel carriage</li>
+          </ul>
+        </div>
+
+        <!-- Y Axis Card -->
+        <div class="tech-card p-4 flex flex-col">
+          <div class="h-36 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3 flex items-center justify-center">
+            <img src="assets/images/axis_y_gantry.png" alt="Y-Axis Moving Bridge" class="h-full object-contain p-2">
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-white text-base">Y-Axis Moving Bridge</h4>
+            <span class="badge-pill badge-cyan text-[10px]">300mm Travel</span>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-1.5 flex-1">
+            <li>• 1× Matching 40mm NEMA 17</li>
+            <li>• 1× TMC2208 stepper driver</li>
+            <li>• Synchronized belt drive system</li>
+            <li>• Rigid cross-beam supporting X-carriage</li>
+            <li>• Low-friction dual V-slot rails</li>
+          </ul>
+        </div>
+
+        <!-- Z Axis Card -->
+        <div class="tech-card p-4 flex flex-col">
+          <div class="h-36 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3 flex items-center justify-center">
+            <img src="assets/images/axis_z_slider.png" alt="Z-Axis Vertical Slider" class="h-full object-contain p-2">
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-white text-base">Z-Axis Linkage</h4>
+            <span class="badge-pill badge-green text-[10px]">40mm Stroke</span>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-1.5 flex-1">
+            <li>• 1× MG90S metal-gear micro servo</li>
+            <li>• Guided linear vertical slider</li>
+            <li>• Kinematic crank-slider linkage</li>
+            <li>• Spring-assisted counterbalance</li>
+            <li>• Ultra-lightweight 3D printed carrier</li>
+          </ul>
+        </div>
+
+        <!-- Gripper Card -->
+        <div class="tech-card p-4 flex flex-col">
+          <div class="h-36 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3 flex items-center justify-center">
+            <img src="assets/images/gripper_servo_stage3.png" alt="Servo Parallel Gripper" class="h-full object-contain p-2">
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-white text-base">Parallel Gripper</h4>
+            <span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">26-36mm Gap</span>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-1.5 flex-1">
+            <li>• 1× MG90S metal-gear micro servo</li>
+            <li>• Geared dual parallel fingers</li>
+            <li>• TPU / silicone high-friction grip pads</li>
+            <li>• Open width: ~36 mm, Clamped: ~26 mm</li>
+            <li>• Tuned torque compliance for plastic caps</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Sorting Board & Caps Overview Banner -->
+      <div class="tech-card p-6 flex flex-col md:flex-row items-center gap-6">
+        <div class="w-full md:w-1/3 rounded-lg overflow-hidden border border-white/5">
+          <img src="assets/images/sorting_bins_caps.png" alt="Bottle Caps in Sorting Bins" class="w-full h-44 object-cover">
+        </div>
+        <div class="w-full md:w-2/3">
+          <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+            <i data-lucide="layout-grid" class="w-5 h-5 text-orange-400"></i>
+            Board & Sorting Bin Layout
+          </h3>
+          <p class="text-xs text-slate-300 leading-relaxed mb-4">
+            The workspace consists of a 300 × 300 mm matte white baseplate. White surface material eliminates specular reflection and maximizes color contrast against standard bottle caps. Four collection bins (Red, Yellow, Green, Blue) sit adjacent to the board along the positive X rail, allowing the gantry to deposit items without traversing back through active board space.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <span class="cap-badge-red text-xs px-2.5 py-1 rounded font-mono">Bin 1: Red Caps</span>
+            <span class="cap-badge-yellow text-xs px-2.5 py-1 rounded font-mono">Bin 2: Yellow Caps</span>
+            <span class="cap-badge-green text-xs px-2.5 py-1 rounded font-mono">Bin 3: Green Caps</span>
+            <span class="cap-badge-blue text-xs px-2.5 py-1 rounded font-mono">Bin 4: Blue Caps</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 04: EDGE VISION PIPELINE
+       ========================================== -->
+  <section id="vision" class="py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">04 / Embedded Image Processing</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Edge Vision & Coordinate Pipeline</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Running on the Teensy 4.1's 600 MHz ARM Cortex-M7 with 1 MB RAM. Zero external cloud servers.
+        </p>
+      </div>
+
+      <!-- Memory Budget & Transfer Analysis -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        
+        <div class="tech-card p-5">
+          <span class="text-xs font-mono text-orange-400 uppercase tracking-wider block mb-1">Frame Buffer Size</span>
+          <h3 class="text-2xl font-bold text-white font-mono mb-2">153,600 Bytes</h3>
+          <p class="text-xs text-slate-400">
+            QVGA Resolution: <span class="font-mono text-slate-200">320 × 240 pixels</span>.<br>
+            Colour Depth: <span class="font-mono text-slate-200">RGB565 (2 bytes / pixel)</span>.<br>
+            Formula: <span class="font-mono text-cyan-300">320 × 240 × 2 = 150 KiB</span>.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <span class="text-xs font-mono text-cyan-400 uppercase tracking-wider block mb-1">Teensy 4.1 RAM Headroom</span>
+          <h3 class="text-2xl font-bold text-white font-mono mb-2">1,024 KiB Total</h3>
+          <p class="text-xs text-slate-400">
+            Raw frame consumes only <span class="text-emerald-400 font-bold">14.6%</span> of internal SRAM.<br>
+            Remaining <span class="font-mono text-slate-200">>800 KiB</span> handles HSV mask buffers, connected-component labeling, and sorting queues without heap fragmentation.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <span class="text-xs font-mono text-emerald-400 uppercase tracking-wider block mb-1">UART Wired Transfer</span>
+          <h3 class="text-2xl font-bold text-white font-mono mb-2">921,600 Baud</h3>
+          <p class="text-xs text-slate-400">
+            Effective transfer time: <span class="font-mono text-slate-200">~1.67 seconds</span> per raw frame.<br>
+            Framed with custom packet header, length word, and CRC16 checksum for transmission integrity.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- Interactive 4-Stage Pipeline Demonstrator (matching poster box 07) -->
+      <div class="tech-card p-6 mb-12">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-white/5 gap-4">
+          <div>
+            <h3 class="font-bold text-lg text-white flex items-center gap-2">
+              <i data-lucide="scan" class="w-5 h-5 text-orange-400"></i>
+              Interactive Vision Pipeline Inspection
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Explore each stage of the vision pipeline executing on the Teensy 4.1 Cortex-M7.</p>
+          </div>
+          <!-- Step Selector Tabs -->
+          <div class="flex flex-wrap gap-2">
+            <button data-step="1" class="vision-step-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border bg-orange-500/20 text-orange-400 border-orange-500/40">
+              1. Input Image
+            </button>
+            <button data-step="2" class="vision-step-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border bg-slate-800/40 text-slate-400 border-slate-700/40">
+              2. HSV Thresholding
+            </button>
+            <button data-step="3" class="vision-step-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border bg-slate-800/40 text-slate-400 border-slate-700/40">
+              3. Contour Detection
+            </button>
+            <button data-step="4" class="vision-step-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border bg-slate-800/40 text-slate-400 border-slate-700/40">
+              4. Grid Mapping (mm)
+            </button>
+          </div>
+        </div>
+
+        <!-- Vision Panels -->
+        <div class="mt-6">
+          
+          <!-- Panel 1: Input Image -->
+          <div id="vision-panel-1" class="vision-step-panel">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="p-6 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center min-h-[260px] relative">
+                <!-- Visual mock of board with 4 caps -->
+                <div class="w-64 h-64 bg-[#1e232e] border border-slate-600 rounded-lg p-4 grid grid-cols-2 gap-8 items-center justify-center">
+                  <div class="w-14 h-14 rounded-full bg-red-600 shadow-lg shadow-red-600/50 border-2 border-red-400 mx-auto flex items-center justify-center text-[10px] font-mono text-white">RED</div>
+                  <div class="w-14 h-14 rounded-full bg-blue-600 shadow-lg shadow-blue-600/50 border-2 border-blue-400 mx-auto flex items-center justify-center text-[10px] font-mono text-white">BLUE</div>
+                  <div class="w-14 h-14 rounded-full bg-emerald-600 shadow-lg shadow-emerald-600/50 border-2 border-emerald-400 mx-auto flex items-center justify-center text-[10px] font-mono text-white">GREEN</div>
+                  <div class="w-14 h-14 rounded-full bg-yellow-500 shadow-lg shadow-yellow-500/50 border-2 border-yellow-300 mx-auto flex items-center justify-center text-[10px] font-mono text-slate-900 font-bold">YELLOW</div>
+                </div>
+                <div class="absolute bottom-3 left-3 text-[11px] font-mono text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-white/5">
+                  Raw Frame: 320×240 RGB565 from ESP32-CAM
+                </div>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-white mb-2">Stage 1: Frame Acquisition & Decoding</h4>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                  The ESP32-CAM captures a top-down frame under fixed LED illumination. The raw RGB565 stream is piped over high-speed UART directly into Teensy's pre-allocated DMA ring buffer. A CRC16 check validates frame integrity before parsing begins.
+                </p>
+                <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-cyan-300">
+                  uint16_t pixel = (buf[i] &lt;&lt; 8) | buf[i+1];<br>
+                  uint8_t r = ((pixel >> 11) &amp; 0x1F) * 255 / 31;<br>
+                  uint8_t g = ((pixel >> 5) &amp; 0x3F) * 255 / 63;<br>
+                  uint8_t b = (pixel &amp; 0x1F) * 255 / 31;
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 2: HSV Thresholding -->
+          <div id="vision-panel-2" class="vision-step-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="p-6 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center min-h-[260px] relative">
+                <!-- Visual mock of thresholded channels -->
+                <div class="w-64 h-64 bg-black border border-slate-800 rounded-lg p-4 grid grid-cols-2 gap-8 items-center justify-center">
+                  <div class="w-14 h-14 rounded-full bg-red-500 border-2 border-white mx-auto flex items-center justify-center text-[10px] font-mono text-white">MASK</div>
+                  <div class="w-14 h-14 rounded-full bg-blue-500 border-2 border-white mx-auto flex items-center justify-center text-[10px] font-mono text-white">MASK</div>
+                  <div class="w-14 h-14 rounded-full bg-emerald-500 border-2 border-white mx-auto flex items-center justify-center text-[10px] font-mono text-white">MASK</div>
+                  <div class="w-14 h-14 rounded-full bg-yellow-400 border-2 border-white mx-auto flex items-center justify-center text-[10px] font-mono text-slate-900 font-bold">MASK</div>
+                </div>
+                <div class="absolute bottom-3 left-3 text-[11px] font-mono text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-white/5">
+                  Binary Segmentation Masks (HSV Color Space)
+                </div>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-white mb-2">Stage 2: Robust HSV Color Segmentation</h4>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                  RGB is highly sensitive to subtle illumination fluctuations. Converting to Hue (H), Saturation (S), and Value (V) decouples color tone from brightness. Red requires two hue slices because it wraps around the hue circle:
+                </p>
+                <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-emerald-300 space-y-1">
+                  <div>RED: (H &lt; 10 || H &gt; 170) &amp;&amp; S &gt; 90 &amp;&amp; V &gt; 60</div>
+                  <div>BLUE: (H >= 100 &amp;&amp; H &lt;= 130) &amp;&amp; S &gt; 80</div>
+                  <div>GREEN: (H >= 35 &amp;&amp; H &lt;= 85) &amp;&amp; S &gt; 70</div>
+                  <div>YELLOW: (H >= 20 &amp;&amp; H &lt;= 35) &amp;&amp; S &gt; 90</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 3: Contour Detection -->
+          <div id="vision-panel-3" class="vision-step-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="p-6 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center min-h-[260px] relative">
+                <!-- Visual mock of circles and bounding boxes -->
+                <div class="w-64 h-64 bg-slate-950 border border-slate-700 rounded-lg p-4 grid grid-cols-2 gap-8 items-center justify-center">
+                  <div class="w-14 h-14 rounded-full border-2 border-dashed border-red-400 mx-auto flex items-center justify-center text-[10px] font-mono text-red-300">○ Ø30</div>
+                  <div class="w-14 h-14 rounded-full border-2 border-dashed border-blue-400 mx-auto flex items-center justify-center text-[10px] font-mono text-blue-300">○ Ø30</div>
+                  <div class="w-14 h-14 rounded-full border-2 border-dashed border-emerald-400 mx-auto flex items-center justify-center text-[10px] font-mono text-emerald-300">○ Ø30</div>
+                  <div class="w-14 h-14 rounded-full border-2 border-dashed border-yellow-400 mx-auto flex items-center justify-center text-[10px] font-mono text-yellow-300">○ Ø30</div>
+                </div>
+                <div class="absolute bottom-3 left-3 text-[11px] font-mono text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-white/5">
+                  Morphological Opening & Circularity Gating
+                </div>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-white mb-2">Stage 3: Blob Centroids & Circularity Filter</h4>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                  A 3×3 morphological opening filter removes camera speckle noise. Connected components extract blob area and perimeter. False positives are rejected using a strict isoperimetric circularity test:
+                </p>
+                <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-amber-300">
+                  float circularity = (4.0f * PI * area) / (perimeter * perimeter);<br>
+                  if (circularity &gt; 0.75f &amp;&amp; area &gt; 500 &amp;&amp; area &lt; 2000) {<br>
+                  &nbsp;&nbsp;// Confirmed cap! Compute centroid (cx, cy)<br>
+                  &nbsp;&nbsp;cx = sumX / area; cy = sumY / area;<br>
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 4: Planar Homography -->
+          <div id="vision-panel-4" class="vision-step-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="p-6 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center min-h-[260px] relative">
+                <!-- Visual mock with millimeter coordinates -->
+                <div class="w-64 h-64 bg-slate-900 border border-cyan-500/40 rounded-lg p-4 grid grid-cols-2 gap-8 items-center justify-center relative">
+                  <div class="w-14 h-14 rounded-full bg-red-950 border border-red-500 flex flex-col items-center justify-center text-[9px] font-mono text-red-300">
+                    <span>(52, 48)</span>
+                    <span class="text-[8px] text-slate-400">mm</span>
+                  </div>
+                  <div class="w-14 h-14 rounded-full bg-blue-950 border border-blue-500 flex flex-col items-center justify-center text-[9px] font-mono text-blue-300">
+                    <span>(218, 56)</span>
+                    <span class="text-[8px] text-slate-400">mm</span>
+                  </div>
+                  <div class="w-14 h-14 rounded-full bg-emerald-950 border border-emerald-500 flex flex-col items-center justify-center text-[9px] font-mono text-emerald-300">
+                    <span>(48, 212)</span>
+                    <span class="text-[8px] text-slate-400">mm</span>
+                  </div>
+                  <div class="w-14 h-14 rounded-full bg-yellow-950 border border-yellow-500 flex flex-col items-center justify-center text-[9px] font-mono text-yellow-300">
+                    <span>(220, 206)</span>
+                    <span class="text-[8px] text-slate-400">mm</span>
+                  </div>
+                </div>
+                <div class="absolute bottom-3 left-3 text-[11px] font-mono text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-white/5">
+                  Planar Homography: (u, v) ⟶ (X, Y) Millimeters
+                </div>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-white mb-2">Stage 4: Perspective Distortion Correction</h4>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                  Perspective distortion means that 30 mm at the edge of the lens occupies fewer pixels than at the optical center. Using the 4 corner calibration points of the 300 × 300 mm board, a 3×3 planar homography matrix maps pixel coordinates $(u, v)$ directly to physical gantry coordinates $(X, Y)$ in millimeters.
+                </p>
+                <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-cyan-300">
+                  // Homography transformation:<br>
+                  float W = H[6]*u + H[7]*v + H[8];<br>
+                  float X_mm = (H[0]*u + H[1]*v + H[2]) / W;<br>
+                  float Y_mm = (H[3]*u + H[4]*v + H[5]) / W;
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 05: ELECTRICAL SYSTEM & POWER TREE
+       ========================================== -->
+  <section id="electrical" class="py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">05 / Power & Electronics</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Electrical Architecture & Power Tree</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Strict rail isolation guarantees servo inductive spikes never reset sensitive 3.3V logic or microcontrollers.
+        </p>
+      </div>
+
+      <!-- Power Tree Diagram (matching prompt Section 5) -->
+      <div class="tech-card p-6 mb-12">
+        <h3 class="font-bold text-sm text-orange-400 font-mono uppercase tracking-wider mb-6 flex items-center gap-2">
+          <i data-lucide="git-branch" class="w-4 h-4"></i>
+          12V / 10A (120W) Power Distribution Breakdown
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Branch A: Stepper Motors -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-orange-500/30">
+            <div class="flex items-center justify-between mb-3">
+              <span class="badge-pill badge-orange text-[10px]">Power Branch A</span>
+              <span class="font-mono text-xs font-bold text-orange-400">12V Direct</span>
+            </div>
+            <h4 class="font-bold text-white text-base mb-2">X & Y Stepper Motors</h4>
+            <p class="text-xs text-slate-300 leading-relaxed mb-4">
+              Direct 12V supply routed to both TMC2208 VMOT power inputs, equipped with 100 µF low-ESR decoupling capacitors.
+            </p>
+            <ul class="text-xs text-slate-400 space-y-1 font-mono">
+              <li>• TMC2208 (X-axis) ⟶ NEMA 17</li>
+              <li>• TMC2208 (Y-axis) ⟶ NEMA 17</li>
+              <li>• Fused: 5A fast-blow inline</li>
+            </ul>
+          </div>
+
+          <!-- Branch B: Servos -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-purple-500/30">
+            <div class="flex items-center justify-between mb-3">
+              <span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">Power Branch B</span>
+              <span class="font-mono text-xs font-bold text-purple-400">5V / 5A Buck</span>
+            </div>
+            <h4 class="font-bold text-white text-base mb-2">MG90S Servo Rail</h4>
+            <p class="text-xs text-slate-300 leading-relaxed mb-4">
+              Dedicated high-current buck converter feeds PCA9685 V+ power terminal. Absorbs sudden 1.5A stall current spikes from gripper jaws.
+            </p>
+            <ul class="text-xs text-slate-400 space-y-1 font-mono">
+              <li>• PCA9685 V+ terminal</li>
+              <li>• MG90S #1 (Z-axis linkage)</li>
+              <li>• MG90S #2 (Gripper jaws)</li>
+            </ul>
+          </div>
+
+          <!-- Branch C: Logic -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-cyan-500/30">
+            <div class="flex items-center justify-between mb-3">
+              <span class="badge-pill badge-cyan text-[10px]">Power Branch C</span>
+              <span class="font-mono text-xs font-bold text-cyan-400">5V / 3A Regulated</span>
+            </div>
+            <h4 class="font-bold text-white text-base mb-2">Microcontrollers & Logic</h4>
+            <p class="text-xs text-slate-300 leading-relaxed mb-4">
+              Clean, isolated 5V logic supply powering Arduino Mega, Teensy 4.1 VIN, ESP32-CAM, and PCA9685 VCC chip power.
+            </p>
+            <ul class="text-xs text-slate-400 space-y-1 font-mono">
+              <li>• Arduino Mega 2560 5V/VIN</li>
+              <li>• Teensy 4.1 VIN (3.3V internal LDO)</li>
+              <li>• ESP32-CAM 5V pin</li>
+            </ul>
+          </div>
+
+        </div>
+
+        <!-- Level Shifter Critical Safety Box -->
+        <div class="mt-6 p-4 rounded-xl bg-red-950/40 border border-red-500/40 flex items-start gap-4">
+          <div class="p-2 rounded-lg bg-red-500/20 text-red-400 shrink-0">
+            <i data-lucide="shield-alert" class="w-5 h-5"></i>
+          </div>
+          <div class="text-xs text-slate-300 leading-relaxed">
+            <strong class="text-red-300 text-sm block mb-1">MANDATORY LEVEL SHIFTER WARNING:</strong>
+            The Arduino Mega 2560 operates on <strong>5V logic</strong>. The Teensy 4.1 and ESP32-CAM are strictly <strong>3.3V logic and NOT 5V tolerant</strong>.
+            Connecting Arduino Mega TX1 (5V) directly to Teensy 4.1 RX1 will destroy the Teensy pin. A bidirectional logic level shifter must be installed between Mega Pin 18 (TX1) and Teensy Pin 0 (RX1).
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Searchable & Filterable Pinout Matrix -->
+      <div class="tech-card overflow-hidden">
+        <div class="p-4 bg-slate-900/60 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 class="font-bold text-sm text-white flex items-center gap-2">
+              <i data-lucide="cpu" class="w-4 h-4 text-orange-400"></i>
+              Hardware Pin & Interface Mapping Matrix
+            </h3>
+            <span class="text-xs text-slate-400">Complete pin-level connection specification</span>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="relative">
+              <input id="pinout-search" type="text" placeholder="Search pin, signal..." class="px-3 py-1.5 pl-8 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-orange-500 w-44">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
+            </div>
+            <button data-filter="all" class="pinout-filter-btn active px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/40">
+              All
+            </button>
+            <button data-filter="teensy" class="pinout-filter-btn px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+              Teensy
+            </button>
+            <button data-filter="mega" class="pinout-filter-btn px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+              Mega
+            </button>
+            <button data-filter="tmc2208" class="pinout-filter-btn px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+              TMC2208
+            </button>
+            <button data-filter="pca9685" class="pinout-filter-btn px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+              PCA9685
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto max-h-[460px]">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Subsystem</th>
+                <th>Source Pin</th>
+                <th>Destination Pin</th>
+                <th>Signal Description</th>
+                <th>Voltage Level</th>
+                <th>Safety Notes</th>
+              </tr>
+            </thead>
+            <tbody id="pinout-table-body">
+              <!-- Camera to Teensy -->
+              <tr data-controller="teensy">
+                <td class="font-bold text-orange-400">ESP32-CAM ⟶ Teensy</td>
+                <td class="font-mono text-xs">GPIO13 (TX2)</td>
+                <td class="font-mono text-xs">Teensy Pin 7 (RX2)</td>
+                <td>Image Data Transmission (High Speed)</td>
+                <td><span class="badge-pill bg-slate-800 text-cyan-300 border border-slate-700">3.3V Direct</span></td>
+                <td>Disable SD card interface</td>
+              </tr>
+              <tr data-controller="teensy">
+                <td class="font-bold text-orange-400">ESP32-CAM ⟶ Teensy</td>
+                <td class="font-mono text-xs">GPIO14 (RX2)</td>
+                <td class="font-mono text-xs">Teensy Pin 8 (TX2)</td>
+                <td>Frame Capture Trigger Command</td>
+                <td><span class="badge-pill bg-slate-800 text-cyan-300 border border-slate-700">3.3V Direct</span></td>
+                <td>Common GND required</td>
+              </tr>
+
+              <!-- Teensy to Mega -->
+              <tr data-controller="teensy">
+                <td class="font-bold text-cyan-400">Teensy ⟶ Mega</td>
+                <td class="font-mono text-xs">Teensy Pin 1 (TX1)</td>
+                <td class="font-mono text-xs">Mega Pin 19 (RX1)</td>
+                <td>Sorting Plan Instruction Packets</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">3.3V ⟶ 5V Tolerant</span></td>
+                <td>Mega reads 3.3V HIGH reliably</td>
+              </tr>
+              <tr data-controller="mega">
+                <td class="font-bold text-emerald-400">Mega ⟶ Teensy</td>
+                <td class="font-mono text-xs">Mega Pin 18 (TX1)</td>
+                <td class="font-mono text-xs">Teensy Pin 0 (RX1)</td>
+                <td>Execution ACK & Status Updates</td>
+                <td><span class="badge-pill bg-red-500/20 text-red-300 border border-red-500/40">5V ⟶ Level Shifter ⟶ 3.3V</span></td>
+                <td>MUST use Level Shifter!</td>
+              </tr>
+
+              <!-- Mega to TMC2208 Stepper X -->
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (X)</td>
+                <td class="font-mono text-xs">Mega Pin 2 (or 54)</td>
+                <td class="font-mono text-xs">Driver STEP Pin</td>
+                <td>X-Axis Step Pulse Train</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
+                <td>Up to 20 kHz step rate</td>
+              </tr>
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (X)</td>
+                <td class="font-mono text-xs">Mega Pin 5 (or 55)</td>
+                <td class="font-mono text-xs">Driver DIR Pin</td>
+                <td>X-Axis Direction Toggle</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
+                <td>CW / CCW rotation</td>
+              </tr>
+
+              <!-- Mega to TMC2208 Stepper Y -->
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (Y)</td>
+                <td class="font-mono text-xs">Mega Pin 3 (or 60)</td>
+                <td class="font-mono text-xs">Driver STEP Pin</td>
+                <td>Y-Axis Step Pulse Train</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
+                <td>Moving bridge actuator</td>
+              </tr>
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (Y)</td>
+                <td class="font-mono text-xs">Mega Pin 6 (or 61)</td>
+                <td class="font-mono text-xs">Driver DIR Pin</td>
+                <td>Y-Axis Direction Toggle</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
+                <td>CW / CCW rotation</td>
+              </tr>
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ Both TMC2208</td>
+                <td class="font-mono text-xs">Mega Pin 8 (or 38)</td>
+                <td class="font-mono text-xs">Driver EN Pin</td>
+                <td>Shared Driver Enable (Active LOW)</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Logic</span></td>
+                <td>LOW = Powered, HIGH = Coast</td>
+              </tr>
+
+              <!-- Mega to PCA9685 I2C -->
+              <tr data-controller="pca9685">
+                <td class="font-bold text-purple-400">Mega ⟶ PCA9685</td>
+                <td class="font-mono text-xs">Mega Pin 20 (SDA)</td>
+                <td class="font-mono text-xs">PCA9685 SDA</td>
+                <td>I2C Data Line (400 kHz Fast-Mode)</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Bus</span></td>
+                <td>4.7kΩ pull-up to 5V</td>
+              </tr>
+              <tr data-controller="pca9685">
+                <td class="font-bold text-purple-400">Mega ⟶ PCA9685</td>
+                <td class="font-mono text-xs">Mega Pin 21 (SCL)</td>
+                <td class="font-mono text-xs">PCA9685 SCL</td>
+                <td>I2C Clock Line</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Bus</span></td>
+                <td>Hardware I2C peripheral</td>
+              </tr>
+              <tr data-controller="pca9685">
+                <td class="font-bold text-purple-400">PCA9685 Channel 0</td>
+                <td class="font-mono text-xs">CH0 PWM</td>
+                <td class="font-mono text-xs">MG90S Servo #1</td>
+                <td>Z-Axis Vertical Stroke (Lift/Lower)</td>
+                <td><span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30">50 Hz PWM (5V V+)</span></td>
+                <td>0° (Raised) to 90° (Lowered)</td>
+              </tr>
+              <tr data-controller="pca9685">
+                <td class="font-bold text-purple-400">PCA9685 Channel 1</td>
+                <td class="font-mono text-xs">CH1 PWM</td>
+                <td class="font-mono text-xs">MG90S Servo #2</td>
+                <td>Gripper Jaw Clamp / Release</td>
+                <td><span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30">50 Hz PWM (5V V+)</span></td>
+                <td>Open (36mm) ⟶ Closed (26mm)</td>
+              </tr>
+
+              <!-- Limit Switches -->
+              <tr data-controller="mega">
+                <td class="font-bold text-emerald-400">Limit Switches ⟶ Mega</td>
+                <td class="font-mono text-xs">NC Switch Pins</td>
+                <td class="font-mono text-xs">Mega Pins 22, 23, 24</td>
+                <td>X-Home, Y-Home, Z-Home Inputs</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Internal Pull-Up</span></td>
+                <td>Normally Closed for wire-break safety</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 06: INTERACTIVE 2D SIMULATOR
+       ========================================== -->
+  <section id="simulator" class="py-16 border-t border-white/5 bg-[#0a0e17]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-8">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-xs font-mono uppercase tracking-wider mb-2">
+            <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
+            Live Interactive Simulator
+          </div>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Gantry Pick & Place Simulator</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Click the 300×300 mm grid to add/remove caps, trigger autonomous sorting, and test communication break recovery in real-time.
+        </p>
+      </div>
+
+      <!-- Simulator Container -->
+      <div class="tech-card p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          <!-- Canvas Viewport -->
+          <div class="lg:col-span-8 flex flex-col items-center">
+            <div class="relative w-full max-w-[580px] aspect-[580/500]">
+              <canvas id="simulation-canvas" width="580" height="500" class="w-full h-full block cursor-crosshair"></canvas>
+            </div>
+            <div class="flex items-center justify-between w-full max-w-[580px] mt-3 text-xs text-slate-400 font-mono">
+              <span>Click grid to place cap</span>
+              <span class="text-orange-400">10×10 Grid (30mm cells) • 4 Output Bins</span>
+            </div>
+          </div>
+
+          <!-- Controls & Telemetry Column -->
+          <div class="lg:col-span-4 flex flex-col gap-4">
+            
+            <!-- Controls Card -->
+            <div class="p-4 rounded-xl bg-slate-900 border border-white/10">
+              <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
+                <i data-lucide="sliders" class="w-4 h-4 text-orange-400"></i>
+                Simulation Controls
+              </h3>
+
+              <!-- Color Palette Picker -->
+              <div class="mb-4">
+                <label class="text-xs font-mono text-slate-400 block mb-2">SELECT CAP COLOUR TO PLACE:</label>
+                <div class="grid grid-cols-4 gap-2">
+                  <button data-color="red" class="cap-color-picker ring-2 ring-white py-2 rounded-lg bg-red-600/30 border border-red-500/50 text-red-300 text-xs font-bold hover:bg-red-600/50 transition-all flex items-center justify-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Red
+                  </button>
+                  <button data-color="yellow" class="cap-color-picker py-2 rounded-lg bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 text-xs font-bold hover:bg-yellow-500/50 transition-all flex items-center justify-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span> Ylw
+                  </button>
+                  <button data-color="green" class="cap-color-picker py-2 rounded-lg bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 text-xs font-bold hover:bg-emerald-600/50 transition-all flex items-center justify-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Grn
+                  </button>
+                  <button data-color="blue" class="cap-color-picker py-2 rounded-lg bg-blue-600/30 border border-blue-500/50 text-blue-300 text-xs font-bold hover:bg-blue-600/50 transition-all flex items-center justify-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Blu
+                  </button>
+                </div>
+              </div>
+
+              <!-- Main Execution Buttons -->
+              <div class="space-y-2 mb-4">
+                <button id="btn-start-sort" class="w-full py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 transition-all">
+                  <i data-lucide="play" class="w-4 h-4"></i>
+                  <span>Start Autonomous Sort</span>
+                </button>
+                <div class="grid grid-cols-2 gap-2">
+                  <button id="btn-preset-scatter" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
+                    Scatter 8 Caps
+                  </button>
+                  <button id="btn-reset-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
+                    Reset Defaults
+                  </button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button id="btn-sim-speed" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-mono border border-slate-700 transition-all">
+                    Speed: 1x
+                  </button>
+                  <button id="btn-clear-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-medium border border-slate-700 transition-all">
+                    Clear Grid
+                  </button>
+                </div>
+              </div>
+
+              <!-- Comms Interruption Test Button -->
+              <button id="btn-sim-comms-cut" class="w-full py-2 rounded-lg bg-red-950/60 hover:bg-red-900/60 text-red-300 border border-red-500/40 text-xs font-semibold flex items-center justify-center gap-2 transition-all">
+                <i data-lucide="unplug" class="w-3.5 h-3.5 text-red-400"></i>
+                <span>Simulate Comms Interruption</span>
+              </button>
+            </div>
+
+            <!-- Live Telemetry Card -->
+            <div class="p-4 rounded-xl bg-slate-900 border border-white/10 font-mono text-xs">
+              <h4 class="font-bold text-xs uppercase text-slate-400 tracking-wider mb-3 flex items-center justify-between">
+                <span>Real-Time Robot Telemetry</span>
+                <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+              </h4>
+
+              <div class="space-y-2 text-slate-300">
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Gantry X:</span>
+                  <span id="telemetry-x" class="text-white font-bold">0 mm</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Gantry Y:</span>
+                  <span id="telemetry-y" class="text-white font-bold">0 mm</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Z Linkage State:</span>
+                  <span id="telemetry-z" class="text-cyan-400 font-bold">RAISED</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Gripper State:</span>
+                  <span id="telemetry-gripper" class="text-orange-400 font-bold">OPEN</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Controller State:</span>
+                  <span id="telemetry-state" class="text-slate-400">IDLE</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Pending Caps:</span>
+                  <span id="telemetry-pending-count" class="text-amber-400 font-bold">6</span>
+                </div>
+                <div class="flex justify-between py-1">
+                  <span class="text-slate-400">Sorted to Bins:</span>
+                  <span id="telemetry-sorted-count" class="text-emerald-400 font-bold">0</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 07: CONTROL STRATEGY & FAIL-SAFE RECOVERY
+       ========================================== -->
+  <section id="safety" class="py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">06 / Motion & Fault Tolerance</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Control Strategy & Fail-Safe Logic</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          How the system ensures mechanical safety, homing repeatability, and graceful recovery when UART packets are severed.
+        </p>
+      </div>
+
+      <!-- 8-Step Pick & Place Choreography Table -->
+      <div class="tech-card mb-12 overflow-hidden">
+        <div class="p-4 bg-slate-900/60 border-b border-white/5 flex items-center justify-between">
+          <span class="font-bold text-sm text-slate-200 flex items-center gap-2">
+            <i data-lucide="list-ordered" class="w-4 h-4 text-orange-400"></i>
+            Detailed 8-Step Pick-and-Place Motion Sequence
+          </span>
+          <span class="text-xs font-mono text-slate-400">Per-Cap Movement Lifecycle</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Step #</th>
+                <th>Phase Name</th>
+                <th>X / Y Gantry Motion</th>
+                <th>Z-Axis Servo</th>
+                <th>Gripper Servo</th>
+                <th>Safety Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-bold font-mono text-orange-400">01</td>
+                <td class="font-semibold text-white">Traverse to Target</td>
+                <td>Move to cap (X, Y) coordinates</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300">Raised (0mm)</span></td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300">Open (36mm)</span></td>
+                <td>Clearance over other caps maintained</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-orange-400">02</td>
+                <td class="font-semibold text-white">Lower Over Cap</td>
+                <td>Stationary at target</td>
+                <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">Lower (~40mm)</span></td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300">Open (36mm)</span></td>
+                <td>Verify slider reached bottom stop</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-orange-400">03</td>
+                <td class="font-semibold text-white">Grip Cap</td>
+                <td>Stationary</td>
+                <td>Lowered</td>
+                <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">Close (~26mm)</span></td>
+                <td>Check servo current/torque limit</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-orange-400">04</td>
+                <td class="font-semibold text-white">Vertical Lift</td>
+                <td>Stationary</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Raise (0mm)</span></td>
+                <td>Closed (Clamping)</td>
+                <td>Spring counterbalances gripper weight</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-orange-400">05</td>
+                <td class="font-semibold text-white">Travel to Bin</td>
+                <td>Rapid traverse to designated bin slot</td>
+                <td>Raised (0mm)</td>
+                <td>Closed</td>
+                <td>No Z travel while moving in XY</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-orange-400">06</td>
+                <td class="font-semibold text-white">Lower into Bin</td>
+                <td>Stationary over bin opening</td>
+                <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">Lower (~25mm)</span></td>
+                <td>Closed</td>
+                <td>Prevents cap bounce/ejection</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-orange-400">07</td>
+                <td class="font-semibold text-white">Release Cap</td>
+                <td>Stationary</td>
+                <td>Lowered</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300">Open (36mm)</span></td>
+                <td>Cap drops into designated bin</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-orange-400">08</td>
+                <td class="font-semibold text-white">Retract & Advance</td>
+                <td>Stationary ⟶ Advance to next cap</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Raise (0mm)</span></td>
+                <td>Open (Ready)</td>
+                <td>Mega increments completed cap counter</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recovery Architecture 3 Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 mb-4">
+            <i data-lucide="radio" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-2">Comms-Loss Safe Recovery</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            The Arduino Mega never relies on per-step instructions. It stores the full batch sorting plan locally. If communication drops while carrying a cap, it <strong>completes depositing that cap into its assigned bin</strong>, retracts Z, halts new pickups, and enters safe idle.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
+            <i data-lucide="compass" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-2">Sensorless Homing & Limits</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Three normally closed (NC) mechanical limit switches protect X, Y, and Z axes. If any wire breaks or an overtravel occurs, the circuit immediately opens, triggering an emergency stop interrupt within 10 microseconds.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-4">
+            <i data-lucide="power" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-2">Physical Emergency Stop</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            A latching red mushroom E-Stop button cuts the 12V supply to the TMC2208 stepper motor drivers and 5V servo buck converter. The controllers remain powered to log error states without hazardous mechanical motion.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 08: BILL OF MATERIALS (BOM)
+       ========================================== -->
+  <section id="bom" class="py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-8">
+        <div>
+          <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">07 / Component Inventory</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Bill of Materials (BOM)</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Leverages existing hardware you already own while detailing all necessary hardware to purchase.
+        </p>
+      </div>
+
+      <!-- Filterable BOM Table -->
+      <div class="tech-card overflow-hidden">
+        <div class="p-4 bg-slate-900/60 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <span class="font-bold text-sm text-white">Component List</span>
+            <div class="flex items-center gap-2">
+              <button data-filter="all" class="bom-filter-btn active px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/40">
+                All (16 Items)
+              </button>
+              <button data-filter="owned" class="bom-filter-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                Already Owned
+              </button>
+              <button data-filter="purchase" class="bom-filter-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                To Purchase
+              </button>
+            </div>
+          </div>
+          <div class="relative">
+            <input id="bom-search" type="text" placeholder="Search components..." class="px-3 py-1.5 pl-8 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-orange-500 w-52">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Component Name</th>
+                <th>Specification / Details</th>
+                <th>Qty</th>
+                <th>Function in System</th>
+                <th>Procurement Status</th>
+              </tr>
+            </thead>
+            <tbody id="bom-table-body">
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">01</td>
+                <td class="font-bold text-cyan-400">Teensy 4.1</td>
+                <td class="font-mono text-xs">ARM Cortex-M7 @ 600 MHz, 1 MB RAM</td>
+                <td class="font-mono">1</td>
+                <td>Vision decoding, colour segmentation, coordinates</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">02</td>
+                <td class="font-bold text-emerald-400">Arduino Mega 2560</td>
+                <td class="font-mono text-xs">ATmega2560 @ 16 MHz, 54 I/O</td>
+                <td class="font-mono">1</td>
+                <td>Motion sequencing, homing, servo control, safety</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">03</td>
+                <td class="font-bold text-orange-400">ESP32-CAM</td>
+                <td class="font-mono text-xs">AI-Thinker module with OV2640</td>
+                <td class="font-mono">1</td>
+                <td>Top-down QVGA image acquisition of sorting board</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">04</td>
+                <td class="font-bold text-purple-400">PCA9685 Board</td>
+                <td class="font-mono text-xs">16-Channel 12-bit PWM generator (I2C)</td>
+                <td class="font-mono">1</td>
+                <td>Jitter-free servo signal generation</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">05</td>
+                <td class="font-bold text-white">MG90S Servo</td>
+                <td class="font-mono text-xs">Metal-gear micro servo (1.8–2.2 kg-cm)</td>
+                <td class="font-mono">2</td>
+                <td>Z-axis vertical stroke & Gripper clamp</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">06</td>
+                <td class="font-bold text-white">12V 10A SMPS</td>
+                <td class="font-mono text-xs">120W switched-mode power supply</td>
+                <td class="font-mono">1</td>
+                <td>Master DC system power source</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">07</td>
+                <td class="font-bold text-white">LED Light Plate</td>
+                <td class="font-mono text-xs">Uniform diffused illumination panel</td>
+                <td class="font-mono">1</td>
+                <td>Eliminates shadow/glare on plastic caps</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">08</td>
+                <td class="font-bold text-orange-400">NEMA 17 Stepper Motors</td>
+                <td class="font-mono text-xs">40 mm body, 1.3 A, ~4.2 kg-cm torque</td>
+                <td class="font-mono">2</td>
+                <td>X and Y Cartesian gantry travel</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">09</td>
+                <td class="font-bold text-orange-400">TMC2208 V1.2 Drivers</td>
+                <td class="font-mono text-xs">SilentStepStick with aluminum heatsink</td>
+                <td class="font-mono">2</td>
+                <td>Smooth, quiet stepper motor driving</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">10</td>
+                <td class="font-bold text-white">GT2 Belt & 20T Pulleys</td>
+                <td class="font-mono text-xs">6 mm width, 2 mm pitch, 5 mm bore pulleys</td>
+                <td class="font-mono">2 sets</td>
+                <td>Precision linear belt drive transmission</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">11</td>
+                <td class="font-bold text-white">2020 Aluminum Extrusion</td>
+                <td class="font-mono text-xs">V-slot / T-slot profiles cut to size</td>
+                <td class="font-mono">1 set</td>
+                <td>Rigid 500×500×500 mm frame structure</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">12</td>
+                <td class="font-bold text-white">Linear Rails or V-Wheels</td>
+                <td class="font-mono text-xs">Delrin V-wheel kits or MGN12H rails</td>
+                <td class="font-mono">2 axis sets</td>
+                <td>Low-friction linear guidance for X & Y</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">13</td>
+                <td class="font-bold text-purple-400">5V 5A Buck Converter</td>
+                <td class="font-mono text-xs">High-efficiency step-down (12V ⟶ 5V)</td>
+                <td class="font-mono">1</td>
+                <td>Isolated high-current power for servos</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">14</td>
+                <td class="font-bold text-cyan-400">5V 3A Logic Buck</td>
+                <td class="font-mono text-xs">Regulated step-down for microcontrollers</td>
+                <td class="font-mono">1</td>
+                <td>Stable 5V rail for Mega, Teensy, ESP32</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">15</td>
+                <td class="font-bold text-red-400">Logic Level Shifter</td>
+                <td class="font-mono text-xs">4-channel bidirectional (5V ⇄ 3.3V)</td>
+                <td class="font-mono">1</td>
+                <td>Protects Teensy 3.3V RX from Mega 5V TX</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">16</td>
+                <td class="font-bold text-white">NC Limit Switches & E-Stop</td>
+                <td class="font-mono text-xs">Microswitches with roller levers + E-Stop button</td>
+                <td class="font-mono">3 switches + 1</td>
+                <td>Homing calibration & physical emergency cutoff</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 09: PHASED IMPLEMENTATION ROADMAP
+       ========================================== -->
+  <section id="roadmap" class="py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">08 / Development Strategy</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">6-Stage Phased Roadmap</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          De-risk highest uncertainty modules first before committing to full mechanical assembly.
+        </p>
+      </div>
+
+      <!-- 6 Stages Grid with Real Project Reference Photos -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <!-- Stage 1 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
+              <img src="assets/images/vision_detection_stage1.png" alt="Stage 1 Vision Prototype" class="w-full h-full object-cover">
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-orange-400 font-bold">STAGE 01</span>
+              <span class="badge-pill badge-green text-[10px]">Validated</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">Vision & Coordinate Prototype</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• ESP32-CAM captures top-down QVGA frame</li>
+              <li>• High-speed wired UART transfer to Teensy 4.1</li>
+              <li>• Fixed-point HSV segmentation of 4 colors</li>
+              <li>• Centroid extraction & perspective homography</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-emerald-400 font-mono">
+            <strong>Milestone:</strong> Accurately detect and locate caps on grid without internet.
+          </div>
+        </div>
+
+        <!-- Stage 2 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
+              <img src="assets/images/gantry_belt_stage2.png" alt="Stage 2 X/Y Gantry Motion" class="w-full h-full object-cover">
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-cyan-400 font-bold">STAGE 02</span>
+              <span class="badge-pill badge-cyan text-[10px]">Hardware Build</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">X/Y Gantry Motion System</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• Assemble 2020 extrusion frame & linear rails</li>
+              <li>• Install dual NEMA 17 steppers & TMC2208s</li>
+              <li>• Calibrate steps/mm: $200 \times 16 / 40 = 80$ steps/mm</li>
+              <li>• Validate repeatable homing to NC switches</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-cyan-300 font-mono">
+            <strong>Milestone:</strong> Sub-millimeter repeatable positioning across 300×300 mm board.
+          </div>
+        </div>
+
+        <!-- Stage 3 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
+              <img src="assets/images/gripper_servo_stage3.png" alt="Stage 3 Z-Axis & Gripper" class="w-full h-full object-cover">
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-purple-400 font-bold">STAGE 03</span>
+              <span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">Mechanism</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">Z-Linkage & Parallel Gripper</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• 3D print crank-slider vertical linkage</li>
+              <li>• Mount dual MG90S servos on lightweight carriage</li>
+              <li>• Wire PCA9685 I2C driver to dedicated 5V buck</li>
+              <li>• Measure grip holding force with TPU compliant pads</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-purple-300 font-mono">
+            <strong>Milestone:</strong> Reliably pick and release caps without slippage or stall.
+          </div>
+        </div>
+
+        <!-- Stage 4 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4 flex items-center justify-center p-4">
+              <i data-lucide="network" class="w-16 h-16 text-orange-400/80"></i>
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-amber-400 font-bold">STAGE 04</span>
+              <span class="badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px]">Firmware Protocol</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">Dual-Controller Integration</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• Connect Teensy Serial1 to Mega Serial1 via level shifter</li>
+              <li>• Implement binary packet protocol with CRC16</li>
+              <li>• Local batch plan storage in Mega SRAM</li>
+              <li>• Simulate UART wire disconnect during active movement</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-amber-300 font-mono">
+            <strong>Milestone:</strong> Mega completes current cap pickup safely without host.
+          </div>
+        </div>
+
+        <!-- Stage 5 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
+              <img src="assets/images/portal_robot_system.png" alt="Stage 5 Full Integration" class="w-full h-full object-cover">
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-emerald-400 font-bold">STAGE 05</span>
+              <span class="badge-pill badge-green text-[10px]">Integration</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">Full Mechanical Assembly</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• Mount top-down camera bracket & LED diffuser</li>
+              <li>• Secure four color sorting bins outside workspace</li>
+              <li>• Planar camera-to-gripper coordinate calibration</li>
+              <li>• Multi-cap end-to-end sorting trials</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-emerald-400 font-mono">
+            <strong>Milestone:</strong> Integrated autonomous end-to-end sorting cycles.
+          </div>
+        </div>
+
+        <!-- Stage 6 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4 flex items-center justify-center p-4">
+              <i data-lucide="shield-check" class="w-16 h-16 text-emerald-400/80"></i>
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-red-400 font-bold">STAGE 06</span>
+              <span class="badge-pill bg-red-500/20 text-red-300 border border-red-500/30 text-[10px]">Stress Testing</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">Reliability & Safety Stress Test</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• 100-cycle continuous batch endurance test</li>
+              <li>• Missed-pickup detection & recovery routines</li>
+              <li>• Thermal logging on TMC2208 stepper carriers</li>
+              <li>• Limit switch trip & hardware E-Stop validation</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-red-400 font-mono">
+            <strong>Milestone:</strong> Production-grade fault tolerance and safe operation.
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 10: FIRMWARE CODE VAULT
+       ========================================== -->
+  <section id="code" class="py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-8">
+        <div>
+          <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">09 / Embedded Firmware</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Production Firmware Vault</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Modular C++ source code templates for Teensy 4.1 vision, Arduino Mega motion sequencing, and packet protocol.
+        </p>
+      </div>
+
+      <!-- Code Viewer Card -->
+      <div class="tech-card overflow-hidden">
+        
+        <!-- Tab Navigation Header -->
+        <div class="bg-slate-900/80 px-4 pt-3 border-b border-white/5 flex items-center justify-between overflow-x-auto">
+          <div class="flex gap-2">
+            <button data-code="teensy" class="code-tab-btn active px-4 py-2 rounded-t-lg font-mono text-xs font-semibold text-orange-400 border-b-2 border-orange-500 bg-orange-500/10 transition-all">
+              teensy_vision.cpp
+            </button>
+            <button data-code="mega" class="code-tab-btn px-4 py-2 rounded-t-lg font-mono text-xs font-semibold text-slate-400 border-b-2 border-transparent transition-all">
+              mega_motion.ino
+            </button>
+            <button data-code="esp32" class="code-tab-btn px-4 py-2 rounded-t-lg font-mono text-xs font-semibold text-slate-400 border-b-2 border-transparent transition-all">
+              esp32cam_uart.ino
+            </button>
+            <button data-code="protocol" class="code-tab-btn px-4 py-2 rounded-t-lg font-mono text-xs font-semibold text-slate-400 border-b-2 border-transparent transition-all">
+              packet_protocol.h
+            </button>
+          </div>
+          <button data-target="code-teensy" class="btn-copy-code px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs border border-white/5 flex items-center gap-1.5 transition-all">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copy Code</span>
+          </button>
+        </div>
+
+        <!-- Code Block 1: Teensy Vision -->
+        <div id="code-teensy" class="code-block p-5 bg-[#0b0e14] overflow-x-auto max-h-[480px]">
+          <pre><code class="text-slate-200">// =========================================================================
+// Teensy 4.1 - Embedded Vision & Plan Generator
+// Hardware: ARM Cortex-M7 @ 600 MHz | RAM: 1 MB
+// =========================================================================
+#include &lt;Arduino.h&gt;
+#include "packet_protocol.h"
+
+#define FRAME_WIDTH  320
+#define FRAME_HEIGHT 240
+#define FRAME_BYTES  (FRAME_WIDTH * FRAME_HEIGHT * 2) // 153,600 bytes RGB565
+
+uint8_t imageBuffer[FRAME_BYTES];
+CapTarget detectedCaps[100];
+uint8_t capCount = 0;
+
+// Planar Homography 3x3 Calibration Matrix (Image px -> Board mm)
+float H[9] = {
+  0.9854f, -0.0120f, -12.45f,
+  0.0105f,  0.9782f, -14.10f,
+  0.00004f, 0.00003f, 1.0000f
+};
+
+void setup() {
+  Serial.begin(115200);   // USB Debugging
+  Serial1.begin(115200);  // Mega Link (3.3V <-> 5V Shifter)
+  Serial2.begin(921600);  // ESP32-CAM High-Speed Wired Link
+  pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop() {
+  // 1. Trigger camera frame
+  Serial2.write(CMD_CAPTURE_FRAME);
+  
+  // 2. Read full frame with CRC verification
+  if (receiveFrame(imageBuffer, FRAME_BYTES)) {
+    // 3. Process image on Teensy M7
+    capCount = 0;
+    segmentCapsHSV(imageBuffer, detectedCaps, &capCount);
+    
+    // 4. Map centroids via homography matrix
+    for (uint8_t i = 0; i &lt; capCount; i++) {
+      transformToMillimeters(&detectedCaps[i]);
+    }
+    
+    // 5. Generate nearest-neighbor travel path
+    optimizeSortingPath(detectedCaps, capCount);
+    
+    // 6. Transmit complete plan batch to Mega
+    sendPlanBatchToMega(detectedCaps, capCount);
+  }
+  
+  delay(100);
+}
+
+void transformToMillimeters(CapTarget* cap) {
+  float u = cap->pixelX;
+  float v = cap->pixelY;
+  float w = H[6]*u + H[7]*v + H[8];
+  cap->boardX_mm = (H[0]*u + H[1]*v + H[2]) / w;
+  cap->boardY_mm = (H[3]*u + H[4]*v + H[5]) / w;
+}</code></pre>
+        </div>
+
+        <!-- Code Block 2: Mega Motion -->
+        <div id="code-mega" class="code-block hidden p-5 bg-[#0b0e14] overflow-x-auto max-h-[480px]">
+          <pre><code class="text-slate-200">// =========================================================================
+// Arduino Mega 2560 - Deterministic Motion & Fail-Safe Sequencer
+// Hardware: ATmega2560 @ 16 MHz | TMC2208 Steppers | PCA9685 Servos
+// =========================================================================
+#include &lt;Wire.h&gt;
+#include &lt;Adafruit_PWMServoDriver.h&gt;
+#include &lt;AccelStepper.h&gt;
+#include "packet_protocol.h"
+
+// Stepper Pins (X & Y)
+AccelStepper stepperX(AccelStepper::DRIVER, 2, 5);
+AccelStepper stepperY(AccelStepper::DRIVER, 3, 6);
+Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver(0x40);
+
+#define SERVO_Z_CH       0
+#define SERVO_GRIPPER_CH 1
+#define PIN_X_HOME       22
+#define PIN_Y_HOME       23
+
+enum RobotState {
+  STATE_IDLE,
+  STATE_HOMING,
+  STATE_MOVING_TO_CAP,
+  STATE_LOWER_Z,
+  STATE_GRIP_CAP,
+  STATE_LIFT_Z,
+  STATE_TRAVERSE_BIN,
+  STATE_RELEASE_CAP,
+  STATE_RETRACT_Z,
+  STATE_FAILSAFE_HALT
+};
+
+RobotState currentState = STATE_HOMING;
+CapTarget currentCap;
+bool hasInFlightCap = false;
+
+void setup() {
+  Serial.begin(115200);   // Debug
+  Serial1.begin(115200);  // Teensy UART (Level shifted)
+  pca.begin();
+  pca.setPWMFreq(50);     // 50 Hz analog servo PWM
+
+  stepperX.setMaxSpeed(4000);     // 80 steps/mm -> 50 mm/s
+  stepperX.setAcceleration(2000);
+  stepperY.setMaxSpeed(4000);
+  stepperY.setAcceleration(2000);
+
+  homeAxes();
+}
+
+void loop() {
+  stepperX.run();
+  stepperY.run();
+  
+  // Non-blocking motion state machine
+  executeMotionStateMachine();
+
+  // Watchdog: check UART heartbeat from Teensy
+  if (checkCommunicationLoss() && hasInFlightCap) {
+    // FAIL-SAFE: Finish current cap drop, then stop!
+    executeSafeLocalizedCompletion();
+  }
+}</code></pre>
+        </div>
+
+        <!-- Code Block 3: ESP32-CAM -->
+        <div id="code-esp32" class="code-block hidden p-5 bg-[#0b0e14] overflow-x-auto max-h-[480px]">
+          <pre><code class="text-slate-200">// =========================================================================
+// ESP32-CAM (AI-Thinker OV2640) - High-Speed Frame Streamer
+// Pure Image Acquisition (Zero Network Overhead)
+// =========================================================================
+#include "esp_camera.h"
+#include &lt;HardwareSerial.h&gt;
+
+HardwareSerial TeensySerial(2); // UART2 (GPIO13 TX, GPIO14 RX)
+
+void setup() {
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = 5; config.pin_d1 = 18; config.pin_d2 = 19; config.pin_d3 = 21;
+  config.pin_d4 = 36; config.pin_d5 = 39; config.pin_d6 = 34; config.pin_d7 = 35;
+  config.pin_xclk = 0; config.pin_pclk = 22; config.pin_vsync = 25; config.pin_href = 23;
+  config.pin_sscb_sda = 26; config.pin_sscb_scl = 27; config.pin_pwdn = 32; config.pin_reset = -1;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_RGB565; // Raw 16-bit color for Teensy
+  config.frame_size = FRAMESIZE_QVGA;     // 320x240
+  config.fb_count = 2;
+
+  esp_camera_init(&config);
+  TeensySerial.begin(921600, SERIAL_8N1, 14, 13);
+}
+
+void loop() {
+  if (TeensySerial.available() && TeensySerial.read() == 0xAA) {
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (fb) {
+      // Send Packet Header: [0x55, 0xAA, LenHigh, LenLow]
+      TeensySerial.write(0x55);
+      TeensySerial.write(0xAA);
+      TeensySerial.write((fb->len >> 8) & 0xFF);
+      TeensySerial.write(fb->len & 0xFF);
+      
+      // Stream raw framebuffer bytes
+      TeensySerial.write(fb->buf, fb->len);
+      esp_camera_fb_return(fb);
+    }
+  }
+}</code></pre>
+        </div>
+
+        <!-- Code Block 4: Packet Protocol -->
+        <div id="code-protocol" class="code-block hidden p-5 bg-[#0b0e14] overflow-x-auto max-h-[480px]">
+          <pre><code class="text-slate-200">// =========================================================================
+// packet_protocol.h - Shared Inter-Controller Wire Definitions
+// Ensures Type Safety, CRC Checking & Atomic Batch Execution
+// =========================================================================
+#ifndef PACKET_PROTOCOL_H
+#define PACKET_PROTOCOL_H
+
+#define PROTOCOL_MAGIC_BYTE   0x5A
+#define CMD_CAPTURE_FRAME     0xAA
+#define CMD_BATCH_START       0xB1
+#define CMD_EXECUTE_PICK      0xC2
+#define CMD_RECOVERY_HALT     0xEE
+
+enum CapColor : uint8_t {
+  COLOR_RED    = 0x01,
+  COLOR_YELLOW = 0x02,
+  COLOR_GREEN  = 0x03,
+  COLOR_BLUE   = 0x04
+};
+
+#pragma pack(push, 1)
+struct CapTarget {
+  uint8_t  capId;
+  CapColor color;
+  uint16_t pixelX;
+  uint16_t pixelY;
+  float    boardX_mm;
+  float    boardY_mm;
+  uint8_t  targetBinId;
+};
+
+struct BatchHeader {
+  uint8_t  magic;
+  uint16_t batchId;
+  uint8_t  totalCaps;
+  uint16_t crc16;
+};
+#pragma pack(pop)
+
+#endif</code></pre>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 11: CRITICAL ENGINEERING GUIDELINES
+       ========================================== -->
+  <section class="py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="mb-12">
+        <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">10 / Production Quality</span>
+        <h2 class="text-3xl sm:text-4xl font-bold text-white">Critical Engineering Considerations</h2>
+        <p class="text-slate-400 text-sm max-w-2xl mt-2">
+          Key failure modes to mitigate before assembling hardware or burning microcontrollers.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-orange-400 font-bold text-sm mb-2">
+            <i data-lucide="thermometer" class="w-4 h-4"></i>
+            1. TMC2208 Vref & Thermals
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Your NEMA 17 motors are rated at 1.3A/phase. Inexpensive TMC2208 breakout boards will overheat and shut down in thermal protect at 1.3A RMS. Adjust potentiometer Vref for $I_{RMS} \approx 0.8\text{–}0.9\text{ A}$ ($V_{ref} \approx 1.1\text{–}1.2\text{ V}$) and supply forced cooling air.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-purple-400 font-bold text-sm mb-2">
+            <i data-lucide="zap" class="w-4 h-4"></i>
+            2. Dedicated Servo Power Rail
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Never attempt to power the two MG90S servos from the Arduino Mega 5V regulator pin. Servo stall and acceleration currents create voltage sags that crash the microcontroller. Always route through a dedicated 5V 5A buck converter directly into PCA9685 V+.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-cyan-400 font-bold text-sm mb-2">
+            <i data-lucide="sun" class="w-4 h-4"></i>
+            3. Lighting Constancy
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Glossy bottle caps reflect harsh point-source room lights, creating hot white specular highlights that destroy HSV color thresholds. The included LED light plate with diffusion layer provides uniform, shadow-free illumination essential for reliable edge segmentation.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-emerald-400 font-bold text-sm mb-2">
+            <i data-lucide="weight" class="w-4 h-4"></i>
+            4. Z-Axis Servo Weight Balance
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            The Z-axis MG90S servo lifts not only the cap, but the entire weight of the 3D-printed gripper mechanism and its clamping servo. Use a tension spring counterbalance or small counterweight so the servo only overcomes friction, preventing gear stripping.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-amber-400 font-bold text-sm mb-2">
+            <i data-lucide="layers" class="w-4 h-4"></i>
+            5. Three Coordinate Frames
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Camera image pixels $(u, v)$, gantry carriage coordinates $(X_g, Y_g)$, and actual physical gripper tip $(X_t, Y_t)$ are three distinct reference frames. Compute toolhead offset $(dx, dy)$ and calibrate camera homography independently.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-red-400 font-bold text-sm mb-2">
+            <i data-lucide="shield-alert" class="w-4 h-4"></i>
+            6. Physical Emergency Stop
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Never rely strictly on software for human and machine safety. A hardware red mushroom emergency stop switch wired directly into the 12V SMPS line immediately de-energizes all motor coils and servos without software intervention.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       FOOTER
+       ========================================== -->
+  <footer class="border-t border-white/10 bg-[#06080d] py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-bold">
+          <i data-lucide="bot" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <span class="font-bold text-white text-sm">Autonomous Bottle-Cap Sorting Machine</span>
+          <p class="text-xs text-orange-400 font-mono font-semibold">Made by Neil Shettigar</p>
+          <p class="text-[11px] text-slate-500 font-mono">Teensy 4.1 + Arduino Mega 2560 + ESP32-CAM Architecture • by Neil, Kahan and Shourya</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4 text-xs font-mono text-slate-400">
+        <span>500×500×500 mm Target</span>
+        <span>•</span>
+        <span>100% Offline Edge Robotics</span>
+        <span>•</span>
+        <button class="btn-open-poster text-orange-400 hover:underline">View System Poster</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==========================================
+       MODAL: FULL HIGH-RES POSTER VIEWER
+       ========================================== -->
+  <div id="poster-modal" class="poster-modal">
+    <!-- Modal Toolbar -->
+    <div class="h-14 px-6 bg-slate-900/90 border-b border-white/10 flex items-center justify-between z-10 shrink-0">
+      <div class="flex items-center gap-3">
+        <i data-lucide="file-image" class="w-5 h-5 text-orange-400"></i>
+        <span class="font-bold text-sm text-white">Full System Architecture & Engineering Poster</span>
+        <span class="text-xs font-mono text-slate-400 hidden sm:inline">(Pan & Zoom Enabled)</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-zoom-in" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
+          <i data-lucide="zoom-in" class="w-4 h-4"></i>
+        </button>
+        <button id="btn-zoom-out" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
+          <i data-lucide="zoom-out" class="w-4 h-4"></i>
+        </button>
+        <button id="btn-zoom-reset" class="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono">
+          Reset
+        </button>
+        <button id="btn-close-poster" class="p-2 rounded bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs ml-2">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Viewport -->
+    <div class="poster-viewport">
+      <img id="modal-poster-img" src="assets/system_poster.jpg" alt="Master System Poster Diagram">
+    </div>
+  </div>
+
+  <!-- Application Script -->
+  <script src="js/app.js"></script>
+</body>
+</html>
