@@ -116,13 +116,13 @@
         <!-- Hero Left Text -->
         <div class="flex-1 text-center lg:text-left">
           <div class="flex flex-wrap items-center justify-center lg:justify-start gap-2.5 mb-4">
-            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-orange-500/20 via-orange-500/15 to-amber-500/20 border border-orange-500/40 text-orange-300 text-xs font-mono font-bold uppercase tracking-wider shadow-md shadow-orange-500/10">
-              <i data-lucide="user-check" class="w-4 h-4 text-orange-400"></i>
-              <span>Made by Neil Shettigar</span>
-            </div>
             <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs font-mono uppercase tracking-wider">
               <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400"></i>
               <span>Embedded Robotics Engineering Spec</span>
+            </div>
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono uppercase tracking-wider">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>Air-Gapped • Fail-Safe</span>
             </div>
           </div>
           
@@ -133,8 +133,8 @@
             </span>
           </h1>
 
-          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 font-mono text-sm font-semibold mb-6">
-            <i data-lucide="code" class="w-4 h-4 text-orange-400"></i>
+          <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-orange-500/20 via-orange-500/15 to-amber-500/20 border border-orange-500/40 text-orange-300 font-mono text-sm font-bold mb-6 shadow-md shadow-orange-500/10">
+            <i data-lucide="user-check" class="w-4 h-4 text-orange-400"></i>
             <span>Made by Neil Shettigar</span>
           </div>
 
@@ -864,7 +864,7 @@
               <div>
                 <h4 class="text-base font-bold text-white mb-2">Stage 4: Perspective Distortion Correction</h4>
                 <p class="text-xs text-slate-300 leading-relaxed mb-4">
-                  Perspective distortion means that 30 mm at the edge of the lens occupies fewer pixels than at the optical center. Using the 4 corner calibration points of the 300 × 300 mm board, a 3×3 planar homography matrix maps pixel coordinates $(u, v)$ directly to physical gantry coordinates $(X, Y)$ in millimeters.
+                  Perspective distortion means that 30 mm at the edge of the lens occupies fewer pixels than at the optical center. Using the 4 corner calibration points of the 300 × 300 mm board, a 3×3 planar homography matrix maps pixel coordinates <span class="font-mono text-cyan-300">(u, v)</span> directly to physical gantry coordinates <span class="font-mono text-cyan-300">(X, Y)</span> in millimeters.
                 </p>
                 <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-cyan-300">
                   // Homography transformation:<br>
@@ -1466,10 +1466,10 @@
                 All (16 Items)
               </button>
               <button data-filter="owned" class="bom-filter-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-                Already Owned
+                Already Owned (7)
               </button>
               <button data-filter="purchase" class="bom-filter-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-                To Purchase
+                To Purchase (9)
               </button>
             </div>
           </div>
@@ -1684,7 +1684,7 @@
             <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
               <li>• Assemble 2020 extrusion frame & linear rails</li>
               <li>• Install dual NEMA 17 steppers & TMC2208s</li>
-              <li>• Calibrate steps/mm: $200 \times 16 / 40 = 80$ steps/mm</li>
+              <li>• Calibrate steps/mm: <span class="font-mono text-cyan-300">200 × 16 / 40 = 80</span> steps/mm</li>
               <li>• Validate repeatable homing to NC switches</li>
             </ul>
           </div>
@@ -2080,7 +2080,7 @@ struct BatchHeader {
             1. TMC2208 Vref & Thermals
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
-            Your NEMA 17 motors are rated at 1.3A/phase. Inexpensive TMC2208 breakout boards will overheat and shut down in thermal protect at 1.3A RMS. Adjust potentiometer Vref for $I_{RMS} \approx 0.8\text{–}0.9\text{ A}$ ($V_{ref} \approx 1.1\text{–}1.2\text{ V}$) and supply forced cooling air.
+            Your NEMA 17 motors are rated at 1.3A/phase. Inexpensive TMC2208 breakout boards will overheat and shut down in thermal protect at 1.3A RMS. Adjust potentiometer Vref for <span class="font-mono text-orange-300">I<sub>RMS</sub> ≈ 0.8–0.9 A</span> (<span class="font-mono text-orange-300">V<sub>ref</sub> ≈ 1.1–1.2 V</span>) and supply forced cooling air.
           </p>
         </div>
 
@@ -2120,7 +2120,7 @@ struct BatchHeader {
             5. Three Coordinate Frames
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
-            Camera image pixels $(u, v)$, gantry carriage coordinates $(X_g, Y_g)$, and actual physical gripper tip $(X_t, Y_t)$ are three distinct reference frames. Compute toolhead offset $(dx, dy)$ and calibrate camera homography independently.
+            Camera image pixels <span class="font-mono text-amber-300">(u, v)</span>, gantry carriage coordinates <span class="font-mono text-amber-300">(X<sub>g</sub>, Y<sub>g</sub>)</span>, and actual physical gripper tip <span class="font-mono text-amber-300">(X<sub>t</sub>, Y<sub>t</sub>)</span> are three distinct reference frames. Compute toolhead offset <span class="font-mono text-amber-300">(dx, dy)</span> and calibrate camera homography independently.
           </p>
         </div>
 

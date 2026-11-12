@@ -145,7 +145,8 @@ function initSimulator() {
   document.getElementById('btn-preset-scatter')?.addEventListener('click', () => {
     caps = [];
     const colors = ['red', 'yellow', 'green', 'blue'];
-    for (let i = 0; i < 8; i++) {
+    let i = 0;
+    while (caps.length < 8) {
       const col = Math.floor(Math.random() * 10);
       const row = Math.floor(Math.random() * 10);
       const snapX = col * CELL_SIZE_MM + CELL_SIZE_MM / 2;
@@ -159,10 +160,18 @@ function initSimulator() {
           cell: `(${col},${row})`,
           status: 'pending'
         });
+        i++;
       }
     }
     BINS.forEach(b => b.count = 0);
     sortedCaps = [];
+    gantry.heldCap = null;
+    gantry.z = 'RAISED';
+    gantry.zHeight = 0;
+    gantry.gripper = 'OPEN';
+    gantry.gripperWidth = 36;
+    planQueue = [];
+    commsLost = false;
     simState = 'IDLE';
     updateTelemetryUI();
   });
@@ -171,20 +180,28 @@ function initSimulator() {
     caps = [];
     BINS.forEach(b => b.count = 0);
     sortedCaps = [];
+    gantry.heldCap = null;
+    gantry.z = 'RAISED';
+    gantry.zHeight = 0;
+    gantry.gripper = 'OPEN';
+    gantry.gripperWidth = 36;
+    planQueue = [];
+    commsLost = false;
     simState = 'IDLE';
     updateTelemetryUI();
   });
 
   document.getElementById('btn-sim-speed')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget;
     if (simSpeedMultiplier === 1) {
       simSpeedMultiplier = 2;
-      e.target.textContent = 'Speed: 2x';
+      btn.textContent = 'Speed: 2x';
     } else if (simSpeedMultiplier === 2) {
       simSpeedMultiplier = 4;
-      e.target.textContent = 'Speed: 4x';
+      btn.textContent = 'Speed: 4x';
     } else {
       simSpeedMultiplier = 1;
-      e.target.textContent = 'Speed: 1x';
+      btn.textContent = 'Speed: 1x';
     }
   });
 
@@ -785,7 +802,11 @@ function initPinoutTable() {
 
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      filterBtns.forEach(b => b.classList.remove('active', 'bg-orange-500/20', 'text-orange-400', 'border-orange-500/40'));
+      filterBtns.forEach(b => {
+        b.classList.remove('active', 'bg-orange-500/20', 'text-orange-400', 'border-orange-500/40');
+        b.classList.add('bg-slate-800', 'text-slate-300', 'border-slate-700');
+      });
+      btn.classList.remove('bg-slate-800', 'text-slate-300', 'border-slate-700');
       btn.classList.add('active', 'bg-orange-500/20', 'text-orange-400', 'border-orange-500/40');
       filterTable();
     });
@@ -823,7 +844,11 @@ function initBOMTable() {
 
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      filterBtns.forEach(b => b.classList.remove('active', 'bg-orange-500/20', 'text-orange-400', 'border-orange-500/40'));
+      filterBtns.forEach(b => {
+        b.classList.remove('active', 'bg-orange-500/20', 'text-orange-400', 'border-orange-500/40');
+        b.classList.add('bg-slate-800', 'text-slate-300', 'border-slate-700');
+      });
+      btn.classList.remove('bg-slate-800', 'text-slate-300', 'border-slate-700');
       btn.classList.add('active', 'bg-orange-500/20', 'text-orange-400', 'border-orange-500/40');
       filterBOM();
     });
@@ -836,16 +861,17 @@ function initBOMTable() {
 function initCodeVault() {
   const tabs = document.querySelectorAll('.code-tab-btn');
   const blocks = document.querySelectorAll('.code-block');
+  const copyBtn = document.querySelector('.btn-copy-code');
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const targetId = tab.dataset.code;
 
       tabs.forEach(t => {
-        t.classList.remove('text-orange-400', 'border-orange-500', 'bg-orange-500/10');
+        t.classList.remove('active', 'text-orange-400', 'border-orange-500', 'bg-orange-500/10');
         t.classList.add('text-slate-400', 'border-transparent');
       });
-      tab.classList.add('text-orange-400', 'border-orange-500', 'bg-orange-500/10');
+      tab.classList.add('active', 'text-orange-400', 'border-orange-500', 'bg-orange-500/10');
       tab.classList.remove('text-slate-400', 'border-transparent');
 
       blocks.forEach(block => {
@@ -855,20 +881,29 @@ function initCodeVault() {
           block.classList.add('hidden');
         }
       });
+
+      if (copyBtn) {
+        copyBtn.dataset.target = `code-${targetId}`;
+      }
     });
   });
 
   // Copy code buttons
   document.querySelectorAll('.btn-copy-code').forEach(btn => {
+    let copyTimeout = null;
+    const defaultLabel = btn.innerHTML;
     btn.addEventListener('click', () => {
       const targetBlockId = btn.dataset.target;
-      const codeEl = document.querySelector(`#${targetBlockId} code`);
+      const codeEl = document.querySelector(`#${targetBlockId} code`) || document.querySelector('.code-block:not(.hidden) code');
       if (codeEl) {
         navigator.clipboard.writeText(codeEl.innerText).then(() => {
-          showNotification('Firmware code copied to clipboard!', 'success');
-          const original = btn.innerHTML;
+          showNotification(`Copied ${targetBlockId.replace('code-', '')} firmware to clipboard!`, 'success');
+          if (copyTimeout) clearTimeout(copyTimeout);
           btn.innerHTML = `<span class="text-emerald-400 font-bold">✓ Copied</span>`;
-          setTimeout(() => btn.innerHTML = original, 2000);
+          copyTimeout = setTimeout(() => {
+            btn.innerHTML = defaultLabel;
+            if (window.lucide) window.lucide.createIcons();
+          }, 2000);
         });
       }
     });
