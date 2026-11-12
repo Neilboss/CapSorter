@@ -4,6 +4,10 @@
 **By Neil Shettigar, Kahan, and Shourya**  
 *Main development & documentation by Neil Shettigar*
 
+🌐 **Live Website (Vercel):** [https://capsorter.vercel.app](https://capsorter.vercel.app)  
+🌐 **Mirror (GitHub Pages):** [https://neilboss.github.io/CapSorter/](https://neilboss.github.io/CapSorter/)  
+📄 **Technical Report (12-Page PDF):** [Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf](https://capsorter.vercel.app/Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)
+
 ---
 
 ![System Poster](assets/system_poster.jpg)
