@@ -91,6 +91,28 @@ If UART communication between Teensy and Mega is severed while carrying a cap:
 
 ---
 
+## 📄 Comprehensive Engineering Technical Report (PDF)
+
+A publication-grade, 12-page technical dossier is included directly in this repository for formal academic or industrial engineering submissions:
+
+👉 **[Download Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf](Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)**
+
+### Dossier Contents & Page Structure:
+1. **Cover & Master System Poster**: Project identity, key specifications, and full-bleed CAD architecture render.
+2. **System Overview & Architectural Partitioning**: Dual-controller design rationale, responsibility division table, and UART pipeline.
+3. **Mechanical Engineering & Gantry Motion**: 4-axis mechanical analysis (X, Y, Z, Gripper) + workspace geometry and travel limits.
+4. **Embedded Computer Vision Pipeline**: 4-stage vision pipeline (RGB565 → HSV → Centroid Extraction → Homography Coordinate Mapping).
+5. **Electrical & Power Distribution Architecture**: 3-branch isolated power tree (12V Motors, 5V/5A Servos, 5V/3A Logic) & bidirectional level-shifter safeguards.
+6. **Hardware Pinout & Wiring Interface Matrix**: Complete pin-by-pin mapping for Teensy 4.1, Arduino Mega 2560, TMC2208, and PCA9685.
+7. **Motion Control & Pick-and-Place Choreography**: 8-step kinematic pick-and-place sequence, fail-safe communication recovery state machine.
+8. **Comprehensive Bill of Materials (BOM)**: Categorized itemized list with technical specifications, quantities, and cost allocations.
+9. **Implementation Roadmap & Milestones**: 6-stage structured milestone plan with physical prototype build photos.
+10. **Critical Engineering Considerations & FMEA**: Power rail isolation, thermal dissipation, homing accuracy, servo chatter mitigation, and optical calibration.
+11. **Firmware Vault — Part 1**: Full production-ready C/C++ firmware headers (`packet_protocol.h`) and ESP32-CAM frame streaming driver (`esp32cam_uart.ino`).
+12. **Firmware Vault — Part 2 & Engineering Sign-Off**: Complete Teensy 4.1 computer vision pipeline (`teensy_vision.cpp`), Arduino Mega motion sequencer (`mega_motion.ino`), and official project sign-off.
+
+---
+
 ## 💻 Web Presentation & Live Interactive Simulator
 
 The repository includes a standalone, zero-dependency engineering web application:

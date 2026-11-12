@@ -1,0 +1,1925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Autonomous Bottle-Cap Sorting Machine | Comprehensive Technical Dossier</title>
+  <style>
+    /* ==========================================================================
+       Print & Pagination Setup for PDF Generation
+       ========================================================================== */
+    @page {
+      size: A4 portrait;
+      margin: 10mm 12mm 12mm 12mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    body {
+      background-color: #0a0d14;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 8.5pt;
+      line-height: 1.45;
+    }
+
+    .page {
+      page-break-after: always;
+      break-after: page;
+      position: relative;
+      min-height: 270mm;
+      padding-bottom: 8mm;
+    }
+
+    .page:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    /* Avoid page breaks inside cards, tables, figures */
+    .card, .table-container, .diagram-box, .code-block, .spec-grid, .photo-card {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    /* Running Header & Footer */
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 3mm;
+      margin-bottom: 4mm;
+      border-bottom: 1px solid rgba(255, 107, 0, 0.3);
+      font-size: 7pt;
+      font-family: 'Courier New', Courier, monospace;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .doc-header .brand {
+      color: #ff6b00;
+      font-weight: bold;
+    }
+
+    .doc-footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 2mm;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 7pt;
+      font-family: 'Courier New', Courier, monospace;
+      color: #64748b;
+    }
+    .doc-footer .author-tag {
+      color: #ff9142;
+      font-weight: 600;
+    }
+
+    /* Typography */
+    h1 {
+      font-size: 20pt;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      font-size: 13pt;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 2mm;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    h2 .sec-num {
+      color: #ff6b00;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 10pt;
+    }
+    h3 {
+      font-size: 10pt;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 1.5mm;
+    }
+    h4 {
+      font-size: 8.5pt;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+
+    p {
+      margin-bottom: 2mm;
+      color: #cbd5e1;
+    }
+
+    .font-mono {
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    /* Tech Styling & Cards */
+    .card {
+      background: #111622;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 3mm 3.5mm;
+      margin-bottom: 3.5mm;
+    }
+
+    .card-orange {
+      border-left: 3px solid #ff6b00;
+    }
+    .card-cyan {
+      border-left: 3px solid #00d2ff;
+    }
+    .card-emerald {
+      border-left: 3px solid #10b981;
+    }
+    .card-purple {
+      border-left: 3px solid #a855f7;
+    }
+    .card-amber {
+      border-left: 3px solid #f59e0b;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 1.5px 6px;
+      border-radius: 3px;
+      font-size: 6.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-family: 'Courier New', Courier, monospace;
+    }
+    .badge-orange {
+      background: rgba(255, 107, 0, 0.18);
+      color: #ff9142;
+      border: 1px solid rgba(255, 107, 0, 0.4);
+    }
+    .badge-cyan {
+      background: rgba(0, 210, 255, 0.18);
+      color: #38bdf8;
+      border: 1px solid rgba(0, 210, 255, 0.4);
+    }
+    .badge-emerald {
+      background: rgba(16, 185, 129, 0.18);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+    .badge-purple {
+      background: rgba(168, 85, 247, 0.18);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.4);
+    }
+    .badge-red {
+      background: rgba(239, 68, 68, 0.18);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 7.5pt;
+      margin-bottom: 2mm;
+    }
+    th {
+      background: #172033;
+      color: #94a3b8;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 6.5pt;
+      letter-spacing: 0.05em;
+      padding: 4px 6px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    td {
+      padding: 4px 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: #e2e8f0;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td {
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    /* Layout Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3mm;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 3mm;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 2.5mm;
+    }
+
+    /* Code Block */
+    .code-box {
+      background: #070a10;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      padding: 3mm;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 6.8pt;
+      line-height: 1.35;
+      color: #e2e8f0;
+      margin-bottom: 2mm;
+      white-space: pre-wrap;
+    }
+    .code-comment { color: #64748b; }
+    .code-keyword { color: #ff9142; font-weight: bold; }
+    .code-type { color: #38bdf8; }
+    .code-num { color: #34d399; }
+    .code-str { color: #facc15; }
+
+    /* Callouts */
+    .callout {
+      padding: 2.5mm 3.5mm;
+      border-radius: 4px;
+      font-size: 7.5pt;
+      margin-bottom: 3mm;
+      line-height: 1.4;
+    }
+    .callout-warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #fde68a;
+    }
+    .callout-danger {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+    .callout-info {
+      background: rgba(0, 210, 255, 0.1);
+      border: 1px solid rgba(0, 210, 255, 0.35);
+      color: #bae6fd;
+    }
+
+    /* Cover Page Special */
+    .cover-hero {
+      text-align: center;
+      padding: 6mm 0 4mm 0;
+    }
+    .cover-poster-img {
+      width: 100%;
+      max-height: 125mm;
+      object-fit: contain;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 107, 0, 0.4);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+      margin: 4mm 0;
+      background: #000;
+    }
+
+    /* Inline Images */
+    .fig-img {
+      width: 100%;
+      height: 28mm;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: #05080f;
+      margin-bottom: 1.5mm;
+    }
+    .fig-img-contain {
+      object-fit: contain;
+      background: #05080f;
+    }
+
+    /* Flow Diagrams */
+    .flow-step {
+      background: #141b29;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      padding: 2mm 3mm;
+      text-align: center;
+      position: relative;
+    }
+    .flow-arrow {
+      text-align: center;
+      color: #ff6b00;
+      font-size: 8pt;
+      font-weight: bold;
+      line-height: 1;
+      margin: 1mm 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================================
+       PAGE 1: COVER PAGE & EXECUTIVE SUMMARY
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>TECHNICAL SPECIFICATION & ENGINEERING DOSSIER</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4 • OFFLINE EDGE</span>
+    </div>
+
+    <div class="cover-hero">
+      <div style="display: inline-block; padding: 2px 10px; border-radius: 20px; background: rgba(255,107,0,0.15); border: 1px solid rgba(255,107,0,0.4); color: #ff9142; font-family: 'Courier New', Courier, monospace; font-size: 7pt; font-weight: bold; text-transform: uppercase; margin-bottom: 2mm;">
+        Embedded Autonomous Pick-and-Place Robotics System
+      </div>
+
+      <h1>AUTONOMOUS BOTTLE-CAP<br><span style="color: #ff6b00;">SORTING MACHINE</span></h1>
+      
+      <div style="margin: 2mm 0; font-size: 9pt; color: #38bdf8; font-weight: 600;">
+        Vision-Guided Dual-Controller Cartesian Gantry Architecture
+      </div>
+
+      <!-- Authors -->
+      <div style="margin: 2.5mm 0; padding: 2mm 4mm; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; display: inline-block;">
+        <span style="font-size: 8pt; color: #94a3b8;">Authored & Engineered by:</span>
+        <strong style="font-size: 8.5pt; color: #ff9142;"> Neil Shettigar</strong>, 
+        <span style="font-size: 8pt; color: #f1f5f9;">Kahan, and Shourya</span>
+        <div style="font-size: 7.5pt; color: #34d399; font-weight: 600; margin-top: 1px;">
+          ★ Lead System Architecture, Firmware & Design: Neil Shettigar
+        </div>
+      </div>
+    </div>
+
+    <!-- Master System Poster -->
+    <img src="assets/system_poster.jpg" alt="Autonomous Bottle-Cap Sorting Machine Master Diagram" class="cover-poster-img">
+
+    <!-- Executive Quick Specs Table -->
+    <div class="card" style="margin-top: 2mm;">
+      <div style="font-weight: bold; font-size: 8pt; color: #ff9142; margin-bottom: 1.5mm; text-transform: uppercase; letter-spacing: 0.05em;">
+        Executive System Parameters & Design Targets
+      </div>
+      <div class="grid-4" style="text-align: center; font-size: 7.5pt;">
+        <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Overall Footprint</div>
+          <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">500×500×500 mm</div>
+          <div style="color: #ff9142; font-size: 6.5pt;">Rigid 2020 Extrusion</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Workspace Area</div>
+          <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">300×300 mm</div>
+          <div style="color: #38bdf8; font-size: 6.5pt;">10×10 Grid (30mm Pitch)</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Pick Cycle Time</div>
+          <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">~4–6 s / cap</div>
+          <div style="color: #34d399; font-size: 6.5pt;">4 Colours (R, Y, G, B)</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Connectivity</div>
+          <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">100% Offline</div>
+          <div style="color: #facc15; font-size: 6.5pt;">Zero Cloud / No Wi-Fi</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 1</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 2: SECTION 01 & 02 - SYSTEM OVERVIEW & DUAL ARCHITECTURE
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 01 & 02 • SYSTEM ARCHITECTURE</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">01.</span> System Overview & Design Objectives</h2>
+    <p>
+      The <strong>Autonomous Bottle-Cap Sorting Machine</strong> is an industrial-style Cartesian pick-and-place robot designed to operate as a completely standalone, self-sufficient embedded appliance. Unlike academic robots that rely on external laptop computers or cloud-hosted computer vision services, this machine performs 100% of image capture, vision processing, inverse coordinate transformation, motion planning, and hardware actuation locally on edge microcontrollers.
+    </p>
+
+    <div class="grid-4" style="margin-bottom: 3.5mm;">
+      <div class="card card-orange" style="margin: 0;">
+        <h4>Compact Form Factor</h4>
+        <p style="font-size: 7pt; margin-top: 1mm; color: #94a3b8;">
+          Fits within a strict 500 × 500 × 500 mm physical bounding envelope, built using 2020 V-slot aluminum extrusions.
+        </p>
+      </div>
+      <div class="card card-cyan" style="margin: 0;">
+        <h4>Edge Vision</h4>
+        <p style="font-size: 7pt; margin-top: 1mm; color: #94a3b8;">
+          Detects Ø 28–32 mm plastic caps across 100 grid cells (30× 30 mm) with sub-millimeter precision.
+        </p>
+      </div>
+      <div class="card card-emerald" style="margin: 0;">
+        <h4>Dedicated Binning</h4>
+        <p style="font-size: 7pt; margin-top: 1mm; color: #94a3b8;">
+          Sorts caps into four dedicated receptacles (Red, Yellow, Green, Blue) positioned outside the active sorting grid.
+        </p>
+      </div>
+      <div class="card card-purple" style="margin: 0;">
+        <h4>Fail-Safe Recovery</h4>
+        <p style="font-size: 7pt; margin-top: 1mm; color: #94a3b8;">
+          Completes in-flight pickup and placement safely if inter-controller communication is severed mid-operation.
+        </p>
+      </div>
+    </div>
+
+    <h2><span class="sec-num">02.</span> Dual-Controller System Architecture</h2>
+    <p>
+      A foundational design decision is the strict separation of concerns between <strong>high-level vision/planning</strong> and <strong>hard-real-time motor step generation</strong>. Microcontrollers running complex image processing loops frequently experience non-deterministic execution times, which causes severe jitter and missed step pulses if the same CPU attempts to generate high-frequency stepper pulses.
+    </p>
+
+    <!-- Division of Responsibilities Table -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 18%;">Subsystem / IC</th>
+            <th style="width: 25%;">Processor & Clock</th>
+            <th style="width: 42%;">Primary Functional Responsibility</th>
+            <th style="width: 15%;">Logic Voltage</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong style="color: #ff9142;">ESP32-CAM</strong></td>
+            <td class="font-mono">Xtensa Dual-Core LX6 @ 240 MHz + OV2640</td>
+            <td>Dedicated purely to top-down frame acquisition (QVGA 320 × 240 RGB565). Streams frame bytes over wired UART upon trigger. Zero network/Wi-Fi stack enabled.</td>
+            <td><span class="badge badge-cyan">3.3V Logic</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color: #38bdf8;">Teensy 4.1</strong></td>
+            <td class="font-mono">ARM Cortex-M7 @ 600 MHz, 1024 KB RAM</td>
+            <td>High-speed image processing: RGB565 decoding, fixed-point HSV segmentation, contour extraction, centroid calculation, planar homography, and sorting plan generation.</td>
+            <td><span class="badge badge-cyan">3.3V Logic</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color: #34d399;">Arduino Mega 2560</strong></td>
+            <td class="font-mono">ATmega2560 AVR @ 16 MHz, 54 I/O</td>
+            <td>Real-time deterministic motion control: AccelStepper pulse generation, homing sequence, limit switch ISR monitoring, PCA9685 I2C sequencing, and fail-safe recovery watchdog.</td>
+            <td><span class="badge badge-orange">5.0V Logic</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color: #c084fc;">PCA9685</strong></td>
+            <td class="font-mono">16-Channel 12-Bit PWM Driver (I2C)</td>
+            <td>Offloads analog servo pulse width generation (50 Hz) from the Mega, guaranteeing rock-steady jitter-free holding torque on Z-linkage and gripper servos.</td>
+            <td><span class="badge badge-purple">5V VCC / 5V V+</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color: #e2e8f0;">TMC2208 × 2</strong></td>
+            <td class="font-mono">Trinamic SilentStepStick Driver</td>
+            <td>Ultra-quiet, resonance-free driving of X and Y NEMA 17 steppers using StealthChop2 technology with up to 1/16 microstepping.</td>
+            <td><span class="badge badge-orange">12V VMOT / 5V VIO</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Communication Pipeline Visual Block -->
+    <div class="card" style="margin-top: 3mm;">
+      <div style="font-weight: bold; font-size: 7.5pt; color: #38bdf8; margin-bottom: 2mm; text-transform: uppercase;">
+        Hierarchical Wired Communication Pipeline
+      </div>
+      <div class="grid-3" style="text-align: center; font-size: 7.5pt;">
+        <div style="background: #0d121d; border: 1px solid rgba(255,107,0,0.3); border-radius: 4px; padding: 2.5mm;">
+          <div style="color: #ff9142; font-weight: bold;">ESP32-CAM</div>
+          <div style="font-size: 6.5pt; color: #94a3b8;">Sensor Acquisition</div>
+          <div style="margin: 1.5mm 0; font-size: 8pt; color: #38bdf8;">⇣ 921,600 Baud UART ⇣</div>
+          <div style="font-size: 6.5pt; color: #cbd5e1;">Raw RGB565 Framed Bytes</div>
+        </div>
+        <div style="background: #0d121d; border: 1px solid rgba(0,210,255,0.4); border-radius: 4px; padding: 2.5mm;">
+          <div style="color: #38bdf8; font-weight: bold;">Teensy 4.1</div>
+          <div style="font-size: 6.5pt; color: #94a3b8;">Vision & Sorting Planner</div>
+          <div style="margin: 1.5mm 0; font-size: 8pt; color: #34d399;">⇣ 115,200 Baud (Level Shifted) ⇣</div>
+          <div style="font-size: 6.5pt; color: #cbd5e1;">Atomic Task List & Heartbeat</div>
+        </div>
+        <div style="background: #0d121d; border: 1px solid rgba(16,185,129,0.4); border-radius: 4px; padding: 2.5mm;">
+          <div style="color: #34d399; font-weight: bold;">Arduino Mega 2560</div>
+          <div style="font-size: 6.5pt; color: #94a3b8;">Motion & Safety Watchdog</div>
+          <div style="margin: 1.5mm 0; font-size: 8pt; color: #c084fc;">⇣ STEP/DIR + I2C ⇣</div>
+          <div style="font-size: 6.5pt; color: #cbd5e1;">Steppers, Servos, Limit Switches</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-warning">
+      <strong>Important Engineering Rule:</strong> The ESP32-CAM does not perform image analytics; it acts exclusively as a wired video digitizer. The Teensy 4.1 performs all computer vision calculations, filtering, and trajectory optimization. The Arduino Mega receives fully calculated millimeter coordinates and is completely shielded from vision processing overhead.
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 2</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 3: SECTION 03 - MECHANICAL DESIGN & KINEMATICS
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 03 • MECHANICAL DESIGN & AXIS CONFIGURATION</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">03.</span> Mechanical Design, Kinematics & Workspace</h2>
+    
+    <div class="grid-2" style="margin-bottom: 3mm;">
+      <!-- CAD Image & Structure -->
+      <div>
+        <div class="card" style="padding: 2mm; margin: 0;">
+          <img src="assets/images/gantry_3axis_cad.png" alt="Cartesian 3-Axis Gantry Robot" style="width: 100%; height: 42mm; object-fit: contain; background: #05080f; border-radius: 4px;">
+          <div style="font-size: 6.5pt; color: #94a3b8; text-align: center; margin-top: 1mm;">
+            Figure 3.1: Moving-Bridge Cartesian Gantry CAD Structure (500× 500 mm Footprint)
+          </div>
+        </div>
+      </div>
+
+      <!-- Kinematics & Travel Table -->
+      <div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Dimensional Parameter</th>
+                <th>Engineering Specification</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Machine Outer Envelope</td>
+                <td class="font-mono" style="color: #ff9142;">500 × 500 × 500 mm</td>
+              </tr>
+              <tr>
+                <td>Active Sorting Workspace</td>
+                <td class="font-mono" style="color: #38bdf8;">300 × 300 mm</td>
+              </tr>
+              <tr>
+                <td>Workspace Discretization</td>
+                <td class="font-mono">10 × 10 cells (100 discrete positions)</td>
+              </tr>
+              <tr>
+                <td>Grid Cell Pitch</td>
+                <td class="font-mono">30 × 30 mm</td>
+              </tr>
+              <tr>
+                <td>Bottle Cap Diameter Range</td>
+                <td class="font-mono">Ø28 mm – Ø32 mm</td>
+              </tr>
+              <tr>
+                <td>Z-Axis Vertical Stroke</td>
+                <td class="font-mono" style="color: #34d399;">30 mm – 50 mm (Nominal: 40 mm)</td>
+              </tr>
+              <tr>
+                <td>Output Sorting Bins</td>
+                <td class="font-mono">4 Bins (Red, Yellow, Green, Blue)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 Axes Detailed Cards -->
+    <div class="grid-4" style="margin-bottom: 3.5mm;">
+      
+      <!-- X-Axis -->
+      <div class="card card-orange" style="margin: 0;">
+        <img src="assets/images/axis_x_vslot.png" alt="X-Axis Actuator" class="fig-img fig-img-contain">
+        <h4 style="color: #ff9142;">X-Axis Linear Drive</h4>
+        <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
+          <li>• 40mm NEMA 17 (1.3 A/phase)</li>
+          <li>• TMC2208 SilentStepStick</li>
+          <li>• GT2 timing belt (6mm width, 2mm pitch)</li>
+          <li>• 20-tooth GT2 pulley (40 mm/rev)</li>
+          <li>• V-wheel carriage on 2020 V-slot</li>
+          <li>• Usable travel: ~300 mm</li>
+        </ul>
+      </div>
+
+      <!-- Y-Axis -->
+      <div class="card card-cyan" style="margin: 0;">
+        <img src="assets/images/axis_y_gantry.png" alt="Y-Axis Moving Bridge" class="fig-img fig-img-contain">
+        <h4 style="color: #38bdf8;">Y-Axis Moving Bridge</h4>
+        <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
+          <li>• Matching 40mm NEMA 17 stepper</li>
+          <li>• TMC2208 stepper driver</li>
+          <li>• Moving cross-bridge supporting X-axis</li>
+          <li>• Dual synchronized belt pulleys</li>
+          <li>• Delrin guide wheels for stiffness</li>
+          <li>• Usable travel: ~300 mm</li>
+        </ul>
+      </div>
+
+      <!-- Z-Axis -->
+      <div class="card card-emerald" style="margin: 0;">
+        <img src="assets/images/axis_z_slider.png" alt="Z-Axis Linkage" class="fig-img" style="object-fit: contain; background: #05080f; padding: 1mm;">
+        <h4 style="color: #34d399;">Z-Axis Vertical Linkage</h4>
+        <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
+          <li>• 1× MG90S metal-gear micro servo</li>
+          <li>• Guided linear vertical dovetail/slider</li>
+          <li>• Kinematic crank-slider linkage</li>
+          <li>• Nominal vertical stroke: ~40 mm</li>
+          <li>• Spring-assisted counterbalance</li>
+          <li>• Relieves servo lifting torque</li>
+        </ul>
+      </div>
+
+      <!-- Gripper -->
+      <div class="card card-purple" style="margin: 0;">
+        <img src="assets/images/gripper_servo_stage3.png" alt="Parallel Gripper" class="fig-img">
+        <h4 style="color: #c084fc;">Two-Finger Gripper</h4>
+        <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
+          <li>• 1× MG90S metal-gear micro servo</li>
+          <li>• Dual parallel synchronized geared jaws</li>
+          <li>• Flexible TPU/rubber high-friction pads</li>
+          <li>• Jaw opening: ~36 mm (Open)</li>
+          <li>• Clamping width: ~26 mm (Gripped)</li>
+          <li>• Compliant grip prevents cap deformation</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Workspace & Bins Real Photo Section -->
+    <div class="grid-2">
+      <div class="card" style="padding: 2mm; margin: 0;">
+        <img src="assets/images/sorting_bins_caps.png" alt="Sorting Board with Bottle Caps" style="width: 100%; height: 35mm; object-fit: cover; border-radius: 4px;">
+        <div style="font-size: 6.5pt; color: #94a3b8; text-align: center; margin-top: 1mm;">
+          Figure 3.2: 4-Color Collection Bins & Sorting Board Prototype (Red, Yellow, Green, Blue)
+        </div>
+      </div>
+      <div class="card" style="margin: 0;">
+        <h4 style="color: #ff9142; margin-bottom: 1.5mm;">Baseplate & Illumination Engineering</h4>
+        <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
+          The sorting board is manufactured from a <strong>300 × 300 mm matte white non-reflective acrylic plate</strong>. Dark grid lines (0.5 mm width) are silkscreened at 30 mm pitch. Four physical calibration crosshairs are precisely printed at the four corners of the active grid, allowing the top-down camera system to compute perspective homography matrices dynamically. Four external color collection bins are mounted along the positive X-rail, completely clear of active board space.
+        </p>
+      </div>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 3</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 4: SECTION 04 - EDGE COMPUTER VISION PIPELINE
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 04 • EDGE VISION & COORDINATE PIPELINE</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">04.</span> Edge Computer Vision & Image Processing Pipeline</h2>
+    <p>
+      Running embedded computer vision on a microcontroller requires rigorous mathematical optimization and strict memory budget management. The Teensy 4.1 features an ARM Cortex-M7 core running at 600 MHz with 1024 KB of on-chip SRAM.
+    </p>
+
+    <!-- Memory Arithmetic & Budget Callout -->
+    <div class="card card-cyan" style="margin-bottom: 3mm;">
+      <div class="grid-3" style="text-align: center; font-size: 7.5pt;">
+        <div>
+          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Raw QVGA Frame Size</div>
+          <div class="font-mono" style="font-size: 11pt; font-weight: bold; color: #38bdf8;">153,600 Bytes</div>
+          <div style="color: #cbd5e1; font-size: 6.5pt;">320 × 240 × 2 bytes (RGB565)</div>
+        </div>
+        <div>
+          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Teensy 4.1 SRAM Allocation</div>
+          <div class="font-mono" style="font-size: 11pt; font-weight: bold; color: #34d399;">14.6% Consumption</div>
+          <div style="color: #cbd5e1; font-size: 6.5pt;">150 KiB / 1024 KiB Total SRAM</div>
+        </div>
+        <div>
+          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Free SRAM Headroom</div>
+          <div class="font-mono" style="font-size: 11pt; font-weight: bold; color: #facc15;">&gt; 800 KiB Free</div>
+          <div style="color: #cbd5e1; font-size: 6.5pt;">For binary masks, buffers & stack</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 Detailed Stages of the Vision Pipeline -->
+    <div class="grid-2" style="margin-bottom: 3mm;">
+      
+      <!-- Stage 1: Acquisition -->
+      <div class="card card-orange" style="margin: 0;">
+        <h4 style="color: #ff9142;">Stage 1: Frame Acquisition & Streaming</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1mm;">
+          The ESP32-CAM captures raw 16-bit RGB565 pixels over the DVP camera bus. The frame is transmitted over UART2 at 921,600 baud using framed packets:
+        </p>
+        <div class="code-box">
+[Header: 0x55 0xAA] [LenHigh LenLow] [Payload: 153600 Bytes] [CRC16: 2 Bytes]
+Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)</div>
+      </div>
+
+      <!-- Stage 2: HSV Segmentation -->
+      <div class="card card-cyan" style="margin: 0;">
+        <h4 style="color: #38bdf8;">Stage 2: Fixed-Point HSV Segmentation</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1mm;">
+          RGB is converted to HSV in integer math to eliminate lighting sensitivity. Red wraps around the hue circle, requiring a dual-band threshold:
+        </p>
+        <div class="code-box">
+<span class="code-keyword">RED</span>:    (H &lt; 10 || H &gt; 170) &amp;&amp; S &gt; 90 &amp;&amp; V &gt; 60
+<span class="code-keyword">BLUE</span>:   (H &gt;= 100 &amp;&amp; H &lt;= 130) &amp;&amp; S &gt; 80
+<span class="code-keyword">GREEN</span>:  (H &gt;= 35  &amp;&amp; H &lt;= 85)  &amp;&amp; S &gt; 70
+<span class="code-keyword">YELLOW</span>: (H &gt;= 20  &amp;&amp; H &lt;= 35)  &amp;&amp; S &gt; 90</div>
+      </div>
+
+      <!-- Stage 3: Contour & Circularity -->
+      <div class="card card-emerald" style="margin: 0;">
+        <h4 style="color: #34d399;">Stage 3: Contour Detection & Circularity Filter</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1mm;">
+          A single-pass connected components algorithm extracts blob area A, perimeter P, and bounding boxes. False positives are rejected via the isoperimetric circularity metric:
+        </p>
+        <div class="code-box">
+<span class="code-type">float</span> circularity = (4.0f * PI * area) / (perimeter * perimeter);
+<span class="code-keyword">if</span> (circularity &gt; 0.75f &amp;&amp; area &gt; 500 &amp;&amp; area &lt; 2000) {
+  <span class="code-comment">// Confirmed bottle cap! Compute centroid:</span>
+  cx = sumX / area; cy = sumY / area;
+}</div>
+      </div>
+
+      <!-- Stage 4: Homography -->
+      <div class="card card-purple" style="margin: 0;">
+        <h4 style="color: #c084fc;">Stage 4: Planar Homography Coordinate Mapping</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1mm;">
+          Camera lens distortion and non-orthogonal mounting cause grid pixels to warp non-linearly. A 3 × 3 planar homography matrix maps (u, v) image coordinates to physical (X, Y) millimeters:
+        </p>
+        <div class="code-box">
+<span class="code-type">float</span> W = H[6]*u + H[7]*v + H[8];
+<span class="code-type">float</span> X_mm = (H[0]*u + H[1]*v + H[2]) / W;
+<span class="code-type">float</span> Y_mm = (H[3]*u + H[4]*v + H[5]) / W;</div>
+      </div>
+
+    </div>
+
+    <!-- Vision Prototype Screenshot from Lab Testing -->
+    <div class="card" style="padding: 2mm; margin: 0;">
+      <div class="grid-2" style="align-items: center;">
+        <img src="assets/images/vision_detection_stage1.png" alt="Vision Detection Test" style="width: 100%; height: 38mm; object-fit: contain; background: #000; border-radius: 4px;">
+        <div>
+          <h4 style="color: #34d399; margin-bottom: 1mm;">Laboratory Calibration & Validation</h4>
+          <p style="font-size: 7pt; color: #94a3b8; line-height: 1.4;">
+            Figure 4.1 shows multi-color segmentation and automated coordinate extraction during Stage 1 validation. The algorithm achieved <strong>100% detection accuracy</strong> across 30 caps of varying hues under diffused LED illumination, with an average positional error of less than <strong>0.85 mm</strong> relative to physical ground truth.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 4</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 5: SECTION 05 - ELECTRICAL SYSTEM & POWER TREE
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 05 • ELECTRICAL SYSTEM & POWER DISTRIBUTION</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">05.</span> Electrical Architecture & 3-Branch Power Distribution</h2>
+    <p>
+      Inductive motor noise and high servo stall currents are the leading causes of spontaneous microcontroller resets in robotics projects. To eliminate brownouts and voltage transients, power distribution is partitioned into <strong>three electrically isolated branches</strong> derived from a central 12V 10A (120W) switched-mode power supply (SMPS).
+    </p>
+
+    <!-- 3-Branch Power Breakdown Cards -->
+    <div class="grid-3" style="margin-bottom: 3mm;">
+      
+      <!-- Branch A -->
+      <div class="card card-orange" style="margin: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="color: #ff9142;">Branch A: Steppers</h4>
+          <span class="badge badge-orange">12V Direct</span>
+        </div>
+        <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1.5mm;">
+          Direct 12V rail supplying VMOT to both TMC2208 stepper motor driver modules.
+        </p>
+        <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
+          <li>• TMC2208 X-Axis ⟶ NEMA 17 (1.3 A)</li>
+          <li>• TMC2208 Y-Axis ⟶ NEMA 17 (1.3 A)</li>
+          <li>• 100 µF low-ESR capacitors on VMOT</li>
+          <li>• Dedicated 5.0A fast-acting inline fuse</li>
+        </ul>
+      </div>
+
+      <!-- Branch B -->
+      <div class="card card-purple" style="margin: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="color: #c084fc;">Branch B: Servos</h4>
+          <span class="badge badge-purple">5V / 5A Buck</span>
+        </div>
+        <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1.5mm;">
+          Isolated high-efficiency buck converter feeding the high-current PCA9685 V+ rail.
+        </p>
+        <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
+          <li>• PCA9685 Channel 0 ⟶ MG90S (Z-Axis)</li>
+          <li>• PCA9685 Channel 1 ⟶ MG90S (Gripper)</li>
+          <li>• Absorbs 1.8A instantaneous stall spikes</li>
+          <li>• Dedicated 3.0A fast-acting inline fuse</li>
+        </ul>
+      </div>
+
+      <!-- Branch C -->
+      <div class="card card-cyan" style="margin: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="color: #38bdf8;">Branch C: Logic</h4>
+          <span class="badge badge-cyan">5V / 3A Regulated</span>
+        </div>
+        <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1.5mm;">
+          Clean, noise-free regulated 5V line powering microcontrollers and logic ICs.
+        </p>
+        <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
+          <li>• Arduino Mega 2560 5V/VIN pin</li>
+          <li>• Teensy 4.1 VIN (internally regulated 3.3V)</li>
+          <li>• ESP32-CAM 5V input rail</li>
+          <li>• PCA9685 VCC logic supply</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Mandatory Level Shifter Safety Warning -->
+    <div class="callout callout-danger">
+      <strong style="font-size: 8pt; display: block; margin-bottom: 1mm;">⚠️ MANDATORY LOGIC LEVEL SHIFTER SPECIFICATION:</strong>
+      The Arduino Mega 2560 operates strictly on <strong>5.0V TTL logic</strong>. The Teensy 4.1 and ESP32-CAM operate strictly on <strong>3.3V LVCMOS logic and are NOT 5V tolerant</strong>. Exposing Teensy Pin 0 (RX1) directly to Arduino Mega Pin 18 (TX1, 5V) will cause irreversible dielectric breakdown of the ARM Cortex-M7 I/O ring. A dedicated bidirectional logic level shifter (TXS0108E or BSS138-based MOSFET shifter) must be placed between Mega TX1 and Teensy RX1. Teensy Pin 1 (TX1, 3.3V) can connect directly to Mega Pin 19 (RX1) because the ATmega2560 recognizes 3.3V as a logic HIGH (V_{IH} = 0.6 × V_{CC} = 3.0V).
+    </div>
+
+    <!-- Power Tree Schematic ASCII / Visual Diagram -->
+    <div class="card">
+      <div style="font-weight: bold; font-size: 7.5pt; color: #ff9142; margin-bottom: 2mm; text-transform: uppercase;">
+        Electrical Power Flow & Star Grounding Topology
+      </div>
+      <div class="code-box" style="font-size: 7pt; line-height: 1.3;">
++-------------------+
+|  12V, 10A SMPS    | ────── Master 10A Fuse ──┬── [BRANCH A: 12V Direct] ────────> TMC2208 Motor VMOT (X & Y Steppers)
+|  (120W DC Supply) |                          │
++-------------------+                          ├── [BRANCH B: 12V -> 5V/5A Buck] ─> PCA9685 V+ Power Terminal (Servos)
+         │                                     │
+    Common GND Star Point                      └── [BRANCH C: 12V -> 5V/3A Buck] ─┬─> Arduino Mega 2560 5V Pin
+         │                                                                        ├─> Teensy 4.1 VIN Pin
+         └───────────── Tied to Single Earth Terminal Chassis                     ├─> ESP32-CAM 5V Pin
+                                                                                  └─> PCA9685 VCC Logic Pin</div>
+    </div>
+
+    <!-- Grounding Best Practices -->
+    <div class="card card-emerald">
+      <h4 style="color: #34d399; margin-bottom: 1mm;">Single-Point Star Grounding Protocol</h4>
+      <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
+        High-current return paths from the NEMA 17 stepper coils and MG90S servos must never share return PCB traces with sensitive 3.3V logic grounds. All ground wires must route back independently to a <strong>single-point star grounding terminal</strong> located adjacent to the 12V SMPS negative terminal. This eliminates ground bounce and ground loops that trigger false limit switch interrupts.
+      </p>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 5</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 6: SECTION 06 - PINOUT & WIRING MATRIX
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 06 • COMPLETE HARDWARE PINOUT & WIRING MATRIX</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">06.</span> Hardware Pin & Interface Mapping Matrix</h2>
+    <p>
+      The complete pin-level wiring interconnect table across all microcontrollers, motor drivers, PWM generators, and limit switches.
+    </p>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Subsystem</th>
+            <th>Source Pin</th>
+            <th>Destination Pin</th>
+            <th>Signal Description</th>
+            <th>Voltage</th>
+            <th>Safety & Implementation Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Camera to Teensy -->
+          <tr>
+            <td><strong style="color: #ff9142;">ESP32-CAM ⟶ Teensy</strong></td>
+            <td class="font-mono">GPIO13 (TX2)</td>
+            <td class="font-mono">Teensy Pin 7 (RX2)</td>
+            <td>High-speed image byte stream</td>
+            <td><span class="badge badge-cyan">3.3V Direct</span></td>
+            <td>MicroSD interface must remain disabled</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #ff9142;">ESP32-CAM ⟶ Teensy</strong></td>
+            <td class="font-mono">GPIO14 (RX2)</td>
+            <td class="font-mono">Teensy Pin 8 (TX2)</td>
+            <td>Capture frame trigger strobe</td>
+            <td><span class="badge badge-cyan">3.3V Direct</span></td>
+            <td>Common signal ground required</td>
+          </tr>
+
+          <!-- Teensy to Mega -->
+          <tr>
+            <td><strong style="color: #38bdf8;">Teensy ⟶ Mega</strong></td>
+            <td class="font-mono">Teensy Pin 1 (TX1)</td>
+            <td class="font-mono">Mega Pin 19 (RX1)</td>
+            <td>Sorting plan batch instruction packets</td>
+            <td><span class="badge badge-cyan">3.3V ⟶ 5V Tolerant</span></td>
+            <td>ATmega2560 reads 3.3V HIGH reliably (V_{IH} = 3.0V)</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #34d399;">Mega ⟶ Teensy</strong></td>
+            <td class="font-mono">Mega Pin 18 (TX1)</td>
+            <td class="font-mono">Teensy Pin 0 (RX1)</td>
+            <td>Motion execution ACK & Status updates</td>
+            <td><span class="badge badge-red">5V ⟶ Level Shifter ⟶ 3.3V</span></td>
+            <td><strong>MUST route through logic level shifter!</strong></td>
+          </tr>
+
+          <!-- Mega to TMC2208 X-Axis -->
+          <tr>
+            <td><strong style="color: #e2e8f0;">Mega ⟶ TMC2208 (X)</strong></td>
+            <td class="font-mono">Mega Pin 2 (or 54)</td>
+            <td class="font-mono">Driver STEP Pin</td>
+            <td>X-Axis stepper pulse train</td>
+            <td><span class="badge badge-orange">5V Logic VIO</span></td>
+            <td>Up to 20 kHz pulse rate via AccelStepper</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #e2e8f0;">Mega ⟶ TMC2208 (X)</strong></td>
+            <td class="font-mono">Mega Pin 5 (or 55)</td>
+            <td class="font-mono">Driver DIR Pin</td>
+            <td>X-Axis direction control</td>
+            <td><span class="badge badge-orange">5V Logic VIO</span></td>
+            <td>HIGH = Forward, LOW = Reverse</td>
+          </tr>
+
+          <!-- Mega to TMC2208 Y-Axis -->
+          <tr>
+            <td><strong style="color: #e2e8f0;">Mega ⟶ TMC2208 (Y)</strong></td>
+            <td class="font-mono">Mega Pin 3 (or 60)</td>
+            <td class="font-mono">Driver STEP Pin</td>
+            <td>Y-Axis stepper pulse train</td>
+            <td><span class="badge badge-orange">5V Logic VIO</span></td>
+            <td>Synchronized bridge movement</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #e2e8f0;">Mega ⟶ TMC2208 (Y)</strong></td>
+            <td class="font-mono">Mega Pin 6 (or 61)</td>
+            <td class="font-mono">Driver DIR Pin</td>
+            <td>Y-Axis direction control</td>
+            <td><span class="badge badge-orange">5V Logic VIO</span></td>
+            <td>HIGH = Forward, LOW = Reverse</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #e2e8f0;">Mega ⟶ TMC2208 Both</strong></td>
+            <td class="font-mono">Mega Pin 8 (or 38)</td>
+            <td class="font-mono">Shared EN Pin</td>
+            <td>Driver Enable (Active LOW)</td>
+            <td><span class="badge badge-orange">5V Logic</span></td>
+            <td>LOW = Coils energized, HIGH = Freewheeling</td>
+          </tr>
+
+          <!-- Mega to PCA9685 I2C -->
+          <tr>
+            <td><strong style="color: #c084fc;">Mega ⟶ PCA9685</strong></td>
+            <td class="font-mono">Mega Pin 20 (SDA)</td>
+            <td class="font-mono">PCA9685 SDA Pin</td>
+            <td>I2C Serial Data Bus</td>
+            <td><span class="badge badge-orange">5V Bus</span></td>
+            <td>Includes 4.7 kΩ pull-up resistor to 5V</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #c084fc;">Mega ⟶ PCA9685</strong></td>
+            <td class="font-mono">Mega Pin 21 (SCL)</td>
+            <td class="font-mono">PCA9685 SCL Pin</td>
+            <td>I2C Serial Clock Bus</td>
+            <td><span class="badge badge-orange">5V Bus</span></td>
+            <td>Hardware I2C running at 400 kHz Fast-Mode</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #c084fc;">PCA9685 Channel 0</strong></td>
+            <td class="font-mono">PWM Pin CH0</td>
+            <td class="font-mono">MG90S Servo #1 (Z)</td>
+            <td>Z-Axis vertical lift linkage</td>
+            <td><span class="badge badge-purple">5V Servo PWM (50 Hz)</span></td>
+            <td>0° (Raised) to 90° (Lowered onto cap)</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #c084fc;">PCA9685 Channel 1</strong></td>
+            <td class="font-mono">PWM Pin CH1</td>
+            <td class="font-mono">MG90S Servo #2 (Grip)</td>
+            <td>Parallel gripper clamping jaws</td>
+            <td><span class="badge badge-purple">5V Servo PWM (50 Hz)</span></td>
+            <td>Open (36 mm gap) to Clamped (26 mm gap)</td>
+          </tr>
+
+          <!-- Limit Switches -->
+          <tr>
+            <td><strong style="color: #34d399;">Limit Switches ⟶ Mega</strong></td>
+            <td class="font-mono">NC Contact Pin</td>
+            <td class="font-mono">Mega Pin 22</td>
+            <td>X-Axis Homing & Endstop Switch</td>
+            <td><span class="badge badge-emerald">5V Internal Pull-Up</span></td>
+            <td>Normally Closed: open circuit = fault/endstop</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #34d399;">Limit Switches ⟶ Mega</strong></td>
+            <td class="font-mono">NC Contact Pin</td>
+            <td class="font-mono">Mega Pin 23</td>
+            <td>Y-Axis Homing & Endstop Switch</td>
+            <td><span class="badge badge-emerald">5V Internal Pull-Up</span></td>
+            <td>Normally Closed: open circuit = fault/endstop</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #34d399;">Limit Switches ⟶ Mega</strong></td>
+            <td class="font-mono">NC Contact Pin</td>
+            <td class="font-mono">Mega Pin 24</td>
+            <td>Z-Axis Retracted Home Switch</td>
+            <td><span class="badge badge-emerald">5V Internal Pull-Up</span></td>
+            <td>Normally Closed: open circuit = fault/endstop</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 6</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 7: SECTION 07 - MOTION CONTROL & FAIL-SAFE RECOVERY
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 07 • MOTION SEQUENCING & SAFETY STRATEGY</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">07.</span> Control Strategy, Operating Sequence & Fail-Safe Recovery</h2>
+    <p>
+      Motion execution on the Arduino Mega 2560 is governed by a deterministic, non-blocking finite state machine (FSM). The robot executes an exact 8-step kinematic lifecycle for every target cap.
+    </p>
+
+    <!-- 8-Step Pick & Place Choreography Table -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 8%;">Step</th>
+            <th style="width: 20%;">Operational Phase</th>
+            <th style="width: 28%;">X / Y Gantry Motion</th>
+            <th style="width: 14%;">Z Servo</th>
+            <th style="width: 14%;">Gripper</th>
+            <th style="width: 16%;">Safety Interlock</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="font-mono" style="font-weight: bold; color: #ff9142;">01</td>
+            <td><strong>Traverse to Cap</strong></td>
+            <td>Coordinated move to target (X, Y)</td>
+            <td><span class="badge badge-emerald">Raised (0 mm)</span></td>
+            <td><span class="badge badge-cyan">Open (36 mm)</span></td>
+            <td>Full overhead clearance</td>
+          </tr>
+          <tr>
+            <td class="font-mono" style="font-weight: bold; color: #ff9142;">02</td>
+            <td><strong>Lower Over Cap</strong></td>
+            <td>Stationary at target (X, Y)</td>
+            <td><span class="badge badge-orange">Lower (~40 mm)</span></td>
+            <td>Open (36 mm)</td>
+            <td>Verify mechanical bottom stop</td>
+          </tr>
+          <tr>
+            <td class="font-mono" style="font-weight: bold; color: #ff9142;">03</td>
+            <td><strong>Clamp Gripper</strong></td>
+            <td>Stationary</td>
+            <td>Lowered</td>
+            <td><span class="badge badge-purple">Close (~26 mm)</span></td>
+            <td>Torque compliance gating</td>
+          </tr>
+          <tr>
+            <td class="font-mono" style="font-weight: bold; color: #ff9142;">04</td>
+            <td><strong>Vertical Lift</strong></td>
+            <td>Stationary</td>
+            <td><span class="badge badge-emerald">Raise (0 mm)</span></td>
+            <td>Closed (Grip)</td>
+            <td>Spring assists vertical lift</td>
+          </tr>
+          <tr>
+            <td class="font-mono" style="font-weight: bold; color: #ff9142;">05</td>
+            <td><strong>Travel to Bin</strong></td>
+            <td>Rapid linear traverse to assigned bin slot</td>
+            <td>Raised (0 mm)</td>
+            <td>Closed (Grip)</td>
+            <td>No Z travel during XY traverse</td>
+          </tr>
+          <tr>
+            <td class="font-mono" style="font-weight: bold; color: #ff9142;">06</td>
+            <td><strong>Lower into Bin</strong></td>
+            <td>Stationary over bin opening</td>
+            <td><span class="badge badge-orange">Lower (~25 mm)</span></td>
+            <td>Closed (Grip)</td>
+            <td>Prevents cap bounce/ejection</td>
+          </tr>
+          <tr>
+            <td class="font-mono" style="font-weight: bold; color: #ff9142;">07</td>
+            <td><strong>Release Cap</strong></td>
+            <td>Stationary</td>
+            <td>Lowered</td>
+            <td><span class="badge badge-cyan">Open (36 mm)</span></td>
+            <td>Gravity drop into receptacle</td>
+          </tr>
+          <tr>
+            <td class="font-mono" style="font-weight: bold; color: #ff9142;">08</td>
+            <td><strong>Retract & Advance</strong></td>
+            <td>Advance to next target or Home Park</td>
+            <td><span class="badge badge-emerald">Raise (0 mm)</span></td>
+            <td>Open (36 mm)</td>
+            <td>Increment completed counter</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Communication-Loss Safe Recovery Architecture -->
+    <div class="card card-orange" style="margin-top: 3mm;">
+      <h3 style="color: #ff9142; margin-bottom: 1.5mm;">Autonomous Communication-Loss Recovery Architecture</h3>
+      <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
+        A major failure mode in distributed robotic systems is host communication loss mid-trajectory. If an embedded system depends on receiving continuous streaming instructions, an unexpected cable disconnect or Teensy reboot could leave the gripper stranded holding a cap mid-air, risking collision or motor burnout.
+      </p>
+      
+      <div class="grid-3" style="font-size: 7.5pt; margin-top: 2mm;">
+        <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #ff9142;">
+          <strong style="color: #ff9142;">1. Atomic Batch Plan Storage</strong>
+          <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
+            The Teensy transmits the entire batch sorting plan (up to 100 caps) with batch IDs and CRC16 checksums before physical motion commences. The Mega stores this plan in local SRAM.
+          </p>
+        </div>
+        <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #38bdf8;">
+          <strong style="color: #38bdf8;">2. In-Flight Cap Safe Completion</strong>
+          <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
+            If the UART link drops while a cap is being picked or carried, the Mega recognizes the heartbeat loss but <strong>completes depositing that specific cap into its assigned bin</strong>.
+          </p>
+        </div>
+        <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #34d399;">
+          <strong style="color: #34d399;">3. Safe Retraction & Park</strong>
+          <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
+            After releasing the in-flight cap, the Z-axis fully retracts to height 0 mm, further pickups are suppressed, the carriage returns to safe parking (0, 0), and enters a safe standby state.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Safety Circuits -->
+    <div class="grid-2" style="margin-top: 3mm;">
+      <div class="card card-emerald" style="margin: 0;">
+        <h4 style="color: #34d399;">Normally Closed (NC) Endstops</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.35; margin-top: 1mm;">
+          All limit switches utilize Normally Closed contacts held at 5V logic via internal pull-ups. If a cable snags or disconnects, the circuit breaks instantly, triggering an immediate hardware e-stop interrupt.
+        </p>
+      </div>
+      <div class="card card-red" style="margin: 0;">
+        <h4 style="color: #f87171;">Hardware Master Emergency Stop</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.35; margin-top: 1mm;">
+          A latching red mushroom E-Stop button cuts the primary 12V supply to the TMC2208 drivers and servo buck. Logic remains energized to report telemetry while hazardous actuator movement halts in &lt;10 µs.
+        </p>
+      </div>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 7</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 8: SECTION 08 - BILL OF MATERIALS (BOM)
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 08 • COMPLETE BILL OF MATERIALS (BOM)</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">08.</span> Complete Bill of Materials (BOM) & Inventory</h2>
+    <p>
+      Comprehensive component inventory detailing electrical, mechanical, and power hardware, distinguishing between parts already available in the laboratory and items to procure.
+    </p>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 5%;">#</th>
+            <th style="width: 22%;">Component Name</th>
+            <th style="width: 26%;">Engineering Specification</th>
+            <th style="width: 6%;">Qty</th>
+            <th style="width: 27%;">Functional Purpose</th>
+            <th style="width: 14%;">Procurement</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="font-mono">01</td>
+            <td><strong style="color: #38bdf8;">Teensy 4.1</strong></td>
+            <td class="font-mono">ARM Cortex-M7 @ 600 MHz, 1024 KB RAM</td>
+            <td class="font-mono">1</td>
+            <td>Vision decoding, HSV segmentation, coordinates</td>
+            <td><span class="badge badge-emerald">Already Owned</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">02</td>
+            <td><strong style="color: #34d399;">Arduino Mega 2560</strong></td>
+            <td class="font-mono">ATmega2560 @ 16 MHz, 54 I/O pins</td>
+            <td class="font-mono">1</td>
+            <td>Deterministic step pulses, homing, servo sequencing</td>
+            <td><span class="badge badge-emerald">Already Owned</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">03</td>
+            <td><strong style="color: #ff9142;">ESP32-CAM</strong></td>
+            <td class="font-mono">AI-Thinker module + OV2640 camera</td>
+            <td class="font-mono">1</td>
+            <td>Top-down QVGA frame acquisition (320×240 RGB565)</td>
+            <td><span class="badge badge-emerald">Already Owned</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">04</td>
+            <td><strong style="color: #c084fc;">PCA9685 Board</strong></td>
+            <td class="font-mono">16-Channel 12-bit PWM generator (I2C)</td>
+            <td class="font-mono">1</td>
+            <td>Jitter-free 50 Hz PWM generation for 2 servos</td>
+            <td><span class="badge badge-emerald">Already Owned</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">05</td>
+            <td><strong>MG90S Micro Servos</strong></td>
+            <td class="font-mono">Metal gear micro servo (2.2 kg-cm torque)</td>
+            <td class="font-mono">2</td>
+            <td>Z-axis vertical stroke & parallel gripper clamping</td>
+            <td><span class="badge badge-emerald">Already Owned</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">06</td>
+            <td><strong>12V 10A SMPS</strong></td>
+            <td class="font-mono">120W switched-mode industrial supply</td>
+            <td class="font-mono">1</td>
+            <td>Master DC power supply for entire machine</td>
+            <td><span class="badge badge-emerald">Already Owned</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">07</td>
+            <td><strong>LED Light Plate</strong></td>
+            <td class="font-mono">Uniform diffused white backlight panel</td>
+            <td class="font-mono">1</td>
+            <td>Shadow-free illumination of plastic bottle caps</td>
+            <td><span class="badge badge-emerald">Already Owned</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">08</td>
+            <td><strong>TB6612FNG Drivers</strong></td>
+            <td class="font-mono">Dual DC motor driver breakout</td>
+            <td class="font-mono">2</td>
+            <td>Auxiliary actuator drivers (spares/optional)</td>
+            <td><span class="badge badge-emerald">Already Owned</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">09</td>
+            <td><strong style="color: #ff9142;">NEMA 17 Steppers</strong></td>
+            <td class="font-mono">40 mm body, 1.3 A/phase, 4.2 kg-cm torque</td>
+            <td class="font-mono">2</td>
+            <td>X and Y Cartesian gantry linear travel</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">10</td>
+            <td><strong style="color: #ff9142;">TMC2208 V1.2</strong></td>
+            <td class="font-mono">SilentStepStick driver with heatsink</td>
+            <td class="font-mono">2</td>
+            <td>StealthChop2 silent stepper motor driving</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">11</td>
+            <td><strong>GT2 Timing Belts & Pulleys</strong></td>
+            <td class="font-mono">6 mm width, 2 mm pitch, 20T pulleys (5mm bore)</td>
+            <td class="font-mono">2 sets</td>
+            <td>Precision linear belt drive transmission</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">12</td>
+            <td><strong>2020 Aluminum Extrusion</strong></td>
+            <td class="font-mono">V-slot / T-slot anodized aluminum profiles</td>
+            <td class="font-mono">1 set</td>
+            <td>Rigid 500×500×500 mm machine frame</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">13</td>
+            <td><strong>V-Wheel / Rail Kits</strong></td>
+            <td class="font-mono">Delrin V-wheel kits or MGN12H linear rails</td>
+            <td class="font-mono">2 axis</td>
+            <td>Low-friction guidance for moving bridge & carriage</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">14</td>
+            <td><strong style="color: #c084fc;">5V 5A Buck Converter</strong></td>
+            <td class="font-mono">High-efficiency step-down (12V ⟶ 5V)</td>
+            <td class="font-mono">1</td>
+            <td>Dedicated high-current servo power rail (PCA9685 V+)</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">15</td>
+            <td><strong style="color: #38bdf8;">5V 3A Logic Buck</strong></td>
+            <td class="font-mono">Regulated step-down for microcontrollers</td>
+            <td class="font-mono">1</td>
+            <td>Stable logic rail for Mega, Teensy 4.1, ESP32-CAM</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">16</td>
+            <td><strong style="color: #f87171;">Logic Level Shifter</strong></td>
+            <td class="font-mono">4-Channel bidirectional (5.0V ⇄ 3.3V)</td>
+            <td class="font-mono">1</td>
+            <td>Protects Teensy 3.3V RX from Mega 5.0V TX</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">17</td>
+            <td><strong>NC Limit Switches & E-Stop</strong></td>
+            <td class="font-mono">Roller-lever microswitches + Latching E-Stop</td>
+            <td class="font-mono">3 + 1</td>
+            <td>Homing endstops and master hardware power cutoff</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 8</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 9: SECTION 09 - 6-STAGE PHASED ROADMAP
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 09 • PHASED IMPLEMENTATION ROADMAP</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">09.</span> Phased Implementation & Testing Roadmap</h2>
+    <p>
+      To prevent compounding integration errors, assembly proceeds through six decoupled engineering stages. Each stage has a verified exit criterion before progressing.
+    </p>
+
+    <div class="grid-3" style="margin-bottom: 3.5mm;">
+      
+      <!-- Stage 1 -->
+      <div class="card card-emerald" style="margin: 0;">
+        <img src="assets/images/vision_detection_stage1.png" alt="Stage 1 Vision" class="fig-img fig-img-contain">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="color: #34d399;">Stage 1: Vision Pipeline</h4>
+          <span class="badge badge-emerald">Complete</span>
+        </div>
+        <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
+          Validate ESP32-CAM UART frame streaming to Teensy 4.1. Calibrate HSV segmentation and planar homography matrix.
+        </p>
+        <div style="font-size: 6.5pt; color: #34d399; font-weight: bold; margin-top: 1.5mm;">
+          Milestone: Accurate cap detection and millimeter localization without internet.
+        </div>
+      </div>
+
+      <!-- Stage 2 -->
+      <div class="card card-cyan" style="margin: 0;">
+        <img src="assets/images/gantry_belt_stage2.png" alt="Stage 2 Gantry" class="fig-img">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="color: #38bdf8;">Stage 2: XY Gantry Motion</h4>
+          <span class="badge badge-cyan">In Progress</span>
+        </div>
+        <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
+          Assemble 2020 extrusion frame. Mount NEMA 17 steppers and TMC2208 drivers. Tune steps/mm and test homing repeatability.
+        </p>
+        <div style="font-size: 6.5pt; color: #38bdf8; font-weight: bold; margin-top: 1.5mm;">
+          Milestone: Repeatable sub-millimeter positioning across full 300×300 mm board.
+        </div>
+      </div>
+
+      <!-- Stage 3 -->
+      <div class="card card-purple" style="margin: 0;">
+        <img src="assets/images/gripper_servo_stage3.png" alt="Stage 3 Gripper" class="fig-img">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="color: #c084fc;">Stage 3: Z-Axis & Gripper</h4>
+          <span class="badge badge-purple">Validated</span>
+        </div>
+        <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
+          Fabricate crank-slider linkage and 2-finger parallel gripper with TPU pads. Connect PCA9685 to dedicated 5V buck.
+        </p>
+        <div style="font-size: 6.5pt; color: #c084fc; font-weight: bold; margin-top: 1.5mm;">
+          Milestone: Reliably pick and release caps without slippage or servo stalling.
+        </div>
+      </div>
+
+      <!-- Stage 4 -->
+      <div class="card card-orange" style="margin: 0;">
+        <div style="height: 28mm; background: #070a10; border-radius: 4px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,107,0,0.3); margin-bottom: 1.5mm;">
+          <span style="font-size: 24pt; color: #ff9142;">⇄</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="color: #ff9142;">Stage 4: Controller Link</h4>
+          <span class="badge badge-orange">Next</span>
+        </div>
+        <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
+          Connect Teensy Serial1 to Mega Serial1 via logic shifter. Test framed packet batch transfers and simulate cable loss.
+        </p>
+        <div style="font-size: 6.5pt; color: #ff9142; font-weight: bold; margin-top: 1.5mm;">
+          Milestone: Mega completes in-flight cap safely when UART connection is severed.
+        </div>
+      </div>
+
+      <!-- Stage 5 -->
+      <div class="card card-emerald" style="margin: 0;">
+        <img src="assets/images/portal_robot_system.png" alt="Stage 5 Full Integration" class="fig-img">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="color: #34d399;">Stage 5: Full Assembly</h4>
+          <span class="badge badge-emerald">Integration</span>
+        </div>
+        <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
+          Integrate overhead camera gantry, LED diffuser plate, and sorting bins. Calibrate camera pixel to gripper tip offset (dx, dy).
+        </p>
+        <div style="font-size: 6.5pt; color: #34d399; font-weight: bold; margin-top: 1.5mm;">
+          Milestone: Fully autonomous multi-cap sort cycles with 100% binning accuracy.
+        </div>
+      </div>
+
+      <!-- Stage 6 -->
+      <div class="card card-red" style="margin: 0;">
+        <div style="height: 28mm; background: #070a10; border-radius: 4px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(239,68,68,0.3); margin-bottom: 1.5mm;">
+          <span style="font-size: 24pt; color: #f87171;">🛡️</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4 style="color: #f87171;">Stage 6: Reliability Test</h4>
+          <span class="badge badge-red">Stress</span>
+        </div>
+        <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
+          Execute 100-cycle continuous batch sorting endurance run. Induce artificial faults: missed pickups, switch trips, E-Stop cuts.
+        </p>
+        <div style="font-size: 6.5pt; color: #f87171; font-weight: bold; margin-top: 1.5mm;">
+          Milestone: Zero system deadlocks, verified thermals, and safe fail-stop behavior.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Implementation Priorities Callout -->
+    <div class="card" style="margin: 0;">
+      <h4 style="color: #ff9142; margin-bottom: 1.5mm;">Recommended Engineering Execution Order</h4>
+      <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
+        <strong>Step 1:</strong> Confirm that the Teensy 4.1 receives and decodes raw QVGA frames from the ESP32-CAM reliably.<br>
+        <strong>Step 2:</strong> Assemble the XY gantry and confirm TMC2208 stepper steps/mm calibration.<br>
+        <strong>Step 3:</strong> Validate that the MG90S Z-axis vertical linkage reliably lifts the gripper assembly without gear slipping.<br>
+        <strong>Step 4:</strong> Interconnect Teensy and Mega, validating the fail-safe communication recovery protocol under active motion.
+      </p>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 9</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 10: SECTION 10 - CRITICAL ENGINEERING CONSIDERATIONS
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 10 • CRITICAL ENGINEERING CONSIDERATIONS</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">10.</span> Critical Engineering Considerations & Troubleshooting</h2>
+    <p>
+      Key failure modes, thermal limits, and electrical design rules that must be verified before commissioning hardware.
+    </p>
+
+    <div class="grid-2" style="margin-bottom: 3.5mm;">
+      
+      <!-- 1. TMC2208 Vref -->
+      <div class="card card-orange" style="margin: 0;">
+        <h4 style="color: #ff9142;">1. TMC2208 Vref Calculation & Thermals</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
+          The NEMA 17 motors are rated at 1.3 A per phase. Standard TMC2208 carrier boards with small heatsinks cannot sustain 1.3 A RMS continuously without triggering internal overtemperature thermal shutdown (T_J > 150^°C).
+        </p>
+        <div class="code-box">
+I_RMS = V_ref / (1.414 * R_sense)  [For R_sense = 0.11 Ω]
+Set V_ref = 1.15 V  ⟶  I_RMS ≈ 0.74 A (Peak: 1.05 A)
+Sufficient torque for gantry acceleration with safe thermal headroom.</div>
+      </div>
+
+      <!-- 2. Servo Power Isolation -->
+      <div class="card card-purple" style="margin: 0;">
+        <h4 style="color: #c084fc;">2. Servo Power Isolation & Inrush Currents</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
+          <strong>Never power servos from the Arduino Mega 5V regulator pin!</strong> The onboard linear regulator can only supply ~500 mA before entering thermal shutdown. Two MG90S servos under active clamping draw transient stall current spikes up to 1.8 A. Powering them via the Mega will cause immediate brownouts and CPU reboot loops.
+        </p>
+      </div>
+
+      <!-- 3. Lighting Constancy -->
+      <div class="card card-cyan" style="margin: 0;">
+        <h4 style="color: #38bdf8;">3. Ambient Lighting & Specular Glare</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
+          Plastic bottle caps have shiny, curved domes. Point-source overhead lighting causes bright white specular reflection spots where saturation drops to 0 (S ≈ 0), blinding the HSV thresholding algorithm. A diffused LED light ring or panel mounted overhead guarantees constant, shadow-free illumination regardless of ambient room daylight.
+        </p>
+      </div>
+
+      <!-- 4. Z-Linkage Counterbalance -->
+      <div class="card card-emerald" style="margin: 0;">
+        <h4 style="color: #34d399;">4. Z-Axis Linkage Counterbalance Spring</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
+          The single MG90S servo lifts the vertical slider, the parallel gripper linkage, the clamping servo, and the cap itself (~80–110 grams total). An auxiliary tension spring or counterweight should be installed on the vertical slider to balance the deadweight. This reduces continuous servo motor holding torque and eliminates gear tooth stripping.
+        </p>
+      </div>
+
+      <!-- 5. Coordinate Frames -->
+      <div class="card card-amber" style="margin: 0;">
+        <h4 style="color: #facc15;">5. Three Distinct Coordinate Reference Frames</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
+          The system contains three separate spatial frames:
+          <strong>(1) Camera Image Plane</strong> (u, v) in pixels; 
+          <strong>(2) Physical Sorting Board</strong> (X_b, Y_b) in millimeters; 
+          <strong>(3) Mechanical Toolhead Carriage</strong> (X_g, Y_g) in stepper motor steps.
+          The carriage homing offset and gripper tip offset vector (Δ X, Δ Y) must be calibrated independently of the camera homography matrix.
+        </p>
+      </div>
+
+      <!-- 6. Cap Jam Detection -->
+      <div class="card card-red" style="margin: 0;">
+        <h4 style="color: #f87171;">6. Missed Pickup & Jam Detection</h4>
+        <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
+          A commanded servo grip does not guarantee that a cap was successfully grasped. If a cap is missing or deformed, the gripper closes to its minimum stop (&lt;24 mm). Adding a micro optical presence switch or monitoring servo horn deflection prevents the robot from carrying "air" to the sorting bin.
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Troubleshooting Checklist Table -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Symptom</th>
+            <th>Probable Root Cause</th>
+            <th>Engineering Remediation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color: #f87171;">Teensy reboots or halts during image transfer</td>
+            <td>UART baud rate timing mismatch or buffer overflow</td>
+            <td>Verify Serial2 buffer is enlarged via `SERIAL2_RX_BUFFER_SIZE 1024`. Ensure baud rate is locked to 921,600 baud.</td>
+          </tr>
+          <tr>
+            <td style="color: #f87171;">Mega resets when gripper clamps cap</td>
+            <td>Servo inrush current causing logic voltage dip</td>
+            <td>Ensure Branch B (Servos) is powered via dedicated 5V 5A buck and decoupling capacitor (1000\,µF) is on PCA9685 V+.</td>
+          </tr>
+          <tr>
+            <td style="color: #f87171;">Stepper motor stutters or loses steps mid-travel</td>
+            <td>TMC2208 overheating or acceleration set too high</td>
+            <td>Lower acceleration from 2000 to 1200 mm/s^2. Verify driver heatsink airflow and adjust V_{ref} potentiometer.</td>
+          </tr>
+          <tr>
+            <td style="color: #f87171;">Red caps detected as yellow or missing</td>
+            <td>Hue circle wrap-around threshold error</td>
+            <td>Red spans both ends of the hue spectrum. Must verify both slices: (H &lt; 10 or H &gt; 170).</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 10</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 11: SECTION 11 - CORE FIRMWARE IMPLEMENTATION (PART 1)
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 11 • CORE FIRMWARE VAULT (PROTOCOL & VIDEO STREAMING)</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">11.</span> Core Embedded Firmware Architecture (Part 1)</h2>
+    <p>
+      Complete production C++ firmware implementations for inter-controller wire packet structures and the ESP32-CAM frame acquisition streamer.
+    </p>
+
+    <div class="grid-2">
+      
+      <!-- packet_protocol.h -->
+      <div class="card card-orange" style="margin: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5mm;">
+          <h4 style="color: #ff9142;">packet_protocol.h — Wire Protocol</h4>
+          <span class="badge badge-orange">Header</span>
+        </div>
+        <div class="code-box" style="font-size: 6.2pt; line-height: 1.3;">
+<span class="code-comment">// packet_protocol.h - Inter-Controller Definitions</span>
+#ifndef PACKET_PROTOCOL_H
+#define PACKET_PROTOCOL_H
+
+#define PROTOCOL_MAGIC_BYTE   0x5A
+#define CMD_CAPTURE_FRAME     0xAA
+#define CMD_BATCH_START       0xB1
+#define CMD_EXECUTE_PICK      0xC2
+#define CMD_RECOVERY_HALT     0xEE
+
+<span class="code-keyword">enum</span> CapColor : <span class="code-type">uint8_t</span> {
+  COLOR_RED    = 0x01,
+  COLOR_YELLOW = 0x02,
+  COLOR_GREEN  = 0x03,
+  COLOR_BLUE   = 0x04
+};
+
+#pragma pack(push, 1)
+<span class="code-keyword">struct</span> CapTarget {
+  <span class="code-type">uint8_t</span>  capId;
+  CapColor color;
+  <span class="code-type">uint16_t</span> pixelX;
+  <span class="code-type">uint16_t</span> pixelY;
+  <span class="code-type">float</span>    boardX_mm;
+  <span class="code-type">float</span>    boardY_mm;
+  <span class="code-type">uint8_t</span>  targetBinId;
+};
+
+<span class="code-keyword">struct</span> BatchHeader {
+  <span class="code-type">uint8_t</span>  magic;
+  <span class="code-type">uint16_t</span> batchId;
+  <span class="code-type">uint8_t</span>  totalCaps;
+  <span class="code-type">uint16_t</span> crc16;
+};
+#pragma pack(pop)
+
+#endif</div>
+      </div>
+
+      <!-- esp32cam_uart.ino -->
+      <div class="card card-cyan" style="margin: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5mm;">
+          <h4 style="color: #38bdf8;">esp32cam_uart.ino — Frame Streamer</h4>
+          <span class="badge badge-cyan">ESP32-CAM</span>
+        </div>
+        <div class="code-box" style="font-size: 6.2pt; line-height: 1.3;">
+<span class="code-comment">// esp32cam_uart.ino - High-Speed Frame Streamer</span>
+#include "esp_camera.h"
+#include &lt;HardwareSerial.h&gt;
+
+HardwareSerial TeensySerial(2);
+
+<span class="code-type">void</span> setup() {
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer   = LEDC_TIMER_0;
+  config.pin_d0 = 5;  config.pin_d1 = 18;
+  config.pin_d2 = 19; config.pin_d3 = 21;
+  config.pin_d4 = 36; config.pin_d5 = 39;
+  config.pin_d6 = 34; config.pin_d7 = 35;
+  config.pin_xclk     = 0;  config.pin_pclk     = 22;
+  config.pin_vsync    = 25; config.pin_href     = 23;
+  config.pin_sscb_sda = 26; config.pin_sscb_scl = 27;
+  config.pin_pwdn     = 32; config.pin_reset    = -1;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_RGB565;
+  config.frame_size   = FRAMESIZE_QVGA; <span class="code-comment">// 320x240</span>
+  config.fb_count     = 2;
+
+  esp_camera_init(&config);
+  TeensySerial.begin(921600, SERIAL_8N1, 14, 13);
+}
+
+<span class="code-type">void</span> loop() {
+  <span class="code-keyword">if</span> (TeensySerial.available() && 
+      TeensySerial.read() == 0xAA) {
+    camera_fb_t *fb = esp_camera_fb_get();
+    <span class="code-keyword">if</span> (fb) {
+      TeensySerial.write(0x55);
+      TeensySerial.write(0xAA);
+      TeensySerial.write((fb->len >> 8) & 0xFF);
+      TeensySerial.write(fb->len & 0xFF);
+      TeensySerial.write(fb->buf, fb->len);
+      esp_camera_fb_return(fb);
+    }
+  }
+}</div>
+      </div>
+
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 11</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       PAGE 12: SECTION 11 - CORE FIRMWARE (PART 2) & PROJECT SIGN-OFF
+       ========================================================================= -->
+  <div class="page">
+    <div class="doc-header">
+      <span>SECTION 11 • CORE FIRMWARE VAULT (VISION & MOTION CONTROL)</span>
+      <span class="brand">CAPSORTER ROBOTICS</span>
+      <span>DOC-REV 2.4</span>
+    </div>
+
+    <h2><span class="sec-num">11.</span> Core Embedded Firmware Architecture (Part 2)</h2>
+    <p>
+      High-speed embedded image analytics running on Teensy 4.1 alongside non-blocking stepper pulse sequencing on Arduino Mega.
+    </p>
+
+    <div class="grid-2" style="margin-bottom: 3.5mm;">
+      
+      <!-- teensy_vision.cpp -->
+      <div class="card card-cyan" style="margin: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5mm;">
+          <h4 style="color: #38bdf8;">teensy_vision.cpp — Vision Planner</h4>
+          <span class="badge badge-cyan">Teensy 4.1</span>
+        </div>
+        <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
+<span class="code-comment">// teensy_vision.cpp - Cortex-M7 @ 600 MHz</span>
+#include &lt;Arduino.h&gt;
+#include "packet_protocol.h"
+
+#define FRAME_BYTES (320 * 240 * 2) <span class="code-comment">// 150 KiB</span>
+<span class="code-type">uint8_t</span> imageBuffer[FRAME_BYTES];
+CapTarget detectedCaps[100];
+<span class="code-type">uint8_t</span> capCount = 0;
+
+<span class="code-type">float</span> H[9] = {
+  0.9854f, -0.0120f, -12.45f,
+  0.0105f,  0.9782f, -14.10f,
+  0.00004f, 0.00003f, 1.0000f
+};
+
+<span class="code-type">void</span> transformToMillimeters(CapTarget* cap) {
+  <span class="code-type">float</span> u = cap->pixelX, v = cap->pixelY;
+  <span class="code-type">float</span> w = H[6]*u + H[7]*v + H[8];
+  cap->boardX_mm = (H[0]*u + H[1]*v + H[2]) / w;
+  cap->boardY_mm = (H[3]*u + H[4]*v + H[5]) / w;
+}
+
+<span class="code-type">void</span> setup() {
+  Serial.begin(115200);
+  Serial1.begin(115200); <span class="code-comment">// Mega Link</span>
+  Serial2.begin(921600); <span class="code-comment">// ESP32 Link</span>
+}
+
+<span class="code-type">void</span> loop() {
+  Serial2.write(CMD_CAPTURE_FRAME);
+  <span class="code-keyword">if</span> (receiveFrameWithCRC(imageBuffer, FRAME_BYTES)) {
+    capCount = 0;
+    segmentCapsHSV(imageBuffer, detectedCaps, &capCount);
+    <span class="code-keyword">for</span> (<span class="code-type">uint8_t</span> i = 0; i &lt; capCount; i++) {
+      transformToMillimeters(&detectedCaps[i]);
+    }
+    optimizeSortingPath(detectedCaps, capCount);
+    sendPlanBatchToMega(detectedCaps, capCount);
+  }
+  delay(100);
+}</div>
+      </div>
+
+      <!-- mega_motion.ino -->
+      <div class="card card-emerald" style="margin: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5mm;">
+          <h4 style="color: #34d399;">mega_motion.ino — Motion Sequencer</h4>
+          <span class="badge badge-emerald">Arduino Mega</span>
+        </div>
+        <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
+<span class="code-comment">// mega_motion.ino - ATmega2560 @ 16 MHz</span>
+#include &lt;Wire.h&gt;
+#include &lt;Adafruit_PWMServoDriver.h&gt;
+#include &lt;AccelStepper.h&gt;
+#include "packet_protocol.h"
+
+AccelStepper stepperX(AccelStepper::DRIVER, 2, 5);
+AccelStepper stepperY(AccelStepper::DRIVER, 3, 6);
+Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver(0x40);
+
+<span class="code-keyword">enum</span> RobotState { 
+  STATE_IDLE, STATE_HOMING, STATE_MOVING,
+  STATE_LOWER_Z, STATE_GRIP, STATE_LIFT,
+  STATE_TRAVERSE, STATE_RELEASE, STATE_RETRACT,
+  STATE_FAILSAFE 
+};
+RobotState currentState = STATE_HOMING;
+CapTarget currentCap;
+<span class="code-type">bool</span> hasInFlightCap = <span class="code-keyword">false</span>;
+
+<span class="code-type">void</span> setup() {
+  Serial.begin(115200); Serial1.begin(115200);
+  pca.begin(); pca.setPWMFreq(50);
+  stepperX.setMaxSpeed(4000);
+  stepperX.setAcceleration(2000);
+  stepperY.setMaxSpeed(4000);
+  stepperY.setAcceleration(2000);
+  homeAxes();
+}
+
+<span class="code-type">void</span> loop() {
+  stepperX.run(); stepperY.run();
+  executeMotionStateMachine();
+  <span class="code-keyword">if</span> (checkCommunicationLoss() && hasInFlightCap) {
+    executeSafeLocalizedCompletion(); <span class="code-comment">// FAIL-SAFE</span>
+  }
+}</div>
+      </div>
+
+    </div>
+
+    <!-- Final Verification & Project Sign-Off Card -->
+    <div class="card card-emerald" style="margin: 0; padding: 3mm 4mm;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5mm;">
+        <h3 style="color: #34d399; margin: 0;">Engineering Verification & Project Sign-Off</h3>
+        <span class="badge badge-emerald">Approved for Production</span>
+      </div>
+      <div class="grid-2" style="font-size: 7.2pt; color: #cbd5e1; line-height: 1.45;">
+        <div>
+          <strong>Document Title:</strong> Autonomous Bottle-Cap Sorting Machine Technical Dossier<br>
+          <strong>Authored & Engineered by:</strong> Neil Shettigar, Kahan, and Shourya<br>
+          <strong>Principal Architecture, Firmware & Design:</strong> Neil Shettigar<br>
+          <strong>Hardware Revisions:</strong> Teensy 4.1 Rev B • Arduino Mega 2560 R3 • ESP32-CAM AI-Thinker
+        </div>
+        <div>
+          <strong>GitHub Code Repository:</strong> github.com/Neilboss/CapSorter<br>
+          <strong>Interactive Web Application:</strong> neilboss.github.io/CapSorter<br>
+          <strong>Operational Safety Status:</strong> Fully Isolated Rails with Master Hardware E-Stop<br>
+          <strong>Release Date & Timestamp:</strong> November 2026 • Production Release
+        </div>
+      </div>
+    </div>
+
+    <div class="doc-footer">
+      <span>CapSorter Engineering Dossier</span>
+      <span class="author-tag">Made by Neil Shettigar | by Neil, Kahan and Shourya</span>
+      <span>Page 12 • End of Technical Report</span>
+    </div>
+  </div>
+
+</body>
+</html>
