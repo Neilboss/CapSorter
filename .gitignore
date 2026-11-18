@@ -11,6 +11,8 @@ desktop.ini
 
 # Temporary & Log files
 *.log
+__pycache__/
+*.pyc
 
 # Reference materials
 reference_screenshots/

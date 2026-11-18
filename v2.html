@@ -1,0 +1,2878 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CapSorter V2 (Raspberry Pi Zero 2 W + IMX219 + Mega) by Neil, Kahan and Shourya</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              orange: '#ff6b00',
+              cyan: '#00d2ff',
+              emerald: '#10b981',
+              dark: '#0a0d14',
+              card: '#111622',
+              cardhover: '#161e30',
+              border: 'rgba(255, 255, 255, 0.08)'
+            }
+          },
+          fontFamily: {
+            sans: ['Outfit', 'Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-[#0a0d14] text-slate-100 min-h-screen" data-version="v2">
+
+  <!-- ==========================================
+       NAVIGATION BAR
+       ========================================== -->
+  <header class="sticky top-0 z-40 bg-[#0a0d14]/90 backdrop-blur-md border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      
+      <!-- Brand & Version Switcher -->
+      <div class="flex items-center gap-3 shrink-0">
+        <a href="index.html" class="flex items-center gap-2.5 shrink-0 group">
+          <div class="w-9 h-9 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0 group-hover:border-cyan-500/60 transition-colors">
+            <i data-lucide="cpu" class="w-4 h-4"></i>
+          </div>
+          <div class="leading-tight whitespace-nowrap">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-base tracking-tight text-white">CapSorter</span>
+              <span class="text-[10px] font-mono uppercase text-cyan-300 px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30">V2 • Pi Zero 2 W</span>
+            </div>
+            <div class="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 mt-0.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+              <span>by Neil, Kahan and Shourya</span>
+            </div>
+          </div>
+        </a>
+
+        <!-- V1 / V2 Version Switcher Pill -->
+        <div class="flex items-center p-1 rounded-lg bg-slate-900 border border-white/10 text-[11px] font-mono">
+          <a href="index.html" class="px-2 py-1 rounded text-slate-400 hover:text-white transition-colors" title="Back to Version Selection Portal">Portal</a>
+          <a href="v1.html" class="px-2.5 py-1 rounded text-slate-400 hover:text-orange-300 transition-colors">V1</a>
+          <a href="v2.html" class="px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold">V2</a>
+        </div>
+      </div>
+
+      <!-- Nav Links Pill (with Dynamic Scroll-Spy Selection Indicator) -->
+      <nav id="top-nav-pill" class="hidden lg:flex relative items-center gap-0.5 px-1.5 py-1 rounded-full bg-slate-900/90 border border-white/10 text-xs font-medium text-slate-300 whitespace-nowrap">
+        <div id="nav-selection-pill"></div>
+        <a href="#overview" data-section="overview" class="nav-pill-link active px-2.5 py-1 rounded-full hover:text-white transition-all">Overview</a>
+        <a href="#simulator" data-section="simulator" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all flex items-center gap-1">
+          <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
+          <span>Simulator</span>
+        </a>
+        <a href="#architecture" data-section="architecture" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all">Architecture</a>
+        <a href="#mechanical" data-section="mechanical" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all">Mechanics</a>
+        <a href="#bom" data-section="bom" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all">BOM</a>
+        <a href="#roadmap" data-section="roadmap" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all">Roadmap</a>
+        <a href="#engineering" data-section="engineering" id="nav-btn-engineering" class="nav-pill-link px-3 py-1 rounded-full text-orange-300 hover:text-orange-200 transition-all flex items-center gap-1">
+          <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+          <span>Engineering</span>
+        </a>
+      </nav>
+
+      <!-- CTA Buttons -->
+      <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
+        <a href="pdf_dossier_v2.html" target="_blank" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 flex items-center gap-1.5 transition-all whitespace-nowrap">
+          <i data-lucide="file-text" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
+          <span>V2 Dossier</span>
+        </a>
+        <button class="btn-open-poster px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-all whitespace-nowrap">
+          <i data-lucide="file-image" class="w-3.5 h-3.5 text-orange-400 shrink-0"></i>
+          <span>Poster</span>
+        </button>
+        <a href="#simulator" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition-all whitespace-nowrap">
+          <i data-lucide="play" class="w-3.5 h-3.5 shrink-0"></i>
+          <span>Run Demo</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================
+       HERO SECTION (VERSION 2)
+       ========================================== -->
+  <section class="relative pt-12 pb-16 overflow-hidden">
+    <!-- Ambient Glow effects -->
+    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-cyan-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+    <div class="absolute top-1/3 right-10 w-[400px] h-[300px] bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      
+      <div class="flex flex-col lg:flex-row items-center gap-12">
+        <!-- Hero Left Text -->
+        <div class="flex-1 text-center lg:text-left">
+          <div class="flex flex-wrap items-center justify-center lg:justify-start gap-2.5 mb-4">
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 text-xs font-mono uppercase tracking-wider">
+              <i data-lucide="cpu" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span>Version 2.0 • Raspberry Pi Zero 2 W Edition</span>
+            </div>
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono uppercase tracking-wider">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>16GB Offline Linux + OpenCV • Fail-Safe</span>
+            </div>
+          </div>
+          
+          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.1] mb-4">
+            Autonomous Bottle-Cap <br>
+            <span class="bg-gradient-to-r from-cyan-400 via-emerald-300 to-orange-400 bg-clip-text text-transparent">
+              Sorting Machine V2
+            </span>
+          </h1>
+
+          <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 via-cyan-500/15 to-emerald-500/20 border border-cyan-500/40 text-cyan-300 font-mono text-sm font-bold mb-6 shadow-md shadow-cyan-500/10">
+            <i data-lucide="user-check" class="w-4 h-4 text-cyan-400"></i>
+            <span>Made by Neil Shettigar</span>
+          </div>
+
+          <p class="text-base sm:text-lg text-slate-300 max-w-2xl mb-8 leading-relaxed">
+            Consolidated V2 dual-controller architecture where a single <strong class="text-cyan-300">Raspberry Pi Zero 2 W (16 GB microSD)</strong> coupled with an <strong class="text-orange-300">8MP IMX219 160° Wide-Angle CSI Camera</strong> (or USB Webcam) replaces both the Teensy 4.1 and ESP32-CAM—performing direct high-speed capture, OpenCV fisheye undistortion, HSV segmentation, and homography before dispatching coordinate batches to the <strong class="text-emerald-300">Arduino Mega 2560</strong>.
+          </p>
+
+          <!-- Key Metrics Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
+              <span class="block text-xs font-mono text-slate-400">VISION SBC</span>
+              <span class="text-lg font-bold text-white font-mono">Pi Zero 2 W</span>
+              <span class="text-[11px] text-cyan-400 block">4× 1GHz • 512MB RAM</span>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
+              <span class="block text-xs font-mono text-slate-400">CAMERA OPTICS</span>
+              <span class="text-lg font-bold text-white font-mono">8MP IMX219</span>
+              <span class="text-[11px] text-orange-400 block">160° FOV CSI / Webcam</span>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
+              <span class="block text-xs font-mono text-slate-400">VISION LATENCY</span>
+              <span class="text-lg font-bold text-white font-mono">~45 ms</span>
+              <span class="text-[11px] text-emerald-400 block">35× faster than V1 UART</span>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
+              <span class="block text-xs font-mono text-slate-400">STORAGE STACK</span>
+              <span class="text-lg font-bold text-white font-mono">16 GB SD</span>
+              <span class="text-[11px] text-amber-400 block">100% Offline OpenCV</span>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex flex-wrap items-center justify-center lg:justify-start gap-4">
+            <a href="pdf_dossier_v2.html" target="_blank" class="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold flex items-center gap-2 shadow-lg shadow-cyan-500/25 transition-all border border-cyan-400/30">
+              <i data-lucide="file-text" class="w-4 h-4 text-cyan-200"></i>
+              <span>Open V2 Technical Dossier</span>
+            </a>
+            <a href="#simulator" class="px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold flex items-center gap-2 shadow-lg shadow-orange-500/30 transition-all">
+              <i data-lucide="play" class="w-4 h-4"></i>
+              <span>Launch V2 Gantry Simulator</span>
+            </a>
+            <a href="v1.html" class="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold border border-white/10 flex items-center gap-2 transition-all">
+              <i data-lucide="arrow-left-right" class="w-4 h-4 text-orange-400"></i>
+              <span>Compare with V1 (Teensy)</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Hero Right: V2 Architecture Upgrade Highlights Card -->
+        <div class="flex-1 w-full max-w-lg lg:max-w-none">
+          <div class="tech-card tech-card-cyan p-5 border-cyan-500/30">
+            <div class="flex items-center justify-between pb-4 mb-4 border-b border-white/10">
+              <div>
+                <span class="text-xs font-mono text-cyan-400 uppercase tracking-wider block">V1 ⟶ V2 Architectural Consolidation</span>
+                <h3 class="text-lg font-bold text-white">Why Raspberry Pi Zero 2 W Replaces Teensy + ESP32-CAM</h3>
+              </div>
+              <span class="badge-pill badge-cyan text-[10px]">V2 Upgrade</span>
+            </div>
+
+            <div class="space-y-3 text-xs">
+              <div class="p-3 rounded-lg bg-slate-900/90 border border-white/5 flex items-start gap-3">
+                <div class="p-2 rounded bg-cyan-500/15 text-cyan-400 shrink-0 mt-0.5">
+                  <i data-lucide="zap" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <strong class="text-white block">Eliminates the 1.67-Second Serial Frame Bottleneck</strong>
+                  <span class="text-slate-400">In V1, piping 153.6 KB from ESP32-CAM to Teensy over 921,600 baud UART took ~1.67s. In V2, the 8MP IMX219 streams into Pi Zero 2 W RAM over 2-lane MIPI CSI-2 in <strong class="text-cyan-300">~20 ms</strong>.</span>
+                </div>
+              </div>
+
+              <div class="p-3 rounded-lg bg-slate-900/90 border border-white/5 flex items-start gap-3">
+                <div class="p-2 rounded bg-emerald-500/15 text-emerald-400 shrink-0 mt-0.5">
+                  <i data-lucide="cpu" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <strong class="text-white block">512× More RAM & Native Python OpenCV Stack</strong>
+                  <span class="text-slate-400">512 MB LPDDR2 RAM + Quad-Core 1 GHz Cortex-A53 on a 16 GB microSD card runs full <code class="text-emerald-300">cv2</code> + <code class="text-emerald-300">NumPy</code> at 640×480 RGB888 (4× higher spatial resolution than V1 QVGA).</span>
+                </div>
+              </div>
+
+              <div class="p-3 rounded-lg bg-slate-900/90 border border-white/5 flex items-start gap-3">
+                <div class="p-2 rounded bg-orange-500/15 text-orange-400 shrink-0 mt-0.5">
+                  <i data-lucide="camera" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <strong class="text-white block">160° Wide-Angle IMX219 Fisheye Undistortion</strong>
+                  <span class="text-slate-400">Precomputed <code class="text-orange-300">cv2.fisheye.initUndistortRectifyMap</code> corrects radial barrel distortion from the 160° FOV lens in ~5 ms prior to 3×3 planar homography.</span>
+                </div>
+              </div>
+
+              <div class="p-3 rounded-lg bg-slate-900/90 border border-white/5 flex items-start gap-3">
+                <div class="p-2 rounded bg-purple-500/15 text-purple-400 shrink-0 mt-0.5">
+                  <i data-lucide="shield" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <strong class="text-white block">Retains Deterministic Arduino Mega 2560 Motion Control</strong>
+                  <span class="text-slate-400">Linux scheduling jitter never touches stepper timing. The Pi sends validated batch coordinates over UART to the Mega, which handles hard-real-time STEP/DIR pulses and fail-safe recovery.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+<section id="overview" class="py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">01 / Functional Scope (V2)</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">System Overview & V2 Objectives</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Consolidates image capture and vision compute into a single Raspberry Pi Zero 2 W while keeping deterministic motion safety on the Arduino Mega 2560.
+        </p>
+      </div>
+
+      <!-- 8 Core Objectives Grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 mb-4">
+            <i data-lucide="box" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">500×500×500 mm Envelope</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Compact self-contained tabletop footprint constructed with 2020 aluminum extrusions. The 160° wide-angle lens allows flexible top camera mounting from 220–450 mm height.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
+            <i data-lucide="disc" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Standard Bottle Caps</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Engineered to handle common plastic beverage bottle caps with outer diameter between Ø28 mm and Ø32 mm across 4 color classes.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-4">
+            <i data-lucide="grid" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">300×300 mm Grid Workspace</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            10 × 10 sorting grid (30 mm pitch) with matte neutral background and 4 corner fiducial markers for OpenCV homography calibration.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4">
+            <i data-lucide="eye" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Single-Board Capture & Vision</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Raspberry Pi Zero 2 W directly captures frames from the 8MP IMX219 CSI camera (or USB webcam), undistorts fisheye curvature, segments HSV masks, and computes mm coordinates.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 mb-4">
+            <i data-lucide="move" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Cartesian XY + Z Gripper</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Two NEMA 17 stepper motors on GT2 belts move the gantry; two MG90S metal-gear servos control vertical stroke and parallel gripper jaws.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
+            <i data-lucide="layers" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Designated Color Bins</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Four color-coded bins (Red, Yellow, Green, Blue) positioned outside the active grid area for unobstructed sorting.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-4">
+            <i data-lucide="hard-drive" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">16 GB Air-Gapped Edge OS</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Boots headless Raspberry Pi OS Lite (64-bit) with Wi-Fi disabled. Auto-starts the Python OpenCV sorting service via <code class="text-emerald-300">systemd</code> with zero internet dependency.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-4">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-1">Fail-Safe Comms Recovery</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            If UART communication between Pi Zero 2 W and Mega drops mid-pick, the Mega autonomously finishes depositing the held cap, retracts Z, and parks safely.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+<section id="simulator" class="py-16 border-t border-white/5 bg-[#0a0e17]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-8">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-xs font-mono uppercase tracking-wider mb-2">
+            <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
+            Live Interactive V2 Simulator
+          </div>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Pi Zero 2 W + Mega Pick &amp; Place Simulator</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Click the 300×300 mm grid to add/remove caps, run the Pi Zero 2 W OpenCV scan &amp; nearest-neighbor sort, and test UART interruption fail-safe recovery.
+        </p>
+      </div>
+
+      <!-- Simulator Container -->
+      <div class="tech-card p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          <!-- Canvas Viewport -->
+          <div class="lg:col-span-8 flex flex-col items-center">
+            <div class="relative w-full max-w-[580px] aspect-[580/500]">
+              <canvas id="simulation-canvas" width="580" height="500" class="w-full h-full block cursor-crosshair"></canvas>
+            </div>
+            <div class="flex items-center justify-between w-full max-w-[580px] mt-3 text-xs text-slate-400 font-mono">
+              <span>Click grid to place cap</span>
+              <span class="text-cyan-400">Pi Zero 2 W OpenCV (640×480) • 10×10 Grid • 4 Bins</span>
+            </div>
+          </div>
+
+          <!-- Controls & Telemetry Column -->
+          <div class="lg:col-span-4 flex flex-col gap-4">
+            
+            <!-- Controls Card -->
+            <div class="p-4 rounded-xl bg-slate-900 border border-white/10">
+              <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
+                <i data-lucide="sliders" class="w-4 h-4 text-cyan-400"></i>
+                V2 Simulation Controls
+              </h3>
+
+              <!-- Color Palette Picker -->
+              <div class="mb-4">
+                <label class="text-xs font-mono text-slate-400 block mb-2">SELECT CAP COLOUR TO PLACE:</label>
+                <div class="grid grid-cols-4 gap-2">
+                  <button data-color="red" class="cap-color-picker ring-2 ring-white py-2 rounded-lg bg-red-600/30 border border-red-500/50 text-red-300 text-xs font-bold hover:bg-red-600/50 transition-all flex items-center justify-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Red
+                  </button>
+                  <button data-color="yellow" class="cap-color-picker py-2 rounded-lg bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 text-xs font-bold hover:bg-yellow-500/50 transition-all flex items-center justify-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span> Ylw
+                  </button>
+                  <button data-color="green" class="cap-color-picker py-2 rounded-lg bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 text-xs font-bold hover:bg-emerald-600/50 transition-all flex items-center justify-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Grn
+                  </button>
+                  <button data-color="blue" class="cap-color-picker py-2 rounded-lg bg-blue-600/30 border border-blue-500/50 text-blue-300 text-xs font-bold hover:bg-blue-600/50 transition-all flex items-center justify-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Blu
+                  </button>
+                </div>
+              </div>
+
+              <!-- Main Execution Buttons -->
+              <div class="space-y-2 mb-4">
+                <button id="btn-start-sort" class="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 transition-all">
+                  <i data-lucide="play" class="w-4 h-4"></i>
+                  <span>Start Pi Zero 2 W OpenCV Sort</span>
+                </button>
+                <div class="grid grid-cols-2 gap-2">
+                  <button id="btn-preset-scatter" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
+                    Scatter 8 Caps
+                  </button>
+                  <button id="btn-reset-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
+                    Reset Defaults
+                  </button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button id="btn-sim-speed" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-mono border border-slate-700 transition-all">
+                    Speed: 1x
+                  </button>
+                  <button id="btn-clear-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-medium border border-slate-700 transition-all">
+                    Clear Grid
+                  </button>
+                </div>
+              </div>
+
+              <!-- Comms Interruption Test Button -->
+              <button id="btn-sim-comms-cut" class="w-full py-2 rounded-lg bg-red-950/60 hover:bg-red-900/60 text-red-300 border border-red-500/40 text-xs font-semibold flex items-center justify-center gap-2 transition-all">
+                <i data-lucide="unplug" class="w-3.5 h-3.5 text-red-400"></i>
+                <span>Simulate Pi ⇄ Mega UART Cut</span>
+              </button>
+            </div>
+
+            <!-- Live Telemetry Card -->
+            <div class="p-4 rounded-xl bg-slate-900 border border-white/10 font-mono text-xs">
+              <h4 class="font-bold text-xs uppercase text-slate-400 tracking-wider mb-3 flex items-center justify-between">
+                <span>Real-Time V2 Telemetry</span>
+                <span class="w-2 h-2 rounded-full bg-cyan-400 pulse-dot"></span>
+              </h4>
+
+              <div class="space-y-2 text-slate-300">
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Vision Host:</span>
+                  <span class="text-cyan-300 font-bold">Pi Zero 2 W (OpenCV)</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Gantry X:</span>
+                  <span id="telemetry-x" class="text-white font-bold">0 mm</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Gantry Y:</span>
+                  <span id="telemetry-y" class="text-white font-bold">0 mm</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Z Linkage State:</span>
+                  <span id="telemetry-z" class="text-cyan-400 font-bold">RAISED</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Gripper State:</span>
+                  <span id="telemetry-gripper" class="text-orange-400 font-bold">OPEN</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Controller State:</span>
+                  <span id="telemetry-state" class="text-slate-400">IDLE</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Pending Caps:</span>
+                  <span id="telemetry-pending-count" class="text-amber-400 font-bold">6</span>
+                </div>
+                <div class="flex justify-between py-1">
+                  <span class="text-slate-400">Sorted to Bins:</span>
+                  <span id="telemetry-sorted-count" class="text-emerald-400 font-bold">0</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+<section id="architecture" class="py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="mb-12">
+        <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">03 / Controller Consolidation</span>
+        <h2 class="text-3xl sm:text-4xl font-bold text-white">V2 System Architecture & Responsibilities</h2>
+        <p class="text-slate-400 text-sm max-w-3xl mt-2">
+          Instead of three programmable boards (ESP32-CAM + Teensy 4.1 + Arduino Mega), V2 uses a streamlined two-processor topology: the <strong>Raspberry Pi Zero 2 W</strong> handles camera capture and OpenCV computer vision, while the <strong>Arduino Mega 2560</strong> guarantees hard-real-time stepper pulse timing and physical safety.
+        </p>
+      </div>
+
+      <!-- Responsibilities Table -->
+      <div class="tech-card mb-10 overflow-hidden">
+        <div class="p-4 bg-slate-900/60 border-b border-white/5 flex items-center justify-between">
+          <span class="font-bold text-sm text-slate-200 flex items-center gap-2">
+            <i data-lucide="sliders" class="w-4 h-4 text-cyan-400"></i>
+            V2 Hardware Responsibilities Matrix
+          </span>
+          <span class="text-xs font-mono text-cyan-400">Consolidated 2-Controller + Sensor & Driver Stack</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Component / IC</th>
+                <th>Hardware Specs</th>
+                <th>Primary Responsibility in V2</th>
+                <th>Interface Bus</th>
+                <th>Operating Voltage</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-bold text-orange-400">8MP IMX219 Camera<br><span class="text-[11px] font-normal text-slate-400">(or USB OTG Webcam)</span></td>
+                <td class="font-mono text-xs">Sony IMX219 8MP Sensor • 160° Wide-Angle FOV Lens</td>
+                <td>Direct top-down image acquisition of the 300×300 mm board at 640×480 / 1280×720 RGB888 (30 FPS capable).</td>
+                <td class="font-mono text-xs text-orange-300">22-Pin MIPI CSI-2<br><span class="text-[10px] text-slate-400">(or Micro-USB OTG)</span></td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">3.3V / 1.8V CSI Rail</span></td>
+              </tr>
+              <tr>
+                <td class="font-bold text-cyan-400">Raspberry Pi Zero 2 W<br><span class="text-[11px] font-normal text-emerald-400">(Replaces Teensy + ESP32)</span></td>
+                <td class="font-mono text-xs">Quad-Core 64-bit ARM Cortex-A53 @ 1.0 GHz • 512 MB RAM • 16 GB microSD</td>
+                <td>Captures camera frame via <code class="text-cyan-300">Picamera2</code>, executes OpenCV 160° fisheye undistortion, HSV color segmentation, contour circularity gating, 3×3 homography, and transmits batch sorting plans to Mega.</td>
+                <td class="font-mono text-xs text-cyan-300">MIPI CSI-2 In &amp;<br>GPIO 14/15 UART0 Out</td>
+                <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">5V Input / 3.3V GPIO</span></td>
+              </tr>
+              <tr>
+                <td class="font-bold text-emerald-400">Arduino Mega 2560</td>
+                <td class="font-mono text-xs">ATmega2560 @ 16 MHz (8 KB SRAM)</td>
+                <td>Receives coordinate batch from Pi Zero 2 W, generates deterministic STEP/DIR pulse trains, monitors NC limit switch ISRs, sequences PCA9685 servos, and runs comms-loss fail-safe recovery.</td>
+                <td class="font-mono text-xs text-emerald-300">UART1 (Pins 18/19) &amp;<br>Hardware I2C (20/21)</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-300 border border-amber-500/30">5V Logic</span></td>
+              </tr>
+              <tr>
+                <td class="font-bold text-purple-400">PCA9685</td>
+                <td class="font-mono text-xs">16-Channel 12-Bit PWM (I2C)</td>
+                <td>Generates jitter-free 50 Hz hardware PWM timing for the two MG90S servos (Z-axis linkage &amp; gripper jaws).</td>
+                <td class="font-mono text-xs text-purple-300">I2C (SDA/SCL)</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Logic / 5V V+</span></td>
+              </tr>
+              <tr>
+                <td class="font-bold text-slate-200">TMC2208 × 2</td>
+                <td class="font-mono text-xs">Trinamic SilentStepStick Driver</td>
+                <td>Drives the X and Y NEMA 17 stepper motors with StealthChop2 silence at 1/16 microstepping (80 steps/mm).</td>
+                <td class="font-mono text-xs text-slate-300">STEP / DIR / EN</td>
+                <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">12V VMOT / 5V VIO</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Overall Communication Visual Flow -->
+      <div class="tech-card p-6 relative">
+        <h3 class="text-sm font-mono text-cyan-400 uppercase tracking-wider mb-6 flex items-center gap-2">
+          <i data-lucide="git-commit" class="w-4 h-4"></i>
+          V2 Inter-Controller &amp; Camera Pipeline Architecture
+        </h3>
+
+        <div class="flex flex-col items-center gap-4 max-w-2xl mx-auto">
+          
+          <!-- Node 1: 8MP IMX219 Camera -->
+          <div class="w-full p-4 rounded-xl bg-slate-900 border border-orange-500/40 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 shrink-0">
+              <i data-lucide="camera" class="w-6 h-6"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white text-base">8MP Sony IMX219 160° Camera (or USB Webcam)</span>
+                <span class="badge-pill badge-orange text-[10px]">Direct Optical Capture</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">Captures 640×480 / 1280×720 RGB888 frames of the 300×300 mm workspace in ~20 ms</p>
+            </div>
+          </div>
+
+          <!-- Bus 1: MIPI CSI-2 Ribbon -->
+          <div class="flex flex-col items-center text-slate-500 text-xs font-mono py-1">
+            <i data-lucide="arrow-down" class="w-4 h-4 text-orange-400"></i>
+            <span class="text-[11px] text-orange-300 font-semibold">22-Pin to 15-Pin Pi Zero MIPI CSI-2 Ribbon Cable (High-Speed Differential Lanes)</span>
+            <span class="text-[10px] text-slate-400">Zero UART bottleneck • Direct DMA transfer into 512 MB LPDDR2 RAM</span>
+          </div>
+
+          <!-- Node 2: Raspberry Pi Zero 2 W -->
+          <div class="w-full p-4 rounded-xl bg-slate-900 border-2 border-cyan-500/50 glow-cyan flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-cyan-500/15 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+              <i data-lucide="cpu" class="w-6 h-6"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white text-base">Raspberry Pi Zero 2 W (Quad-Core 1 GHz • 16 GB microSD)</span>
+                <span class="badge-pill badge-cyan text-[10px]">Capture + OpenCV + Planner</span>
+              </div>
+              <p class="text-xs text-slate-300 mt-0.5">Picamera2 / V4L2 ⟶ 160° Fisheye Undistort ⟶ OpenCV HSV Masks ⟶ Contours ⟶ 3×3 Homography ⟶ Path Planner</p>
+            </div>
+          </div>
+
+          <!-- Bus 2 with Level Shifter -->
+          <div class="flex flex-col items-center text-slate-500 text-xs font-mono py-1">
+            <i data-lucide="arrow-down-up" class="w-4 h-4 text-emerald-400"></i>
+            <span class="text-[11px] text-emerald-300 font-semibold">GPIO 14/15 UART0 (/dev/serial0 @ 115,200 Baud) via 3.3V ⇄ 5V Logic Level Shifter</span>
+            <span class="text-[10px] text-slate-400">Packed Binary Coordinate Batch (<code class="text-cyan-300">packet_protocol.h</code>), CRC16 Verification, Heartbeat &amp; ACK</span>
+          </div>
+
+          <!-- Node 3: Arduino Mega 2560 -->
+          <div class="w-full p-4 rounded-xl bg-slate-900 border border-emerald-500/40 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <i data-lucide="bot" class="w-6 h-6"></i>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white text-base">Arduino Mega 2560 (ATmega2560 @ 16 MHz)</span>
+                <span class="badge-pill badge-green text-[10px]">Real-Time Motion &amp; Safety</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">Coordinates ⟶ STEP/DIR Pulses ⟶ PCA9685 Servo PWM ⟶ 8-Step Pick &amp; Place ⟶ Comms-Loss Recovery</p>
+            </div>
+          </div>
+
+          <!-- Actuator Outputs -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full mt-2">
+            <div class="p-3 rounded-lg bg-slate-800/60 border border-white/5 flex items-center gap-3">
+              <i data-lucide="zap" class="w-4 h-4 text-orange-400"></i>
+              <div class="text-xs">
+                <strong class="text-slate-200 block">X &amp; Y Stepper Motors</strong>
+                <span class="text-slate-400">2× NEMA 17 via TMC2208 (STEP/DIR)</span>
+              </div>
+            </div>
+            <div class="p-3 rounded-lg bg-slate-800/60 border border-white/5 flex items-center gap-3">
+              <i data-lucide="grip" class="w-4 h-4 text-purple-400"></i>
+              <div class="text-xs">
+                <strong class="text-slate-200 block">Z-Axis Lift &amp; Gripper Jaws</strong>
+                <span class="text-slate-400">2× MG90S via PCA9685 (I2C PWM)</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Design Rationale Callout -->
+        <div class="mt-6 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-start gap-3">
+          <i data-lucide="info" class="w-5 h-5 text-cyan-400 shrink-0 mt-0.5"></i>
+          <div class="text-xs text-slate-300 leading-relaxed">
+            <strong class="text-cyan-300 block mb-1">Why Keep the Arduino Mega 2560 Alongside the Raspberry Pi Zero 2 W?</strong>
+            The Raspberry Pi Zero 2 W runs a multitasking Linux kernel where background OS interrupts can introduce 50–500 µs timing jitter on GPIO pins—which causes stepper motors to stutter or miss steps at high speeds. By keeping the <strong>Arduino Mega 2560</strong> as a dedicated real-time motion coprocessor, stepper acceleration ramps and <code class="text-emerald-300">&lt;10 µs</code> limit-switch emergency stops remain 100% deterministic.
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+<section id="mechanical" class="py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">04 / Gantry &amp; Optics Geometry</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Mechanical Design &amp; 160° Camera Mounting</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Identical 500×500×500 mm Cartesian gantry mechanics as V1, enhanced with top-bar mounting for the Pi Zero 2 W and 8MP IMX219 160° wide-angle lens.
+        </p>
+      </div>
+
+      <!-- Main CAD & Layout Showcase -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
+        
+        <!-- CAD Render Image -->
+        <div class="lg:col-span-7 tech-card p-3">
+          <div class="relative rounded-lg overflow-hidden border border-white/5 bg-black/40">
+            <img src="assets/images/gantry_3axis_cad.png" alt="Cartesian 3-Axis Robot CAD Design" class="w-full h-[380px] object-cover">
+            <div class="absolute bottom-2 left-2 px-2.5 py-1 rounded bg-black/70 backdrop-blur-sm text-[11px] font-mono text-slate-300 border border-white/10">
+              Moving-Bridge Cartesian Structure (500×500 mm Base) • Top-Mounted Pi Zero 2 W + IMX219
+            </div>
+          </div>
+        </div>
+
+        <!-- Proposed Dimensions Table -->
+        <div class="lg:col-span-5 tech-card p-5 flex flex-col justify-between">
+          <div>
+            <h3 class="font-bold text-white text-base mb-3 flex items-center gap-2">
+              <i data-lucide="ruler" class="w-4 h-4 text-cyan-400"></i>
+              V2 Dimensional &amp; Optical Targets
+            </h3>
+            <div class="space-y-2.5 text-xs">
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Overall Machine Envelope</span>
+                <span class="font-mono font-semibold text-white">500 × 500 × 500 mm</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Sorting Board Workspace</span>
+                <span class="font-mono font-semibold text-white">300 × 300 mm (10×10 cells)</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Camera Sensor &amp; Lens</span>
+                <span class="font-mono font-semibold text-orange-400">Sony IMX219 8MP (160° FOV)</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Active OpenCV Capture Resolution</span>
+                <span class="font-mono font-semibold text-cyan-400">640 × 480 px (~1.8 px/mm)</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Optimal Camera Height (160° Lens)</span>
+                <span class="font-mono font-semibold text-emerald-400">240 – 380 mm above board</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-white/5">
+                <span class="text-slate-400">Cap Outer Diameter</span>
+                <span class="font-mono font-semibold text-white">Ø28 – 32 mm</span>
+              </div>
+              <div class="flex justify-between py-1.5">
+                <span class="text-slate-400">Z-Axis Vertical Stroke</span>
+                <span class="font-mono font-semibold text-purple-400">30 – 50 mm</span>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 p-3 rounded-lg bg-slate-900 border border-cyan-500/20 text-[11px] text-slate-300">
+            <strong class="text-cyan-300">160° FOV Optical Advantage:</strong> Because the 160° wide-angle lens captures an ultra-wide cone, the camera mount bar does not need to sit high at 500 mm—mounting at <span class="font-mono text-white">250–320 mm</span> keeps the machine compact while OpenCV rectifies radial distortion.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 4 Axis Detailed Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        
+        <!-- X Axis Card -->
+        <div class="tech-card p-4 flex flex-col">
+          <div class="h-40 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3">
+            <img src="assets/images/axis_x_vslot.png" alt="X-Axis V-Slot Actuator" class="w-full h-full object-cover">
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-white text-base">X-Axis Linear Drive</h4>
+            <span class="badge-pill badge-orange text-[10px]">370mm Travel</span>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-1.5 flex-1">
+            <li>• 1× 40mm NEMA 17 (1.3 A / phase)</li>
+            <li>• 1× TMC2208 driver (StealthChop2)</li>
+            <li>• GT2 timing belt, 6 mm width</li>
+            <li>• 20-tooth GT2 pulley (40 mm/rev)</li>
+            <li>• Linear guide / V-wheel carriage</li>
+          </ul>
+        </div>
+
+        <!-- Y Axis Card -->
+        <div class="tech-card p-4 flex flex-col">
+          <div class="h-40 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3">
+            <img src="assets/images/axis_y_gantry.png" alt="Y-Axis Moving Bridge" class="w-full h-full object-cover">
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-white text-base">Y-Axis Moving Bridge</h4>
+            <span class="badge-pill badge-cyan text-[10px]">300mm Travel</span>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-1.5 flex-1">
+            <li>• 1× Matching 40mm NEMA 17</li>
+            <li>• 1× TMC2208 stepper driver</li>
+            <li>• Synchronized belt drive system</li>
+            <li>• Rigid cross-beam supporting X-carriage</li>
+            <li>• Low-friction dual V-slot rails</li>
+          </ul>
+        </div>
+
+        <!-- Z Axis Card -->
+        <div class="tech-card p-4 flex flex-col">
+          <div class="h-40 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3">
+            <img src="assets/images/axis_z_slider.png" alt="Z-Axis Vertical Slider" class="w-full h-full object-cover">
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-white text-base">Z-Axis Linkage</h4>
+            <span class="badge-pill badge-green text-[10px]">40mm Stroke</span>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-1.5 flex-1">
+            <li>• 1× MG90S metal-gear micro servo</li>
+            <li>• Guided linear vertical slider</li>
+            <li>• Kinematic crank-slider linkage</li>
+            <li>• Spring-assisted counterbalance</li>
+            <li>• Ultra-lightweight 3D printed carrier</li>
+          </ul>
+        </div>
+
+        <!-- Gripper Card -->
+        <div class="tech-card p-4 flex flex-col">
+          <div class="h-40 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3">
+            <img src="assets/images/gripper_servo_stage3.png" alt="Servo Parallel Gripper" class="w-full h-full object-cover">
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-white text-base">Parallel Gripper</h4>
+            <span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">26-36mm Gap</span>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-1.5 flex-1">
+            <li>• 1× MG90S metal-gear micro servo</li>
+            <li>• Geared dual parallel fingers</li>
+            <li>• TPU / silicone high-friction grip pads</li>
+            <li>• Open width: ~36 mm, Clamped: ~26 mm</li>
+            <li>• Tuned torque compliance for plastic caps</li>
+          </ul>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+<section id="bom" class="py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-8">
+        <div>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">05 / Component Inventory</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">V2 Bill of Materials (BOM)</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Replaces Teensy 4.1 &amp; ESP32-CAM with your already-owned Raspberry Pi Zero 2 W (16 GB microSD) plus the 8MP IMX219 160° camera module (Robu.in ₹1,489) and 22-pin Pi Zero CSI cable.
+        </p>
+      </div>
+
+      <!-- Filterable BOM Table -->
+      <div class="tech-card overflow-hidden">
+        <div class="p-4 bg-slate-900/60 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="font-bold text-sm text-white">V2 Component List</span>
+            <div class="flex items-center gap-2">
+              <button data-filter="all" class="bom-filter-btn active px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/40">
+                All (17 Items)
+              </button>
+              <button data-filter="owned" class="bom-filter-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                Already Owned (6)
+              </button>
+              <button data-filter="purchase" class="bom-filter-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                To Purchase (11)
+              </button>
+            </div>
+          </div>
+          <div class="relative">
+            <input id="bom-search" type="text" placeholder="Search V2 components..." class="px-3 py-1.5 pl-8 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500 w-52">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Component Name</th>
+                <th>Specification / Details</th>
+                <th>Qty</th>
+                <th>Function in V2 System</th>
+                <th>Procurement Status</th>
+              </tr>
+            </thead>
+            <tbody id="bom-table-body">
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">01</td>
+                <td class="font-bold text-cyan-400">Raspberry Pi Zero 2 W + 16GB SD</td>
+                <td class="font-mono text-xs">Quad-Core Cortex-A53 @ 1 GHz, 512 MB RAM, 16 GB Class 10 microSD</td>
+                <td class="font-mono">1</td>
+                <td>Replaces Teensy 4.1 &amp; ESP32-CAM: Camera capture, OpenCV vision, homography, path planning</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">02</td>
+                <td class="font-bold text-emerald-400">Arduino Mega 2560</td>
+                <td class="font-mono text-xs">ATmega2560 @ 16 MHz, 54 Digital I/O, 4 Hardware UARTs</td>
+                <td class="font-mono">1</td>
+                <td>Deterministic stepper pulse generation, homing ISR, servo sequencing, fail-safe recovery</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">03</td>
+                <td class="font-bold text-purple-400">PCA9685 Board</td>
+                <td class="font-mono text-xs">16-Channel 12-bit PWM generator (I2C)</td>
+                <td class="font-mono">1</td>
+                <td>Jitter-free 50 Hz servo signal generation</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">04</td>
+                <td class="font-bold text-white">MG90S Servo</td>
+                <td class="font-mono text-xs">Metal-gear micro servo (1.8–2.2 kg-cm)</td>
+                <td class="font-mono">2</td>
+                <td>Z-axis vertical stroke &amp; Gripper clamp</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">05</td>
+                <td class="font-bold text-white">12V 10A SMPS</td>
+                <td class="font-mono text-xs">120W switched-mode power supply</td>
+                <td class="font-mono">1</td>
+                <td>Master DC system power source</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="owned">
+                <td class="font-mono text-slate-400">06</td>
+                <td class="font-bold text-white">LED Light Plate</td>
+                <td class="font-mono text-xs">Uniform diffused illumination panel</td>
+                <td class="font-mono">1</td>
+                <td>Eliminates shadow/glare on glossy plastic caps</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Already Owned</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">07</td>
+                <td class="font-bold text-orange-400">8MP IMX219 160° Camera Module</td>
+                <td class="font-mono text-xs">Sony IMX219 8MP Wide-Angle 160° FOV (Robu.in ₹1,489) or USB Webcam</td>
+                <td class="font-mono">1</td>
+                <td>High-resolution top-down workspace acquisition into Pi Zero 2 W</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase (~₹1,489)</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">08</td>
+                <td class="font-bold text-cyan-400">Pi Zero 22-Pin to 15-Pin CSI Cable</td>
+                <td class="font-mono text-xs">15 cm / 30 cm FFC Adapter Ribbon (0.5mm 22-pin to 1.0mm 15-pin)</td>
+                <td class="font-mono">1</td>
+                <td>Adapts standard 15-pin IMX219 camera to Pi Zero 2 W's 22-pin CSI connector</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase (~₹69)</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">09</td>
+                <td class="font-bold text-orange-400">NEMA 17 Stepper Motors</td>
+                <td class="font-mono text-xs">40 mm body, 1.3 A, ~4.2 kg-cm torque</td>
+                <td class="font-mono">2</td>
+                <td>X and Y Cartesian gantry travel</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">10</td>
+                <td class="font-bold text-orange-400">TMC2208 V1.2 Drivers</td>
+                <td class="font-mono text-xs">SilentStepStick with aluminum heatsink</td>
+                <td class="font-mono">2</td>
+                <td>Smooth, quiet stepper motor driving</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">11</td>
+                <td class="font-bold text-white">GT2 Belt &amp; 20T Pulleys</td>
+                <td class="font-mono text-xs">6 mm width, 2 mm pitch, 5 mm bore pulleys</td>
+                <td class="font-mono">2 sets</td>
+                <td>Precision linear belt drive transmission</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">12</td>
+                <td class="font-bold text-white">2020 Aluminum Extrusion</td>
+                <td class="font-mono text-xs">V-slot / T-slot profiles cut to size</td>
+                <td class="font-mono">1 set</td>
+                <td>Rigid 500×500×500 mm frame structure</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">13</td>
+                <td class="font-bold text-white">Linear Rails or V-Wheels</td>
+                <td class="font-mono text-xs">Delrin V-wheel kits or MGN12H rails</td>
+                <td class="font-mono">2 axis sets</td>
+                <td>Low-friction linear guidance for X &amp; Y</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">14</td>
+                <td class="font-bold text-purple-400">5V 5A Buck Converter</td>
+                <td class="font-mono text-xs">High-efficiency step-down (12V ⟶ 5V)</td>
+                <td class="font-mono">1</td>
+                <td>Isolated high-current power for servos</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">15</td>
+                <td class="font-bold text-cyan-400">5V 3A Logic Buck</td>
+                <td class="font-mono text-xs">Regulated step-down for Pi Zero 2 W &amp; Mega</td>
+                <td class="font-mono">1</td>
+                <td>Stable 5V rail for Pi Zero 2 W, IMX219, and Mega</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">16</td>
+                <td class="font-bold text-red-400">Logic Level Shifter</td>
+                <td class="font-mono text-xs">4-channel bidirectional (5V ⇄ 3.3V)</td>
+                <td class="font-mono">1</td>
+                <td>Protects Pi Zero 2 W 3.3V RXD0 from Mega 5V TX1</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+              <tr data-status="purchase">
+                <td class="font-mono text-slate-400">17</td>
+                <td class="font-bold text-white">NC Limit Switches &amp; E-Stop</td>
+                <td class="font-mono text-xs">Microswitches with roller levers + E-Stop button</td>
+                <td class="font-mono">3 switches + 1</td>
+                <td>Homing calibration &amp; physical emergency cutoff</td>
+                <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+<section id="roadmap" class="py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">06 / Development Strategy</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">6-Stage V2 Phased Roadmap</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Validate the Pi Zero 2 W OpenCV + 160° IMX219 vision stack on the bench first, then integrate with the Arduino Mega motion gantry.
+        </p>
+      </div>
+
+      <!-- 6 Stages Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <!-- Stage 1 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
+              <img src="assets/images/vision_detection_stage1.png" alt="Stage 1 Pi Zero 2 W Vision" class="w-full h-full object-cover">
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-cyan-400 font-bold">STAGE 01</span>
+              <span class="badge-pill badge-cyan text-[10px]">Pi Zero 2 W Setup</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">16GB OS, IMX219 &amp; OpenCV Calibration</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• Flash Raspberry Pi OS Lite (64-bit) to 16 GB microSD</li>
+              <li>• Connect 8MP IMX219 via 22-pin Pi Zero CSI ribbon</li>
+              <li>• Run <code class="text-cyan-300">fisheye_calibrate.py</code> to save <code class="text-orange-300">K, D, H</code> matrices</li>
+              <li>• Verify 45 ms HSV + circularity + mm output offline</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-cyan-300 font-mono">
+            <strong>Milestone:</strong> Sub-millimeter cap coordinates computed on Pi Zero 2 W.
+          </div>
+        </div>
+
+        <!-- Stage 2 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
+              <img src="assets/images/gantry_belt_stage2.png" alt="Stage 2 X/Y Gantry Motion" class="w-full h-full object-cover">
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-orange-400 font-bold">STAGE 02</span>
+              <span class="badge-pill badge-orange text-[10px]">Hardware Build</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">X/Y Gantry Motion System</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• Assemble 2020 extrusion frame &amp; linear rails</li>
+              <li>• Install dual NEMA 17 steppers &amp; TMC2208s</li>
+              <li>• Calibrate steps/mm: <span class="font-mono text-cyan-300">200 × 16 / 40 = 80</span> steps/mm</li>
+              <li>• Validate repeatable homing to NC switches</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-orange-300 font-mono">
+            <strong>Milestone:</strong> Sub-millimeter repeatable positioning across 300×300 mm board.
+          </div>
+        </div>
+
+        <!-- Stage 3 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
+              <img src="assets/images/gripper_servo_stage3.png" alt="Stage 3 Z-Axis & Gripper" class="w-full h-full object-cover">
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-purple-400 font-bold">STAGE 03</span>
+              <span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">Mechanism</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">Z-Linkage &amp; Parallel Gripper</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• 3D print crank-slider vertical linkage</li>
+              <li>• Mount dual MG90S servos on lightweight carriage</li>
+              <li>• Wire PCA9685 I2C driver to dedicated 5V buck</li>
+              <li>• Measure grip holding force with TPU compliant pads</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-purple-300 font-mono">
+            <strong>Milestone:</strong> Reliably pick and release caps without slippage or stall.
+          </div>
+        </div>
+
+        <!-- Stage 4 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4 flex items-center justify-center p-4">
+              <i data-lucide="network" class="w-16 h-16 text-cyan-400/80"></i>
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-amber-400 font-bold">STAGE 04</span>
+              <span class="badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px]">Pi ⇄ Mega Link</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">Pi Zero 2 W to Mega UART Protocol</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• Wire Pi GPIO 14/15 (<code class="text-cyan-300">/dev/serial0</code>) to Mega Serial1 via shifter</li>
+              <li>• Pack binary structs in Python (<code class="text-cyan-300">struct.pack</code>) with CRC16</li>
+              <li>• Store batch plan locally in Mega SRAM</li>
+              <li>• Test UART disconnect during active movement</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-amber-300 font-mono">
+            <strong>Milestone:</strong> Mega completes current cap pickup safely without Pi host.
+          </div>
+        </div>
+
+        <!-- Stage 5 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
+              <img src="assets/images/portal_robot_system.png" alt="Stage 5 Full Integration" class="w-full h-full object-cover">
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-emerald-400 font-bold">STAGE 05</span>
+              <span class="badge-pill badge-green text-[10px]">Integration</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">Full Mechanical &amp; Auto-Boot Assembly</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• Mount top-down IMX219 camera bracket &amp; LED diffuser</li>
+              <li>• Enable <code class="text-emerald-300">capsorter_vision.service</code> systemd auto-start</li>
+              <li>• Planar camera-to-gripper coordinate offset tuning</li>
+              <li>• Multi-cap end-to-end sorting trials</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-emerald-400 font-mono">
+            <strong>Milestone:</strong> Power-on autonomous sorting with zero laptop/Wi-Fi.
+          </div>
+        </div>
+
+        <!-- Stage 6 -->
+        <div class="tech-card p-5 flex flex-col justify-between">
+          <div>
+            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4 flex items-center justify-center p-4">
+              <i data-lucide="shield-check" class="w-16 h-16 text-emerald-400/80"></i>
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs text-red-400 font-bold">STAGE 06</span>
+              <span class="badge-pill bg-red-500/20 text-red-300 border border-red-500/30 text-[10px]">Stress Testing</span>
+            </div>
+            <h3 class="font-bold text-white text-base mb-2">Reliability &amp; Read-Only SD Protection</h3>
+            <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
+              <li>• Enable Raspberry Pi OverlayFS (read-only root filesystem)</li>
+              <li>• 100-cycle continuous batch endurance test</li>
+              <li>• Thermal logging on Pi Zero 2 W &amp; TMC2208 drivers</li>
+              <li>• Limit switch trip &amp; hardware E-Stop validation</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-red-400 font-mono">
+            <strong>Milestone:</strong> Corruption-proof SD card and industrial fault tolerance.
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==========================================
+       SECTION 07: ON-DEMAND ENGINEERING DEEP-DIVE SUITE
+       ========================================== -->
+  <section id="engineering" class="py-16 border-t border-white/10 bg-[#080b11]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Engineering Launcher Gate Card -->
+      <div class="tech-card p-6 sm:p-8 border-orange-500/30 bg-gradient-to-br from-[#121826] via-[#0e131f] to-[#131b2e]">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-white/10">
+          <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/15 border border-orange-500/30 text-orange-400 text-xs font-mono uppercase tracking-wider mb-3">
+              <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+              <span>07 / Optional Technical Deep-Dive</span>
+            </div>
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-white">
+              Engineering Specs, Wiring Pinouts &amp; Firmware Vault
+            </h2>
+            <p class="text-slate-300 text-xs sm:text-sm max-w-2xl mt-2 leading-relaxed">
+              Detailed computer vision algorithms, electrical schematics, searchable pinout matrices, fail-safe state machines, production source code, and hardware guidelines are hidden by default to keep the main page streamlined. Click any module below or use the <strong class="text-cyan-400">Engineering</strong> tab in the top bar to inspect them on demand.
+            </p>
+          </div>
+
+          <div class="shrink-0">
+            <button id="btn-toggle-engineering" class="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-orange-500/25 transition-all cursor-pointer">
+              <i data-lucide="layers" class="w-4 h-4"></i>
+              <span id="btn-toggle-engineering-label">Show Engineering Deep-Dive (5 Modules)</span>
+              <i id="btn-toggle-engineering-icon" data-lucide="chevron-down" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5 Clickable Quick-Access Module Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-6">
+          <button data-open-eng="vision" class="eng-quick-card text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 hover:border-orange-500/40 transition-all group cursor-pointer">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-mono uppercase text-orange-400">Module 01</span>
+              <i data-lucide="eye" class="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform"></i>
+            </div>
+            <div class="font-bold text-white text-xs mb-1">OpenCV & 160° Fisheye Vision</div>
+            <p class="text-[11px] text-slate-400 leading-snug">5-stage Picamera2, fisheye remap, HSV masks & 3×3 homography</p>
+          </button>
+
+          <button data-open-eng="electrical" class="eng-quick-card text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 hover:border-cyan-500/40 transition-all group cursor-pointer">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-mono uppercase text-cyan-400">Module 02</span>
+              <i data-lucide="zap" class="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform"></i>
+            </div>
+            <div class="font-bold text-white text-xs mb-1">Electrical &amp; Pinout Matrix</div>
+            <p class="text-[11px] text-slate-400 leading-snug">3-branch power tree, 3.3V⇄5V shifter &amp; searchable pin table</p>
+          </button>
+
+          <button data-open-eng="safety" class="eng-quick-card text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 hover:border-emerald-500/40 transition-all group cursor-pointer">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-mono uppercase text-emerald-400">Module 03</span>
+              <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform"></i>
+            </div>
+            <div class="font-bold text-white text-xs mb-1">Motion &amp; Fault Tolerance</div>
+            <p class="text-[11px] text-slate-400 leading-snug">8-step pick sequence, NC endstops &amp; comms-loss recovery</p>
+          </button>
+
+          <button data-open-eng="code" class="eng-quick-card text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 hover:border-purple-500/40 transition-all group cursor-pointer">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-mono uppercase text-purple-400">Module 04</span>
+              <i data-lucide="code-2" class="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform"></i>
+            </div>
+            <div class="font-bold text-white text-xs mb-1">Embedded Firmware Vault</div>
+            <p class="text-[11px] text-slate-400 leading-snug">pi_zero_vision.py, fisheye_calibrate.py, mega_motion.ino & protocol</p>
+          </button>
+
+          <button data-open-eng="considerations" class="eng-quick-card text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 hover:border-amber-500/40 transition-all group cursor-pointer">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-mono uppercase text-amber-400">Module 05</span>
+              <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform"></i>
+            </div>
+            <div class="font-bold text-white text-xs mb-1">Critical Considerations</div>
+            <p class="text-[11px] text-slate-400 leading-snug">TMC2208 Vref thermals, servo rail isolation &amp; calibration</p>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Collapsible Engineering Drawer (Hidden by Default) -->
+    <div id="engineering-drawer" class="hidden mt-8">
+      <!-- Sticky Sub-Navigation Bar Inside Engineering Drawer -->
+      <div class="sticky top-16 z-30 bg-[#0d121d]/95 backdrop-blur-md border-y border-orange-500/30 py-3 px-4">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-[11px] font-mono uppercase text-orange-400 mr-2 font-bold flex items-center gap-1">
+              <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+              <span>Engineering Filter:</span>
+            </span>
+            <button data-eng-tab="all" class="eng-subtab-btn active px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
+              All 5 Modules
+            </button>
+            <button data-eng-tab="vision" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
+              1. Vision Pipeline
+            </button>
+            <button data-eng-tab="electrical" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
+              2. Electrical &amp; Pinouts
+            </button>
+            <button data-eng-tab="safety" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
+              3. Motion &amp; Fail-Safe
+            </button>
+            <button data-eng-tab="code" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
+              4. Embedded Firmware
+            </button>
+            <button data-eng-tab="considerations" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
+              5. Critical Considerations
+            </button>
+          </div>
+          <button id="btn-close-engineering" class="px-3 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs font-mono font-semibold flex items-center gap-1 transition-all cursor-pointer">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            <span>Hide Engineering</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- The 5 Deep-Dive Engineering Modules -->
+<div id="vision" data-eng-module="vision" class="eng-module-panel py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">04 / Python 3 + OpenCV on Raspberry Pi Zero 2 W</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">V2 OpenCV Vision &amp; Fisheye Homography Pipeline</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Executing locally on the Pi Zero 2 W's Quad-Core 1 GHz Cortex-A53 with 512 MB RAM and 16 GB microSD storage.
+        </p>
+      </div>
+
+      <!-- Memory Budget & Compute Headroom Analysis -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        
+        <div class="tech-card p-5">
+          <span class="text-xs font-mono text-orange-400 uppercase tracking-wider block mb-1">CSI DMA Frame Acquisition</span>
+          <h3 class="text-2xl font-bold text-white font-mono mb-2">640×480 RGB888</h3>
+          <p class="text-xs text-slate-400">
+            Frame Size: <span class="font-mono text-slate-200">921,600 Bytes (~900 KiB)</span> — 4× higher pixel count than V1.<br>
+            Capture Latency: <span class="font-mono text-emerald-400 font-bold">~18–25 ms</span> via MIPI CSI-2 (<code class="text-cyan-300">Picamera2</code>) or USB V4L2, replacing V1's 1.67s UART transfer.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <span class="text-xs font-mono text-cyan-400 uppercase tracking-wider block mb-1">Pi Zero 2 W RAM Headroom</span>
+          <h3 class="text-2xl font-bold text-white font-mono mb-2">512 MB LPDDR2</h3>
+          <p class="text-xs text-slate-400">
+            Provides <span class="text-cyan-300 font-bold">512× more RAM</span> than Teensy 4.1 (1 MB).<br>
+            Headless Raspberry Pi OS Lite + Python 3 + OpenCV + precomputed fisheye LUTs consume ~145 MB, leaving <span class="font-mono text-emerald-400">&gt;360 MB free</span>.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <span class="text-xs font-mono text-emerald-400 uppercase tracking-wider block mb-1">16 GB microSD Storage Budget</span>
+          <h3 class="text-2xl font-bold text-white font-mono mb-2">~12.8 GB Free</h3>
+          <p class="text-xs text-slate-400">
+            OS + <code class="text-slate-200">python3-opencv</code> + <code class="text-slate-200">picamera2</code> + <code class="text-slate-200">numpy</code> use ~2.8 GB.<br>
+            Stores <code class="text-cyan-300">calibration.npz</code> (<span class="font-mono">K, D, H</span> matrices) and optional offline diagnostic snapshots.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- Interactive 5-Stage Pipeline Demonstrator -->
+      <div class="tech-card p-6 mb-12">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between pb-6 border-b border-white/5 gap-4">
+          <div>
+            <h3 class="font-bold text-lg text-white flex items-center gap-2">
+              <i data-lucide="scan" class="w-5 h-5 text-cyan-400"></i>
+              Interactive 5-Stage V2 OpenCV Pipeline Inspection
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Explore each stage of the Python OpenCV pipeline running on the Raspberry Pi Zero 2 W.</p>
+          </div>
+          <!-- Step Selector Tabs -->
+          <div class="flex flex-wrap gap-2">
+            <button data-step="1" class="vision-step-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border bg-orange-500/20 text-orange-400 border-orange-500/40">
+              1. CSI / USB Capture
+            </button>
+            <button data-step="2" class="vision-step-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border bg-slate-800/40 text-slate-400 border-slate-700/40">
+              2. 160° Fisheye Undistort
+            </button>
+            <button data-step="3" class="vision-step-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border bg-slate-800/40 text-slate-400 border-slate-700/40">
+              3. OpenCV HSV Masks
+            </button>
+            <button data-step="4" class="vision-step-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border bg-slate-800/40 text-slate-400 border-slate-700/40">
+              4. Contours &amp; Circularity
+            </button>
+            <button data-step="5" class="vision-step-btn px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border bg-slate-800/40 text-slate-400 border-slate-700/40">
+              5. 3×3 Homography (mm)
+            </button>
+          </div>
+        </div>
+
+        <!-- Vision Panels -->
+        <div class="mt-6">
+          
+          <!-- Panel 1: CSI / USB Capture -->
+          <div id="vision-panel-1" class="vision-step-panel">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="p-6 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center min-h-[260px] relative">
+                <div class="w-64 h-64 bg-[#1e232e] border border-slate-600 rounded-2xl p-4 grid grid-cols-2 gap-8 items-center justify-center">
+                  <div class="w-14 h-14 rounded-full bg-red-600 shadow-lg shadow-red-600/50 border-2 border-red-400 mx-auto flex items-center justify-center text-[10px] font-mono text-white">RED</div>
+                  <div class="w-14 h-14 rounded-full bg-blue-600 shadow-lg shadow-blue-600/50 border-2 border-blue-400 mx-auto flex items-center justify-center text-[10px] font-mono text-white">BLUE</div>
+                  <div class="w-14 h-14 rounded-full bg-emerald-600 shadow-lg shadow-emerald-600/50 border-2 border-emerald-400 mx-auto flex items-center justify-center text-[10px] font-mono text-white">GREEN</div>
+                  <div class="w-14 h-14 rounded-full bg-yellow-500 shadow-lg shadow-yellow-500/50 border-2 border-yellow-300 mx-auto flex items-center justify-center text-[10px] font-mono text-slate-900 font-bold">YELLOW</div>
+                </div>
+                <div class="absolute bottom-3 left-3 text-[11px] font-mono text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-white/5">
+                  Raw 640×480 BGR888 Frame (IMX219 CSI / V4L2 Webcam)
+                </div>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-white mb-2">Stage 1: Direct MIPI CSI-2 / USB Frame Capture (~20 ms)</h4>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                  The Pi Zero 2 W acquires a <code class="text-cyan-300">640×480</code> NumPy array directly from the 8MP IMX219 camera using <code class="text-cyan-300">Picamera2</code> with locked exposure and white balance (or automatically falls back to <code class="text-cyan-300">cv2.VideoCapture(0)</code> if a USB webcam is plugged into the OTG port).
+                </p>
+                <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-cyan-300">
+                  # Direct DMA capture into NumPy array (no serial transfer!)<br>
+                  frame_bgr = picam2.capture_array("main")<br>
+                  # Fallback if USB webcam is used:<br>
+                  # ret, frame_bgr = usb_cap.read()
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 2: 160° Fisheye Radial Undistortion -->
+          <div id="vision-panel-2" class="vision-step-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="p-6 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center min-h-[260px] relative">
+                <div class="w-64 h-64 bg-[#171d28] border-2 border-cyan-500/50 rounded-none p-4 grid grid-cols-2 gap-8 items-center justify-center">
+                  <div class="w-14 h-14 rounded-full bg-red-600 border-2 border-white/80 mx-auto flex items-center justify-center text-[9px] font-mono text-white">RECTIFIED</div>
+                  <div class="w-14 h-14 rounded-full bg-blue-600 border-2 border-white/80 mx-auto flex items-center justify-center text-[9px] font-mono text-white">RECTIFIED</div>
+                  <div class="w-14 h-14 rounded-full bg-emerald-600 border-2 border-white/80 mx-auto flex items-center justify-center text-[9px] font-mono text-white">RECTIFIED</div>
+                  <div class="w-14 h-14 rounded-full bg-yellow-500 border-2 border-white/80 mx-auto flex items-center justify-center text-[9px] font-mono text-slate-950 font-bold">RECTIFIED</div>
+                </div>
+                <div class="absolute bottom-3 left-3 text-[11px] font-mono text-cyan-300 bg-slate-900/90 px-2 py-0.5 rounded border border-cyan-500/30">
+                  cv2.remap(frame, map1, map2) • Barrel Curvature Removed
+                </div>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-white mb-2">Stage 2: 160° Wide-Angle Fisheye Rectification (~5 ms)</h4>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                  An ultra-wide 160° FOV IMX219 lens bends straight grid lines outward near the borders (radial barrel distortion). At startup, the Pi precomputes <code class="text-cyan-300">map1, map2</code> from the calibrated intrinsic matrix <code class="text-orange-300">K</code> and distortion vector <code class="text-orange-300">D</code>, allowing <code class="text-cyan-300">cv2.remap()</code> to flatten the image in ~5 ms.
+                </p>
+                <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-orange-300">
+                  map1, map2 = cv2.fisheye.initUndistortRectifyMap(<br>
+                  &nbsp;&nbsp;K, D, np.eye(3), K_new, (640, 480), cv2.CV_16SC2<br>
+                  )<br>
+                  rectified = cv2.remap(frame_bgr, map1, map2, cv2.INTER_LINEAR)
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 3: HSV Thresholding -->
+          <div id="vision-panel-3" class="vision-step-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="p-6 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center min-h-[260px] relative">
+                <div class="w-64 h-64 bg-black border border-slate-800 rounded-lg p-4 grid grid-cols-2 gap-8 items-center justify-center">
+                  <div class="w-14 h-14 rounded-full bg-red-500 border-2 border-white mx-auto flex items-center justify-center text-[10px] font-mono text-white">MASK</div>
+                  <div class="w-14 h-14 rounded-full bg-blue-500 border-2 border-white mx-auto flex items-center justify-center text-[10px] font-mono text-white">MASK</div>
+                  <div class="w-14 h-14 rounded-full bg-emerald-500 border-2 border-white mx-auto flex items-center justify-center text-[10px] font-mono text-white">MASK</div>
+                  <div class="w-14 h-14 rounded-full bg-yellow-400 border-2 border-white mx-auto flex items-center justify-center text-[10px] font-mono text-slate-900 font-bold">MASK</div>
+                </div>
+                <div class="absolute bottom-3 left-3 text-[11px] font-mono text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-white/5">
+                  NEON-Accelerated OpenCV HSV Masks (cv2.inRange)
+                </div>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-white mb-2">Stage 3: Vectorized OpenCV HSV Segmentation (~8 ms)</h4>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                  OpenCV converts the rectified frame to HSV using ARM NEON SIMD instructions and extracts binary masks for Red (wrapping around hue $0^\circ/180^\circ$), Yellow, Green, and Blue:
+                </p>
+                <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-emerald-300 space-y-1">
+                  <div>hsv = cv2.cvtColor(rectified, cv2.COLOR_BGR2HSV)</div>
+                  <div>mask_red = cv2.inRange(hsv, (0,100,70), (10,255,255)) | \</div>
+                  <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cv2.inRange(hsv, (168,100,70), (180,255,255))</div>
+                  <div>mask_ylw = cv2.inRange(hsv, (18,110,90), (35,255,255))</div>
+                  <div>mask_grn = cv2.inRange(hsv, (38,85,65), (85,255,255))</div>
+                  <div>mask_blu = cv2.inRange(hsv, (98,100,70), (132,255,255))</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 4: Contour Detection -->
+          <div id="vision-panel-4" class="vision-step-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="p-6 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center min-h-[260px] relative">
+                <div class="w-64 h-64 bg-slate-950 border border-slate-700 rounded-lg p-4 grid grid-cols-2 gap-8 items-center justify-center">
+                  <div class="w-14 h-14 rounded-full border-2 border-dashed border-red-400 mx-auto flex items-center justify-center text-[10px] font-mono text-red-300">○ Ø30</div>
+                  <div class="w-14 h-14 rounded-full border-2 border-dashed border-blue-400 mx-auto flex items-center justify-center text-[10px] font-mono text-blue-300">○ Ø30</div>
+                  <div class="w-14 h-14 rounded-full border-2 border-dashed border-emerald-400 mx-auto flex items-center justify-center text-[10px] font-mono text-emerald-300">○ Ø30</div>
+                  <div class="w-14 h-14 rounded-full border-2 border-dashed border-yellow-400 mx-auto flex items-center justify-center text-[10px] font-mono text-yellow-300">○ Ø30</div>
+                </div>
+                <div class="absolute bottom-3 left-3 text-[11px] font-mono text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-white/5">
+                  cv2.findContours &amp; Isoperimetric Circularity Filter
+                </div>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-white mb-2">Stage 4: Morphological Opening &amp; Contour Centroids (~7 ms)</h4>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                  A $5 \times 5$ elliptical morphological opening removes stray noise. <code class="text-amber-300">cv2.findContours</code> and image moments <code class="text-amber-300">cv2.moments(cnt)</code> extract sub-pixel centroids while rejecting non-circular blobs:
+                </p>
+                <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-amber-300">
+                  area = cv2.contourArea(cnt)<br>
+                  perim = cv2.arcLength(cnt, True)<br>
+                  circ = (4.0 * np.pi * area) / (perim * perim + 1e-5)<br>
+                  if 700 &lt; area &lt; 5500 and circ &gt; 0.75:<br>
+                  &nbsp;&nbsp;M = cv2.moments(cnt)<br>
+                  &nbsp;&nbsp;u, v = M["m10"] / M["m00"], M["m01"] / M["m00"]
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 5: Planar Homography -->
+          <div id="vision-panel-5" class="vision-step-panel hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div class="p-6 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center min-h-[260px] relative">
+                <div class="w-64 h-64 bg-slate-900 border border-cyan-500/40 rounded-lg p-4 grid grid-cols-2 gap-8 items-center justify-center relative">
+                  <div class="w-14 h-14 rounded-full bg-red-950 border border-red-500 flex flex-col items-center justify-center text-[9px] font-mono text-red-300">
+                    <span>(52, 48)</span>
+                    <span class="text-[8px] text-slate-400">mm</span>
+                  </div>
+                  <div class="w-14 h-14 rounded-full bg-blue-950 border border-blue-500 flex flex-col items-center justify-center text-[9px] font-mono text-blue-300">
+                    <span>(218, 56)</span>
+                    <span class="text-[8px] text-slate-400">mm</span>
+                  </div>
+                  <div class="w-14 h-14 rounded-full bg-emerald-950 border border-emerald-500 flex flex-col items-center justify-center text-[9px] font-mono text-emerald-300">
+                    <span>(48, 212)</span>
+                    <span class="text-[8px] text-slate-400">mm</span>
+                  </div>
+                  <div class="w-14 h-14 rounded-full bg-yellow-950 border border-yellow-500 flex flex-col items-center justify-center text-[9px] font-mono text-yellow-300">
+                    <span>(220, 206)</span>
+                    <span class="text-[8px] text-slate-400">mm</span>
+                  </div>
+                </div>
+                <div class="absolute bottom-3 left-3 text-[11px] font-mono text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-white/5">
+                  cv2.perspectiveTransform: Rectified (u, v) ⟶ Gantry (X, Y) mm
+                </div>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-white mb-2">Stage 5: 3×3 Planar Homography &amp; Path Optimization (~2 ms)</h4>
+                <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                  Once radial lens distortion is removed in Stage 2, <code class="text-cyan-300">cv2.perspectiveTransform</code> multiplies the rectified pixel centroid <span class="font-mono text-cyan-300">(u, v)</span> by the 4-corner calibrated $3 \times 3$ homography matrix <span class="font-mono text-cyan-300">H</span> to obtain physical board coordinates <span class="font-mono text-cyan-300">(X_mm, Y_mm)</span>, sorts targets by shortest Euclidean travel, and sends the packed struct batch to the Arduino Mega.
+                </p>
+                <div class="p-3 rounded-lg bg-slate-900 border border-white/5 text-xs font-mono text-cyan-300">
+                  pts = np.array([[[u, v]]], dtype=np.float32)<br>
+                  board_xy = cv2.perspectiveTransform(pts, H)[0][0]<br>
+                  x_mm, y_mm = float(board_xy[0]), float(board_xy[1])
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+<div id="electrical" data-eng-module="electrical" class="eng-module-panel py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">05 / Power &amp; GPIO Wiring (V2)</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">V2 Electrical Architecture &amp; Power Tree</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Your existing 3-branch isolated power supply powers the Raspberry Pi Zero 2 W and Arduino Mega 2560 with zero changes to the buck converters.
+        </p>
+      </div>
+
+      <!-- Power Tree Diagram -->
+      <div class="tech-card p-6 mb-12">
+        <h3 class="font-bold text-sm text-cyan-400 font-mono uppercase tracking-wider mb-6 flex items-center gap-2">
+          <i data-lucide="git-branch" class="w-4 h-4"></i>
+          12V / 10A (120W) Power Distribution Breakdown for V2
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Branch A: Stepper Motors -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-orange-500/30">
+            <div class="flex items-center justify-between mb-3">
+              <span class="badge-pill badge-orange text-[10px]">Power Branch A</span>
+              <span class="font-mono text-xs font-bold text-orange-400">12V Direct</span>
+            </div>
+            <h4 class="font-bold text-white text-base mb-2">X &amp; Y Stepper Motors</h4>
+            <p class="text-xs text-slate-300 leading-relaxed mb-4">
+              Direct 12V supply routed to both TMC2208 VMOT power inputs, equipped with 100 µF low-ESR decoupling capacitors.
+            </p>
+            <ul class="text-xs text-slate-400 space-y-1 font-mono">
+              <li>• TMC2208 (X-axis) ⟶ NEMA 17</li>
+              <li>• TMC2208 (Y-axis) ⟶ NEMA 17</li>
+              <li>• Fused: 5A fast-blow inline</li>
+            </ul>
+          </div>
+
+          <!-- Branch B: Servos -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-purple-500/30">
+            <div class="flex items-center justify-between mb-3">
+              <span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">Power Branch B</span>
+              <span class="font-mono text-xs font-bold text-purple-400">5V / 5A Buck</span>
+            </div>
+            <h4 class="font-bold text-white text-base mb-2">MG90S Servo Rail</h4>
+            <p class="text-xs text-slate-300 leading-relaxed mb-4">
+              Dedicated high-current buck converter feeds PCA9685 V+ power terminal. Absorbs sudden 1.5A stall current spikes from gripper jaws.
+            </p>
+            <ul class="text-xs text-slate-400 space-y-1 font-mono">
+              <li>• PCA9685 V+ terminal</li>
+              <li>• MG90S #1 (Z-axis linkage)</li>
+              <li>• MG90S #2 (Gripper jaws)</li>
+            </ul>
+          </div>
+
+          <!-- Branch C: Logic (Pi Zero 2 W + Mega) -->
+          <div class="p-5 rounded-xl bg-slate-900 border border-cyan-500/40">
+            <div class="flex items-center justify-between mb-3">
+              <span class="badge-pill badge-cyan text-[10px]">Power Branch C</span>
+              <span class="font-mono text-xs font-bold text-cyan-400">5V / 3A Regulated</span>
+            </div>
+            <h4 class="font-bold text-white text-base mb-2">Pi Zero 2 W &amp; Mega Logic</h4>
+            <p class="text-xs text-slate-300 leading-relaxed mb-4">
+              Clean, isolated 5V logic rail powering Raspberry Pi Zero 2 W (~450 mA peak with IMX219 camera), Arduino Mega (~70 mA), and PCA9685 VCC.
+            </p>
+            <ul class="text-xs text-slate-400 space-y-1 font-mono">
+              <li>• Pi Zero 2 W 5V (Pins 2 &amp; 4 / USB PWR)</li>
+              <li>• 8MP IMX219 powered via Pi CSI port</li>
+              <li>• Arduino Mega 2560 5V &amp; PCA9685 VCC</li>
+            </ul>
+          </div>
+
+        </div>
+
+        <!-- Level Shifter Critical Safety Box -->
+        <div class="mt-6 p-4 rounded-xl bg-red-950/40 border border-red-500/40 flex items-start gap-4">
+          <div class="p-2 rounded-lg bg-red-500/20 text-red-400 shrink-0">
+            <i data-lucide="shield-alert" class="w-5 h-5"></i>
+          </div>
+          <div class="text-xs text-slate-300 leading-relaxed">
+            <strong class="text-red-300 text-sm block mb-1">MANDATORY 3.3V ⇄ 5V LEVEL SHIFTER WARNING (PI ZERO 2 W GPIO):</strong>
+            Just like the Teensy 4.1 in V1, the <strong>Raspberry Pi Zero 2 W GPIO pins operate strictly at 3.3V logic and are NOT 5V tolerant</strong>. The Arduino Mega 2560 operates at <strong>5V logic</strong>. Connecting Arduino Mega Pin 18 (<code class="text-red-300">TX1 5V</code>) directly to Pi Zero 2 W Pin 10 (<code class="text-cyan-300">GPIO 15 / RXD0</code>) will permanently damage the Pi SoC. Always route UART through the <strong>4-channel bidirectional logic level shifter</strong> (HV=5V, LV=3.3V).
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Searchable & Filterable V2 Pinout Matrix -->
+      <div class="tech-card overflow-hidden">
+        <div class="p-4 bg-slate-900/60 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 class="font-bold text-sm text-white flex items-center gap-2">
+              <i data-lucide="cpu" class="w-4 h-4 text-cyan-400"></i>
+              V2 Hardware Pin &amp; Interface Mapping Matrix
+            </h3>
+            <span class="text-xs text-slate-400">Complete pin-level connection specification for Raspberry Pi Zero 2 W + IMX219 + Arduino Mega 2560</span>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="relative">
+              <input id="pinout-search" type="text" placeholder="Search pin, GPIO..." class="px-3 py-1.5 pl-8 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500 w-44">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
+            </div>
+            <button data-filter="all" class="pinout-filter-btn active px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/40">
+              All
+            </button>
+            <button data-filter="pizero" class="pinout-filter-btn px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+              Pi Zero 2W
+            </button>
+            <button data-filter="mega" class="pinout-filter-btn px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+              Mega
+            </button>
+            <button data-filter="tmc2208" class="pinout-filter-btn px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+              TMC2208
+            </button>
+            <button data-filter="pca9685" class="pinout-filter-btn px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+              PCA9685
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto max-h-[460px]">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Subsystem</th>
+                <th>Source Pin</th>
+                <th>Destination Pin</th>
+                <th>Signal Description</th>
+                <th>Voltage Level</th>
+                <th>Safety Notes</th>
+              </tr>
+            </thead>
+            <tbody id="pinout-table-body">
+              <!-- Camera to Pi Zero 2 W -->
+              <tr data-controller="pizero">
+                <td class="font-bold text-orange-400">IMX219 Camera ⟶ Pi Zero 2W</td>
+                <td class="font-mono text-xs">15-Pin Camera FPC</td>
+                <td class="font-mono text-xs">22-Pin Pi Zero CSI Port</td>
+                <td>2-Lane MIPI CSI-2 Raw Frame Stream + I2C Control</td>
+                <td><span class="badge-pill bg-slate-800 text-cyan-300 border border-slate-700">1.8V / 3.3V CSI</span></td>
+                <td>Requires 15-to-22 pin Pi Zero ribbon cable</td>
+              </tr>
+              <tr data-controller="pizero">
+                <td class="font-bold text-cyan-400">5V 3A Logic Buck ⟶ Pi Zero 2W</td>
+                <td class="font-mono text-xs">Buck 5V+ &amp; GND</td>
+                <td class="font-mono text-xs">Header Pin 2/4 (5V) &amp; Pin 6 (GND)</td>
+                <td>Regulated 5V DC Power to Raspberry Pi Zero 2 W</td>
+                <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">5.0V ± 0.1V DC</span></td>
+                <td>Or feed via Micro-USB PWR IN port</td>
+              </tr>
+              <tr data-controller="pizero">
+                <td class="font-bold text-cyan-400">Pi Zero 2W ⟶ Level Shifter</td>
+                <td class="font-mono text-xs">Header Pin 1 (3.3V)</td>
+                <td class="font-mono text-xs">Level Shifter LV Ref</td>
+                <td>Low-Voltage Reference for 3.3V Side of Shifter</td>
+                <td><span class="badge-pill bg-slate-800 text-cyan-300 border border-slate-700">3.3V Ref</span></td>
+                <td>Common GND with Mega required</td>
+              </tr>
+
+              <!-- Pi Zero 2 W to Mega -->
+              <tr data-controller="pizero">
+                <td class="font-bold text-cyan-400">Pi Zero 2W ⟶ Mega</td>
+                <td class="font-mono text-xs">Pin 8 (GPIO14 / TXD0)</td>
+                <td class="font-mono text-xs">Shifter LV1 ⟶ HV1 ⟶ Mega Pin 19 (RX1)</td>
+                <td>Sorting Plan Batch Packets &amp; Heartbeat (115,200 Baud)</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">3.3V ⟶ Shifter ⟶ 5V</span></td>
+                <td>Disable Linux serial console in raspi-config</td>
+              </tr>
+              <tr data-controller="mega">
+                <td class="font-bold text-emerald-400">Mega ⟶ Pi Zero 2W</td>
+                <td class="font-mono text-xs">Mega Pin 18 (TX1)</td>
+                <td class="font-mono text-xs">Shifter HV2 ⟶ LV2 ⟶ Pin 10 (GPIO15 / RXD0)</td>
+                <td>Execution ACK, Batch Done &amp; Fault Telemetry</td>
+                <td><span class="badge-pill bg-red-500/20 text-red-300 border border-red-500/40">5V ⟶ Level Shifter ⟶ 3.3V</span></td>
+                <td>MANDATORY Level Shifter on Mega TX1!</td>
+              </tr>
+
+              <!-- Mega to TMC2208 Stepper X & Y -->
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (X)</td>
+                <td class="font-mono text-xs">Mega Pin 2</td>
+                <td class="font-mono text-xs">X Driver STEP Pin</td>
+                <td>X-Axis Step Pulse Train (80 steps/mm, 370mm range)</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
+                <td>4000 steps/s max speed (50 mm/s)</td>
+              </tr>
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (X)</td>
+                <td class="font-mono text-xs">Mega Pin 5</td>
+                <td class="font-mono text-xs">X Driver DIR Pin</td>
+                <td>X-Axis Direction Toggle</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
+                <td>CW / CCW rotation</td>
+              </tr>
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (Y)</td>
+                <td class="font-mono text-xs">Mega Pin 3</td>
+                <td class="font-mono text-xs">Y Driver STEP Pin</td>
+                <td>Y-Axis Step Pulse Train (80 steps/mm, 300mm range)</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
+                <td>Moving bridge actuator</td>
+              </tr>
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (Y)</td>
+                <td class="font-mono text-xs">Mega Pin 6</td>
+                <td class="font-mono text-xs">Y Driver DIR Pin</td>
+                <td>Y-Axis Direction Toggle</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
+                <td>CW / CCW rotation</td>
+              </tr>
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-slate-200">Mega ⟶ Both TMC2208</td>
+                <td class="font-mono text-xs">Mega Pin 8</td>
+                <td class="font-mono text-xs">Shared Driver EN Pin</td>
+                <td>Shared Driver Enable (Active LOW)</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Logic</span></td>
+                <td>Driven LOW in setup() to energize stepper coils</td>
+              </tr>
+              <tr data-controller="tmc2208">
+                <td class="font-bold text-orange-400">TMC2208 Config &amp; Power</td>
+                <td class="font-mono text-xs">MS1, MS2, VMOT, VIO</td>
+                <td class="font-mono text-xs">MS1=5V, MS2=5V | VMOT=12V | 1A/1B/2A/2B</td>
+                <td>1/16 Microstepping Select &amp; 12V Motor Coil Output</td>
+                <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">12V VM / 5V VIO</span></td>
+                <td>Tie MS1 &amp; MS2 HIGH for 1/16 microsteps (80 steps/mm); 100µF cap on VMOT</td>
+              </tr>
+
+              <!-- Mega to PCA9685 I2C -->
+              <tr data-controller="pca9685">
+                <td class="font-bold text-purple-400">Mega ⟶ PCA9685</td>
+                <td class="font-mono text-xs">Mega Pin 20 (SDA) &amp; 21 (SCL)</td>
+                <td class="font-mono text-xs">PCA9685 SDA &amp; SCL (I2C 0x40)</td>
+                <td>I2C Bus (400 kHz) | V+ fed by 5V/5A Buck (Branch B)</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Logic / 5V V+</span></td>
+                <td>4.7kΩ pull-ups; OE pin pulled LOW (enabled)</td>
+              </tr>
+              <tr data-controller="pca9685">
+                <td class="font-bold text-purple-400">PCA9685 Channel 0</td>
+                <td class="font-mono text-xs">CH0 PWM</td>
+                <td class="font-mono text-xs">MG90S Servo #1 (Z-Axis)</td>
+                <td>Z-Axis Vertical Stroke (Lift / Lower)</td>
+                <td><span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30">50 Hz PWM (5V V+)</span></td>
+                <td>Ticks: 180 (0mm Raised), 410 (40mm Pick), 320 (25mm Bin)</td>
+              </tr>
+              <tr data-controller="pca9685">
+                <td class="font-bold text-purple-400">PCA9685 Channel 1</td>
+                <td class="font-mono text-xs">CH1 PWM</td>
+                <td class="font-mono text-xs">MG90S Servo #2 (Gripper)</td>
+                <td>Gripper Jaw Clamp / Release</td>
+                <td><span class="badge-pill bg-purple-500/20 text-purple-300 border border-purple-500/30">50 Hz PWM (5V V+)</span></td>
+                <td>Ticks: 210 (36mm Open) ⟶ 385 (26mm Clamped)</td>
+              </tr>
+
+              <!-- Limit Switches -->
+              <tr data-controller="mega">
+                <td class="font-bold text-emerald-400">Limit Switches ⟶ Mega</td>
+                <td class="font-mono text-xs">NC Contacts (Common to GND)</td>
+                <td class="font-mono text-xs">Mega Pins 22 (X), 23 (Y), 24 (Z)</td>
+                <td>X-Home, Y-Home, Z-Home Endstop Inputs</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V INPUT_PULLUP</span></td>
+                <td>Normally Closed to GND: reads LOW normal, HIGH when triggered/broken</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<div id="safety" data-eng-module="safety" class="eng-module-panel py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+        <div>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">06 / Motion &amp; Fault Tolerance</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Control Strategy &amp; Fail-Safe Logic</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          How the Arduino Mega 2560 ensures mechanical safety, homing repeatability, and graceful recovery if the Raspberry Pi Zero 2 W UART link is interrupted.
+        </p>
+      </div>
+
+      <!-- 8-Step Pick & Place Choreography Table -->
+      <div class="tech-card mb-12 overflow-hidden">
+        <div class="p-4 bg-slate-900/60 border-b border-white/5 flex items-center justify-between">
+          <span class="font-bold text-sm text-slate-200 flex items-center gap-2">
+            <i data-lucide="list-ordered" class="w-4 h-4 text-cyan-400"></i>
+            Detailed 8-Step Pick-and-Place Motion Sequence
+          </span>
+          <span class="text-xs font-mono text-slate-400">Executed Deterministically on Arduino Mega 2560</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Step #</th>
+                <th>Phase Name</th>
+                <th>X / Y Gantry Motion</th>
+                <th>Z-Axis Servo</th>
+                <th>Gripper Servo</th>
+                <th>Safety Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-bold font-mono text-cyan-400">01</td>
+                <td class="font-semibold text-white">Traverse to Target</td>
+                <td>Move to cap (X, Y) mm coordinates</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300">Raised (0mm)</span></td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300">Open (36mm)</span></td>
+                <td>Clearance over other caps maintained</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-cyan-400">02</td>
+                <td class="font-semibold text-white">Lower Over Cap</td>
+                <td>Stationary at target</td>
+                <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">Lower (~40mm)</span></td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300">Open (36mm)</span></td>
+                <td>Verify slider reached bottom stop</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-cyan-400">03</td>
+                <td class="font-semibold text-white">Grip Cap</td>
+                <td>Stationary</td>
+                <td>Lowered</td>
+                <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">Close (~26mm)</span></td>
+                <td>Check servo current/torque limit</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-cyan-400">04</td>
+                <td class="font-semibold text-white">Vertical Lift</td>
+                <td>Stationary</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Raise (0mm)</span></td>
+                <td>Closed (Clamping)</td>
+                <td>Spring counterbalances gripper weight</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-cyan-400">05</td>
+                <td class="font-semibold text-white">Travel to Bin</td>
+                <td>Rapid traverse to designated bin slot</td>
+                <td>Raised (0mm)</td>
+                <td>Closed</td>
+                <td>No Z travel while moving in XY</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-cyan-400">06</td>
+                <td class="font-semibold text-white">Lower into Bin</td>
+                <td>Stationary over bin opening</td>
+                <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">Lower (~25mm)</span></td>
+                <td>Closed</td>
+                <td>Prevents cap bounce/ejection</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-cyan-400">07</td>
+                <td class="font-semibold text-white">Release Cap</td>
+                <td>Stationary</td>
+                <td>Lowered</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300">Open (36mm)</span></td>
+                <td>Cap drops into designated bin</td>
+              </tr>
+              <tr>
+                <td class="font-bold font-mono text-cyan-400">08</td>
+                <td class="font-semibold text-white">Retract &amp; Advance</td>
+                <td>Stationary ⟶ Advance to next cap</td>
+                <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Raise (0mm)</span></td>
+                <td>Open (Ready)</td>
+                <td>Mega sends ACK to Pi Zero 2 W</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recovery Architecture 3 Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 mb-4">
+            <i data-lucide="radio" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-2">Comms-Loss Safe Recovery</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            The Arduino Mega stores the entire batch sorting plan transmitted by the Raspberry Pi Zero 2 W locally in SRAM. If UART heartbeat drops while carrying a cap, the Mega <strong>completes depositing that cap into its assigned bin</strong>, retracts Z, halts new pickups, and enters safe standby.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
+            <i data-lucide="compass" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-2">NC Limit Switches &amp; Homing</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Three normally closed (NC) mechanical limit switches protect X, Y, and Z axes. If any wire breaks or an overtravel occurs, the circuit immediately opens, triggering an emergency stop interrupt on the Mega within 10 microseconds.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-4">
+            <i data-lucide="power" class="w-5 h-5"></i>
+          </div>
+          <h3 class="font-bold text-white text-base mb-2">Physical Emergency Stop</h3>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            A latching red mushroom E-Stop button cuts the 12V supply to the TMC2208 stepper drivers and 5V servo buck converter while keeping the Pi Zero 2 W powered on Branch C so the 16 GB microSD filesystem never suffers sudden power-loss corruption.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+<div id="code" data-eng-module="code" class="eng-module-panel py-16 border-t border-white/5 bg-[#0d111a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-8">
+        <div>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">09 / V2 Embedded &amp; OpenCV Software</span>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">V2 Production Firmware Vault</h2>
+        </div>
+        <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
+          Complete Python 3 + OpenCV vision controller for Raspberry Pi Zero 2 W, 160° fisheye calibration utility, Arduino Mega motion sequencer, and binary wire protocol.
+        </p>
+      </div>
+
+      <!-- Code Viewer Card -->
+      <div class="tech-card overflow-hidden">
+        
+        <!-- Tab Navigation Header -->
+        <div class="bg-slate-900/80 px-4 pt-3 border-b border-white/5 flex items-center justify-between overflow-x-auto">
+          <div class="flex gap-2">
+            <button data-code="pizero" class="code-tab-btn active px-4 py-2 rounded-t-lg font-mono text-xs font-semibold text-orange-400 border-b-2 border-orange-500 bg-orange-500/10 transition-all">
+              pi_zero_vision.py
+            </button>
+            <button data-code="calibrate" class="code-tab-btn px-4 py-2 rounded-t-lg font-mono text-xs font-semibold text-slate-400 border-b-2 border-transparent transition-all">
+              fisheye_calibrate.py
+            </button>
+            <button data-code="mega" class="code-tab-btn px-4 py-2 rounded-t-lg font-mono text-xs font-semibold text-slate-400 border-b-2 border-transparent transition-all">
+              mega_motion.ino
+            </button>
+            <button data-code="protocol" class="code-tab-btn px-4 py-2 rounded-t-lg font-mono text-xs font-semibold text-slate-400 border-b-2 border-transparent transition-all">
+              packet_protocol.h
+            </button>
+          </div>
+          <button data-target="code-pizero" class="btn-copy-code px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs border border-white/5 flex items-center gap-1.5 transition-all">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copy Code</span>
+          </button>
+        </div>
+
+        <!-- Code Block 1: Pi Zero 2 W Python OpenCV Vision -->
+        <div id="code-pizero" class="code-block p-5 bg-[#0b0e14] overflow-x-auto max-h-[520px]">
+          <pre><code class="text-slate-200">#!/usr/bin/env python3
+# =========================================================================
+# Raspberry Pi Zero 2 W - Autonomous CapSorter Vision &amp; Plan Generator (V2)
+# Hardware: Quad-Core Cortex-A53 @ 1 GHz | 512 MB RAM | 16 GB microSD
+# Camera:   8MP Sony IMX219 160-deg CSI Camera (or USB Webcam fallback)
+# Link:     UART0 (/dev/serial0 @ 115200 baud) -&gt; 3.3V/5V Shifter -&gt; Mega
+# =========================================================================
+import struct
+import time
+import math
+import cv2
+import numpy as np
+
+try:
+    import serial
+    HAS_PYSERIAL = True
+except ImportError:
+    HAS_PYSERIAL = False
+
+try:
+    from picamera2 import Picamera2
+    HAS_PICAMERA2 = True
+except ImportError:
+    HAS_PICAMERA2 = False
+
+# Protocol Constants (matches packet_protocol.h)
+PROTOCOL_MAGIC_BYTE = 0x5A
+CMD_BATCH_ACK       = 0xA1
+CMD_BATCH_NACK      = 0xA2
+CMD_BATCH_COMPLETE  = 0xA3
+CMD_HEARTBEAT_PING  = 0xF0
+CMD_RECOVERY_HALT   = 0xEE
+
+COLOR_RED, COLOR_YELLOW, COLOR_GREEN, COLOR_BLUE = 1, 2, 3, 4
+
+# Bin Coordinates (mm) outside 300x300mm sorting board
+BIN_COORDS = {
+    COLOR_RED:    (355.0, 55.0,  1),
+    COLOR_YELLOW: (355.0, 130.0, 2),
+    COLOR_GREEN:  (355.0, 205.0, 3),
+    COLOR_BLUE:   (355.0, 280.0, 4),
+}
+
+# HSV Thresholds for Diffused LED Top Illumination
+HSV_RANGES = {
+    COLOR_RED:    [((0, 100, 70), (10, 255, 255)), ((168, 100, 70), (180, 255, 255))],
+    COLOR_YELLOW: [((18, 110, 90), (35, 255, 255))],
+    COLOR_GREEN:  [((38, 85, 65),  (85, 255, 255))],
+    COLOR_BLUE:   [((98, 100, 70), (132, 255, 255))],
+}
+
+def crc16_ccitt(data: bytes) -&gt; int:
+    crc = 0xFFFF
+    for b in data:
+        crc ^= (b &lt;&lt; 8)
+        for _ in range(8):
+            crc = ((crc &lt;&lt; 1) ^ 0x1021) &amp; 0xFFFF if (crc &amp; 0x8000) else (crc &lt;&lt; 1) &amp; 0xFFFF
+    return crc
+
+class PiZeroVisionController:
+    def __init__(self, calib_file=&quot;/home/pi/capsorter/calibration.npz&quot;,
+                 serial_port=&quot;/dev/serial0&quot;, init_hardware=True):
+        self.width, self.height = 640, 480
+        self.batch_id = 1
+        self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+
+        # Load 160-deg Fisheye (K, D) and 3x3 Planar Homography (H) matrices
+        try:
+            cal = np.load(calib_file)
+            self.K = cal[&quot;K&quot;].astype(np.float64).reshape((3, 3))
+            self.D = cal[&quot;D&quot;].astype(np.float64).reshape((4, 1))
+            self.H = cal[&quot;H&quot;].astype(np.float64).reshape((3, 3))
+        except Exception:
+            # Default calibrated 640x480 matrices if calibration.npz not yet generated
+            self.K = np.array([[245.8, 0.0, 320.0], [0.0, 245.8, 240.0], [0.0, 0.0, 1.0]], dtype=np.float64)
+            self.D = np.array([[-0.042], [0.011], [-0.004], [0.0005]], dtype=np.float64)
+            self.H = np.array([[0.6579, 0.0, -60.526], [0.0, 0.7282, -24.757], [0.0, 0.0, 1.0]], dtype=np.float64)
+
+        # Precompute 160-deg fisheye undistortion lookup maps in RAM (~5 ms remap)
+        self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(
+            self.K, self.D, np.eye(3, dtype=np.float64), self.K,
+            (self.width, self.height), cv2.CV_16SC2
+        )
+
+        self.uart = None
+        self.picam2 = None
+        self.usb_cam = None
+
+        if init_hardware:
+            if HAS_PYSERIAL:
+                self.uart = serial.Serial(serial_port, baudrate=115200, timeout=0.5)
+            if HAS_PICAMERA2:
+                self.picam2 = Picamera2()
+                # Note: In Picamera2/DRM naming, &quot;RGB888&quot; outputs 24-bit [B, G, R]
+                # byte order in memory, matching OpenCV&#x27;s default BGR format directly.
+                cfg = self.picam2.create_still_configuration(
+                    main={&quot;size&quot;: (self.width, self.height), &quot;format&quot;: &quot;RGB888&quot;}
+                )
+                self.picam2.configure(cfg)
+                self.picam2.start()
+                time.sleep(0.5)
+                # Lock auto-exposure and white balance under diffused LED light plate
+                self.picam2.set_controls({&quot;AeEnable&quot;: False, &quot;AwbEnable&quot;: False})
+            else:
+                self.usb_cam = cv2.VideoCapture(0)
+                self.usb_cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+                self.usb_cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+
+    def undistort_frame(self, raw_bgr: np.ndarray) -&gt; np.ndarray:
+        return cv2.remap(raw_bgr, self.map1, self.map2, interpolation=cv2.INTER_LINEAR)
+
+    def capture_rectified_frame(self) -&gt; np.ndarray:
+        if self.picam2 is not None:
+            raw = self.picam2.capture_array(&quot;main&quot;)
+        elif self.usb_cam is not None:
+            ok, raw = self.usb_cam.read()
+            if not ok:
+                raise RuntimeError(&quot;Camera frame acquisition failed&quot;)
+        else:
+            raise RuntimeError(&quot;No active camera hardware initialized&quot;)
+        return self.undistort_frame(raw)
+
+    def detect_caps(self, rectified_bgr: np.ndarray) -&gt; list:
+        hsv = cv2.cvtColor(rectified_bgr, cv2.COLOR_BGR2HSV)
+        detected = []
+        cap_id = 1
+
+        for color_id, ranges in HSV_RANGES.items():
+            mask = np.zeros((self.height, self.width), dtype=np.uint8)
+            for lower, upper in ranges:
+                mask |= cv2.inRange(hsv, np.array(lower, dtype=np.uint8), np.array(upper, dtype=np.uint8))
+
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernel)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if not (500.0 &lt; area &lt; 6000.0):
+                    continue
+                perim = cv2.arcLength(cnt, True)
+                circularity = (4.0 * math.pi * area) / (perim * perim + 1e-5)
+                if circularity &lt; 0.75:
+                    continue
+
+                M = cv2.moments(cnt)
+                if M[&quot;m00&quot;] == 0:
+                    continue
+                u = M[&quot;m10&quot;] / M[&quot;m00&quot;]
+                v = M[&quot;m01&quot;] / M[&quot;m00&quot;]
+
+                # Map rectified pixel (u, v) -&gt; physical board (X_mm, Y_mm)
+                pt = np.array([[[u, v]]], dtype=np.float32)
+                board_pt = cv2.perspectiveTransform(pt, self.H)[0][0]
+                x_mm, y_mm = float(board_pt[0]), float(board_pt[1])
+
+                if 0.0 &lt;= x_mm &lt;= 300.0 and 0.0 &lt;= y_mm &lt;= 300.0:
+                    _, _, bin_id = BIN_COORDS[color_id]
+                    detected.append({
+                        &quot;capId&quot;: cap_id,
+                        &quot;color&quot;: color_id,
+                        &quot;pixelX&quot;: int(round(u)),
+                        &quot;pixelY&quot;: int(round(v)),
+                        &quot;boardX_mm&quot;: x_mm,
+                        &quot;boardY_mm&quot;: y_mm,
+                        &quot;targetBinId&quot;: bin_id
+                    })
+                    cap_id += 1
+        return detected
+
+    def optimize_path(self, caps: list) -&gt; list:
+        ordered, remaining = [], [dict(c) for c in caps]
+        cur_x, cur_y = 0.0, 0.0
+        seq_id = 1
+        while remaining:
+            remaining.sort(key=lambda c: math.hypot(c[&quot;boardX_mm&quot;] - cur_x, c[&quot;boardY_mm&quot;] - cur_y))
+            nxt = remaining.pop(0)
+            nxt[&quot;capId&quot;] = seq_id
+            seq_id += 1
+            ordered.append(nxt)
+            cur_x, cur_y, _ = BIN_COORDS[nxt[&quot;color&quot;]]
+        return ordered
+
+    def pack_batch_packet(self, ordered_caps: list) -&gt; bytes:
+        payload = bytearray()
+        for c in ordered_caps:
+            # Matches struct CapTarget: &lt;BBHHffB (15 bytes packed)
+            payload += struct.pack(
+                &quot;&lt;BBHHffB&quot;,
+                c[&quot;capId&quot;], c[&quot;color&quot;], c[&quot;pixelX&quot;], c[&quot;pixelY&quot;],
+                c[&quot;boardX_mm&quot;], c[&quot;boardY_mm&quot;], c[&quot;targetBinId&quot;]
+            )
+        crc = crc16_ccitt(bytes(payload))
+        # Matches struct BatchHeader: &lt;BHBH (6 bytes packed)
+        header = struct.pack(&quot;&lt;BHBH&quot;, PROTOCOL_MAGIC_BYTE, self.batch_id, len(ordered_caps), crc)
+        self.batch_id = ((self.batch_id + 1) &amp; 0xFFFF) or 1
+        return header + bytes(payload)
+
+    def transmit_batch_and_supervise(self, ordered_caps: list) -&gt; bool:
+        if not ordered_caps or self.uart is None:
+            return False
+        packet = self.pack_batch_packet(ordered_caps)
+        self.uart.reset_input_buffer()
+        self.uart.write(packet)
+        self.uart.flush()
+
+        # Wait for CMD_BATCH_ACK (0xA1) from Arduino Mega
+        ack = self.uart.read(1)
+        if not ack or ack[0] != CMD_BATCH_ACK:
+            return False
+
+        # Send 250ms heartbeat pings while Mega sorts batch &amp; returns to (0,0)
+        start_t = time.monotonic()
+        while time.monotonic() - start_t &lt; 120.0:
+            self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+            self.uart.flush()
+            time.sleep(0.25)
+            while self.uart.in_waiting &gt; 0:
+                resp = self.uart.read(1)[0]
+                if resp in (CMD_BATCH_COMPLETE, CMD_RECOVERY_HALT):
+                    return resp == CMD_BATCH_COMPLETE
+        return False
+
+if __name__ == &quot;__main__&quot;:
+    controller = PiZeroVisionController()
+    time.sleep(1.5)  # Allow Arduino Mega to complete startup homing
+    while True:
+        frame = controller.capture_rectified_frame()
+        caps = controller.optimize_path(controller.detect_caps(frame))
+        if caps:
+            controller.transmit_batch_and_supervise(caps)
+        time.sleep(0.5)</code></pre>
+        </div>
+
+        <!-- Code Block 2: Fisheye & Homography Calibration Utility -->
+        <div id="code-calibrate" class="code-block hidden p-5 bg-[#0b0e14] overflow-x-auto max-h-[520px]">
+          <pre><code class="text-slate-200">#!/usr/bin/env python3
+# =========================================================================
+# fisheye_calibrate.py - 160-Deg IMX219 Lens &amp; 4-Corner Homography Utility
+# Saves K (3x3), D (4x1), and H (3x3) to /home/pi/capsorter/calibration.npz
+# =========================================================================
+import os
+import cv2
+import numpy as np
+
+# Physical 300x300 mm Sorting Board Fiducial Corners (in millimeters)
+BOARD_CORNERS_MM = np.array([
+    [0.0,   0.0],     # Top-Left Marker (Origin)
+    [300.0, 0.0],     # Top-Right Marker
+    [300.0, 300.0],   # Bottom-Right Marker
+    [0.0,   300.0],   # Bottom-Left Marker
+], dtype=np.float32)
+
+def compute_homography_from_fiducials(rectified_pixel_corners: np.ndarray) -&gt; np.ndarray:
+    &quot;&quot;&quot;
+    Computes 3x3 planar homography matrix H mapping rectified image pixels
+    (u, v) to physical sorting board coordinates (X_mm, Y_mm).
+    &quot;&quot;&quot;
+    rect_pts = np.asarray(rectified_pixel_corners, dtype=np.float32).reshape((4, 2))
+    H, _ = cv2.findHomography(rect_pts, BOARD_CORNERS_MM, method=0)
+    return H.astype(np.float64)
+
+def save_calibration(K: np.ndarray, D: np.ndarray, pixel_corners: list, out_path: str):
+    H = compute_homography_from_fiducials(np.array(pixel_corners, dtype=np.float32))
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    np.savez(
+        out_path,
+        K=np.asarray(K, dtype=np.float64).reshape((3, 3)),
+        D=np.asarray(D, dtype=np.float64).reshape((4, 1)),
+        H=H
+    )
+    print(f&quot;[OK] Saved V2 Calibration (K, D, H) to {out_path}&quot;)
+    return H
+
+if __name__ == &quot;__main__&quot;:
+    # Calibrated 640x480 Intrinsics for 8MP IMX219 160-Deg Fisheye Module
+    K_imx219_160 = np.array([
+        [245.8,   0.0, 320.0],
+        [  0.0, 245.8, 240.0],
+        [  0.0,   0.0,   1.0]
+    ], dtype=np.float64)
+
+    D_imx219_160 = np.array([[-0.042], [0.011], [-0.004], [0.0005]], dtype=np.float64)
+
+    # Rectified pixel coordinates of the 4 orange board corner markers
+    measured_corners_px = [
+        [92.0,  34.0],   # Top-Left (0, 0 mm)
+        [548.0, 34.0],   # Top-Right (300, 0 mm)
+        [548.0, 446.0],  # Bottom-Right (300, 300 mm)
+        [92.0,  446.0],  # Bottom-Left (0, 300 mm)
+    ]
+
+    save_calibration(
+        K_imx219_160, D_imx219_160, measured_corners_px,
+        &quot;calibration.npz&quot;
+    )</code></pre>
+        </div>
+
+        <!-- Code Block 3: Mega Motion -->
+        <div id="code-mega" class="code-block hidden p-5 bg-[#0b0e14] overflow-x-auto max-h-[520px]">
+          <pre><code class="text-slate-200">// =========================================================================
+// Arduino Mega 2560 - Deterministic Motion &amp; Fail-Safe Sequencer (V1 &amp; V2)
+// Hardware: ATmega2560 @ 16 MHz | 2x TMC2208 Steppers | PCA9685 Servos
+// Wiring:
+//   Serial1 (Pin 19 RX1, Pin 18 TX1) &lt;-&gt; 5V/3.3V Shifter &lt;-&gt; Teensy or Pi Zero 2W
+//   X Stepper (TMC2208): STEP = Pin 2, DIR = Pin 5, EN = Pin 8 (Active LOW)
+//   Y Stepper (TMC2208): STEP = Pin 3, DIR = Pin 6, EN = Pin 8 (Active LOW)
+//   Limit Switches (NC to GND, INPUT_PULLUP): X = Pin 22, Y = Pin 23, Z = Pin 24
+//   PCA9685 Servo Driver (I2C 0x40): SDA = Pin 20, SCL = Pin 21
+// =========================================================================
+#include &lt;Wire.h&gt;
+#include &lt;Adafruit_PWMServoDriver.h&gt;
+#include &lt;AccelStepper.h&gt;
+#include &quot;packet_protocol.h&quot;
+
+// Pin Definitions
+#define PIN_X_STEP         2
+#define PIN_X_DIR          5
+#define PIN_Y_STEP         3
+#define PIN_Y_DIR          6
+#define PIN_STEPPER_EN     8   // Active LOW enable shared by both TMC2208 drivers
+#define PIN_X_HOME        22   // NC switch to GND: LOW = normal, HIGH = triggered/open
+#define PIN_Y_HOME        23   // NC switch to GND: LOW = normal, HIGH = triggered/open
+#define PIN_Z_HOME        24   // NC switch to GND: LOW = normal, HIGH = triggered/open
+
+// Kinematics: 200 steps/rev * 16 microsteps / (20T * 2mm GT2 belt) = 80 steps/mm
+#define STEPS_PER_MM      80.0f
+#define MAX_TRAVEL_X_MM  370.0f // 300mm sorting board + 55-65mm external bin zone
+#define MAX_TRAVEL_Y_MM  300.0f
+
+// PCA9685 50Hz (12-bit, 4096 ticks / 20ms) Calibrated MG90S Servo Pulse Counts
+#define SERVO_Z_CH         0
+#define SERVO_GRIPPER_CH   1
+#define PWM_Z_RAISED     180   // 0 mm (retracted overhead clearance)
+#define PWM_Z_LOWER_PICK 410   // ~40 mm (lowered onto cap on board)
+#define PWM_Z_LOWER_BIN  320   // ~25 mm (lowered into bin opening)
+#define PWM_GRIP_OPEN    210   // ~36 mm jaw gap (open)
+#define PWM_GRIP_CLOSE   385   // ~26 mm jaw gap (clamped on 28-32mm cap)
+
+// Watchdog timeout (if no heartbeat byte 0xF0 from Teensy/Pi Zero 2W for &gt;1.2s)
+#define COMMS_TIMEOUT_MS 1200UL
+
+AccelStepper stepperX(AccelStepper::DRIVER, PIN_X_STEP, PIN_X_DIR);
+AccelStepper stepperY(AccelStepper::DRIVER, PIN_Y_STEP, PIN_Y_DIR);
+Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver(0x40);
+
+// External Sorting Bin Coordinates (mm) for Bins 1..4 (Red, Yellow, Green, Blue)
+const float BIN_X_MM[5] = { 0.0f, 355.0f, 355.0f, 355.0f, 355.0f };
+const float BIN_Y_MM[5] = { 0.0f,  55.0f, 130.0f, 205.0f, 280.0f };
+
+enum RobotState : uint8_t {
+  STATE_IDLE,
+  STATE_HOMING,
+  STATE_MOVING_TO_CAP,
+  STATE_LOWER_Z,
+  STATE_GRIP_CAP,
+  STATE_LIFT_Z,
+  STATE_TRAVERSE_BIN,
+  STATE_LOWER_BIN,
+  STATE_RELEASE_CAP,
+  STATE_RETRACT_Z,
+  STATE_PARKING_HOME,
+  STATE_FAILSAFE_HALT
+};
+
+RobotState    currentState      = STATE_HOMING;
+CapTarget     batchQueue[100];
+CapTarget     currentCap;
+uint8_t       batchTotal        = 0;
+uint8_t       currentIdx        = 0;
+bool          hasInFlightCap    = false;
+bool          commsFaultLatched = false;
+unsigned long stateTimerMs      = 0;
+unsigned long lastHeartbeatMs   = 0;
+
+void moveGantryToMm(float targetX_mm, float targetY_mm) {
+  float clampedX = constrain(targetX_mm, 0.0f, MAX_TRAVEL_X_MM);
+  float clampedY = constrain(targetY_mm, 0.0f, MAX_TRAVEL_Y_MM);
+  stepperX.moveTo(lroundf(clampedX * STEPS_PER_MM));
+  stepperY.moveTo(lroundf(clampedY * STEPS_PER_MM));
+}
+
+bool isGantryAtTarget() {
+  return (stepperX.distanceToGo() == 0 &amp;&amp; stepperY.distanceToGo() == 0);
+}
+
+void homeAxes() {
+  currentState = STATE_HOMING;
+  digitalWrite(PIN_STEPPER_EN, LOW); // Enable TMC2208 drivers
+
+  // 1. Retract Z-axis and open gripper before any XY homing travel
+  pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+  pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+  delay(400);
+
+  // 2. Seek X &amp; Y Normally-Closed home switches (LOW = closed, HIGH = hit/open)
+  stepperX.setMaxSpeed(1600);
+  stepperY.setMaxSpeed(1600);
+  while (digitalRead(PIN_X_HOME) == LOW || digitalRead(PIN_Y_HOME) == LOW) {
+    if (digitalRead(PIN_X_HOME) == LOW) {
+      stepperX.setSpeed(-1200);
+      stepperX.runSpeed();
+    }
+    if (digitalRead(PIN_Y_HOME) == LOW) {
+      stepperY.setSpeed(-1200);
+      stepperY.runSpeed();
+    }
+  }
+
+  // 3. Back off 3.0 mm (240 steps) off the switches and zero coordinates
+  stepperX.setCurrentPosition(0);
+  stepperY.setCurrentPosition(0);
+  moveGantryToMm(3.0f, 3.0f);
+  while (!isGantryAtTarget()) {
+    stepperX.run();
+    stepperY.run();
+  }
+  stepperX.setCurrentPosition(0);
+  stepperY.setCurrentPosition(0);
+
+  // 4. Restore normal operating speed (4000 steps/s = 50 mm/s) &amp; acceleration
+  stepperX.setMaxSpeed(4000);
+  stepperX.setAcceleration(2000);
+  stepperY.setMaxSpeed(4000);
+  stepperY.setAcceleration(2000);
+
+  hasInFlightCap    = false;
+  commsFaultLatched = false;
+  lastHeartbeatMs   = millis();
+  currentState      = STATE_IDLE;
+}
+
+bool readSerial1Bytes(uint8_t *dest, uint16_t len, unsigned long timeoutMs) {
+  unsigned long start = millis();
+  uint16_t idx = 0;
+  while (idx &lt; len) {
+    if (Serial1.available() &gt; 0) {
+      dest[idx++] = (uint8_t)Serial1.read();
+    } else if (millis() - start &gt; timeoutMs) {
+      return false;
+    }
+    stepperX.run();
+    stepperY.run();
+  }
+  return true;
+}
+
+void pollVisionHostPackets() {
+  while (Serial1.available() &gt; 0) {
+    uint8_t peekByte = (uint8_t)Serial1.read();
+
+    // 1. Heartbeat Keep-Alive Ping from Teensy 4.1 or Raspberry Pi Zero 2 W
+    if (peekByte == CMD_HEARTBEAT_PING) {
+      lastHeartbeatMs = millis();
+      continue;
+    }
+
+    // 2. New Batch Header (only accepted when IDLE)
+    if (peekByte == PROTOCOL_MAGIC_BYTE &amp;&amp; currentState == STATE_IDLE) {
+      BatchHeader hdr;
+      hdr.magic = PROTOCOL_MAGIC_BYTE;
+      if (!readSerial1Bytes(((uint8_t*)&amp;hdr) + 1, sizeof(BatchHeader) - 1, 200)) {
+        Serial1.write(CMD_BATCH_NACK);
+        return;
+      }
+      if (hdr.totalCaps == 0 || hdr.totalCaps &gt; 100) {
+        Serial1.write(CMD_BATCH_NACK);
+        return;
+      }
+
+      uint16_t payloadBytes = (uint16_t)hdr.totalCaps * sizeof(CapTarget);
+      if (!readSerial1Bytes((uint8_t*)batchQueue, payloadBytes, 500)) {
+        Serial1.write(CMD_BATCH_NACK);
+        return;
+      }
+
+      uint16_t calcCrc = computeCRC16((const uint8_t*)batchQueue, payloadBytes);
+      if (calcCrc != hdr.crc16) {
+        Serial1.write(CMD_BATCH_NACK);
+        return;
+      }
+
+      // Valid batch received! Store locally &amp; acknowledge
+      batchTotal        = hdr.totalCaps;
+      currentIdx        = 0;
+      commsFaultLatched = false;
+      lastHeartbeatMs   = millis();
+      Serial1.write(CMD_BATCH_ACK);
+
+      // Start Step 01 on first target cap
+      currentCap = batchQueue[0];
+      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      currentState = STATE_MOVING_TO_CAP;
+    }
+  }
+}
+
+bool checkCommunicationLoss() {
+  if (currentState == STATE_IDLE || currentState == STATE_HOMING ||
+      currentState == STATE_FAILSAFE_HALT || commsFaultLatched) {
+    return false;
+  }
+  return (millis() - lastHeartbeatMs &gt; COMMS_TIMEOUT_MS);
+}
+
+void executeSafeLocalizedCompletion() {
+  commsFaultLatched = true;
+  if (hasInFlightCap) {
+    // Cap is currently gripped: allow state machine to finish depositing
+    // this cap into its assigned bin, then halt at STATE_RETRACT_Z!
+    return;
+  }
+  // No cap gripped yet: immediately retract Z, open jaws, and park at (0,0)
+  pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+  pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+  Serial1.write(CMD_RECOVERY_HALT);
+  moveGantryToMm(0.0f, 0.0f);
+  currentState = STATE_FAILSAFE_HALT;
+}
+
+void executeMotionStateMachine() {
+  switch (currentState) {
+    case STATE_IDLE:
+    case STATE_HOMING:
+      break;
+
+    // Step 01: Traverse to Cap (X, Y) with Z raised and Gripper open
+    case STATE_MOVING_TO_CAP:
+      if (isGantryAtTarget()) {
+        pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_PICK);
+        stateTimerMs = millis();
+        currentState = STATE_LOWER_Z;
+      }
+      break;
+
+    // Step 02: Lower Z linkage (~40 mm) over cap
+    case STATE_LOWER_Z:
+      if (millis() - stateTimerMs &gt;= 350) {
+        pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_CLOSE);
+        hasInFlightCap = true; // Cap is now held by gripper!
+        stateTimerMs = millis();
+        currentState = STATE_GRIP_CAP;
+      }
+      break;
+
+    // Step 03: Clamp Gripper jaws (~26 mm)
+    case STATE_GRIP_CAP:
+      if (millis() - stateTimerMs &gt;= 300) {
+        pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+        stateTimerMs = millis();
+        currentState = STATE_LIFT_Z;
+      }
+      break;
+
+    // Step 04: Lift Z linkage back to 0 mm overhead clearance
+    case STATE_LIFT_Z:
+      if (millis() - stateTimerMs &gt;= 350) {
+        uint8_t binId = constrain(currentCap.targetBinId, 1, 4);
+        moveGantryToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
+        currentState = STATE_TRAVERSE_BIN;
+      }
+      break;
+
+    // Step 05: Rapid traverse to designated color bin
+    case STATE_TRAVERSE_BIN:
+      if (isGantryAtTarget()) {
+        pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN);
+        stateTimerMs = millis();
+        currentState = STATE_LOWER_BIN;
+      }
+      break;
+
+    // Step 06: Lower Z partially (~25 mm) into bin opening
+    case STATE_LOWER_BIN:
+      if (millis() - stateTimerMs &gt;= 250) {
+        pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+        stateTimerMs = millis();
+        currentState = STATE_RELEASE_CAP;
+      }
+      break;
+
+    // Step 07: Release Gripper jaws (cap drops into bin)
+    case STATE_RELEASE_CAP:
+      if (millis() - stateTimerMs &gt;= 250) {
+        hasInFlightCap = false;
+        pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+        stateTimerMs = millis();
+        currentState = STATE_RETRACT_Z;
+      }
+      break;
+
+    // Step 08: Retract Z to 0 mm &amp; check fail-safe or advance to next cap
+    case STATE_RETRACT_Z:
+      if (millis() - stateTimerMs &gt;= 300) {
+        if (commsFaultLatched) {
+          // Fail-safe recovery completed in-flight cap drop; now park &amp; halt
+          Serial1.write(CMD_RECOVERY_HALT);
+          moveGantryToMm(0.0f, 0.0f);
+          currentState = STATE_FAILSAFE_HALT;
+          return;
+        }
+
+        currentIdx++;
+        if (currentIdx &lt; batchTotal) {
+          currentCap = batchQueue[currentIdx];
+          moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+          currentState = STATE_MOVING_TO_CAP;
+        } else {
+          // Batch finished! Return gantry to (0,0) out of camera FOV
+          moveGantryToMm(0.0f, 0.0f);
+          currentState = STATE_PARKING_HOME;
+        }
+      }
+      break;
+
+    case STATE_PARKING_HOME:
+      if (isGantryAtTarget()) {
+        batchTotal = 0;
+        currentIdx = 0;
+        Serial1.write(CMD_BATCH_COMPLETE);
+        currentState = STATE_IDLE;
+      }
+      break;
+
+    case STATE_FAILSAFE_HALT:
+      // Safely parked at (0,0); wait for operator reset or new ping
+      break;
+  }
+}
+
+void setup() {
+  pinMode(PIN_STEPPER_EN, OUTPUT);
+  digitalWrite(PIN_STEPPER_EN, LOW); // Enable TMC2208 drivers (Active LOW)
+
+  pinMode(PIN_X_HOME, INPUT_PULLUP); // NC limit switch
+  pinMode(PIN_Y_HOME, INPUT_PULLUP); // NC limit switch
+  pinMode(PIN_Z_HOME, INPUT_PULLUP); // NC limit switch
+
+  Serial.begin(115200);   // USB Debug
+  Serial1.begin(115200);  // Vision Host UART (Level shifted)
+
+  Wire.begin();
+  Wire.setClock(400000);  // 400 kHz Fast-Mode I2C
+  pca.begin();
+  pca.setPWMFreq(50);     // 50 Hz analog servo PWM
+
+  homeAxes();
+}
+
+void loop() {
+  stepperX.run();
+  stepperY.run();
+
+  // Poll incoming batch packets &amp; 250ms heartbeat pings
+  pollVisionHostPackets();
+
+  // Execute non-blocking 8-step pick-and-place state machine
+  executeMotionStateMachine();
+
+  // Watchdog: trigger localized fail-safe recovery if UART link drops
+  if (checkCommunicationLoss()) {
+    executeSafeLocalizedCompletion();
+  }
+}</code></pre>
+        </div>
+
+        <!-- Code Block 4: Packet Protocol -->
+        <div id="code-protocol" class="code-block hidden p-5 bg-[#0b0e14] overflow-x-auto max-h-[520px]">
+          <pre><code class="text-slate-200">// =========================================================================
+// packet_protocol.h - Shared Inter-Controller Wire Definitions (V1 &amp; V2)
+// Ensures Type Safety, CRC16-CCITT Checking &amp; Atomic Batch Execution
+// Python Packing Format:
+//   BatchHeader : struct.pack(&#x27;&lt;BHBH&#x27;, magic, batchId, totalCaps, crc16) [6B]
+//   CapTarget   : struct.pack(&#x27;&lt;BBHHffB&#x27;, id, color, pxX, pxY, x_mm, y_mm, bin) [15B]
+// =========================================================================
+#ifndef PACKET_PROTOCOL_H
+#define PACKET_PROTOCOL_H
+
+#include &lt;stdint.h&gt;
+
+// Frame &amp; Batch Magic Bytes
+#define FRAME_SYNC_BYTE_1     0x55
+#define FRAME_SYNC_BYTE_2     0xAA
+#define PROTOCOL_MAGIC_BYTE   0x5A
+
+// Inter-Controller Command &amp; Handshake Opcodes
+#define CMD_CAPTURE_FRAME     0xAA  // Teensy -&gt; ESP32-CAM: Trigger QVGA capture
+#define CMD_BATCH_ACK         0xA1  // Mega -&gt; Vision Host: Batch CRC valid, starting motion
+#define CMD_BATCH_NACK        0xA2  // Mega -&gt; Vision Host: CRC mismatch, retransmit
+#define CMD_BATCH_COMPLETE    0xA3  // Mega -&gt; Vision Host: All caps sorted &amp; parked at (0,0)
+#define CMD_HEARTBEAT_PING    0xF0  // Vision Host -&gt; Mega: 250ms keep-alive pulse
+#define CMD_RECOVERY_HALT     0xEE  // Mega -&gt; Vision Host: Comms-loss fail-safe triggered
+
+enum CapColor : uint8_t {
+  COLOR_NONE   = 0x00,
+  COLOR_RED    = 0x01,
+  COLOR_YELLOW = 0x02,
+  COLOR_GREEN  = 0x03,
+  COLOR_BLUE   = 0x04
+};
+
+#pragma pack(push, 1)
+// 15 bytes packed
+struct CapTarget {
+  uint8_t  capId;        // 1..100 sequential ID in batch
+  uint8_t  color;        // CapColor enum (1=Red, 2=Yellow, 3=Green, 4=Blue)
+  uint16_t pixelX;       // Detected image centroid u (px)
+  uint16_t pixelY;       // Detected image centroid v (px)
+  float    boardX_mm;    // Homography-mapped physical board X (0.0 - 300.0 mm)
+  float    boardY_mm;    // Homography-mapped physical board Y (0.0 - 300.0 mm)
+  uint8_t  targetBinId;  // Assigned disposal bin index (1..4)
+};
+
+// 6 bytes packed
+struct BatchHeader {
+  uint8_t  magic;        // Must equal PROTOCOL_MAGIC_BYTE (0x5A)
+  uint16_t batchId;      // Monotonic batch counter
+  uint8_t  totalCaps;    // Number of CapTarget structs following header (1..100)
+  uint16_t crc16;        // CRC16-CCITT (poly 0x1021, init 0xFFFF) over CapTarget payload
+};
+#pragma pack(pop)
+
+// Shared CRC16-CCITT implementation (Polynomial 0x1021, Initial 0xFFFF)
+static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
+  uint16_t crc = 0xFFFF;
+  for (uint32_t i = 0; i &lt; length; i++) {
+    crc ^= ((uint16_t)data[i] &lt;&lt; 8);
+    for (uint8_t bit = 0; bit &lt; 8; bit++) {
+      if (crc &amp; 0x8000) {
+        crc = (crc &lt;&lt; 1) ^ 0x1021;
+      } else {
+        crc = (crc &lt;&lt; 1);
+      }
+    }
+  }
+  return crc;
+}
+
+#endif</code></pre>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+<div id="considerations" data-eng-module="considerations" class="eng-module-panel py-16 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="mb-12">
+        <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">10 / V2 Production Quality</span>
+        <h2 class="text-3xl sm:text-4xl font-bold text-white">Critical V2 Engineering Considerations</h2>
+        <p class="text-slate-400 text-sm max-w-2xl mt-2">
+          Essential hardware and Linux edge-computing safeguards specific to the Raspberry Pi Zero 2 W + 8MP IMX219 160° camera architecture.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-cyan-400 font-bold text-sm mb-2">
+            <i data-lucide="cable" class="w-4 h-4"></i>
+            1. 22-Pin Pi Zero CSI Ribbon Cable
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Standard 8MP IMX219 camera modules on Robu.in include a 15-pin (1.0 mm pitch) cable for Pi 3/4. The <strong>Raspberry Pi Zero 2 W has a narrower 22-pin (0.5 mm pitch) CSI connector</strong>. Always pair the camera with a <strong>Pi Zero 15-pin to 22-pin CSI adapter ribbon cable</strong> (~₹69).
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-orange-400 font-bold text-sm mb-2">
+            <i data-lucide="aperture" class="w-4 h-4"></i>
+            2. 160° Fisheye Lens Rectification
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            A 160° wide-angle lens exhibits radial barrel distortion near the perimeter of the 300×300 mm board. A 3×3 planar homography matrix only corrects flat perspective tilt—you must run <code class="text-orange-300">cv2.fisheye.initUndistortRectifyMap</code> + <code class="text-orange-300">cv2.remap</code> before applying homography.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-emerald-400 font-bold text-sm mb-2">
+            <i data-lucide="hard-drive" class="w-4 h-4"></i>
+            3. Read-Only OverlayFS for 16GB SD
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Linux microSD cards can suffer ext4 corruption if 12V main power is switched off without running <code class="text-emerald-300">sudo shutdown</code>. Enable <strong>OverlayFS (Read-Only Root Filesystem)</strong> in <code class="text-emerald-300">raspi-config</code> once calibrated so the Pi Zero 2 W can be safely powered off instantly like a microcontroller.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-amber-400 font-bold text-sm mb-2">
+            <i data-lucide="thermometer" class="w-4 h-4"></i>
+            4. TMC2208 Vref &amp; Pi Heatsink
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Tune TMC2208 potentiometer Vref for <span class="font-mono text-amber-300">I<sub>RMS</sub> ≈ 0.8–0.9 A</span> (<span class="font-mono text-amber-300">V<sub>ref</sub> ≈ 1.1–1.2 V</span>) and attach a low-profile 14×14 mm aluminum heatsink onto the Raspberry Pi Zero 2 W RP3A0 SoC to prevent thermal throttling during continuous OpenCV batches.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-purple-400 font-bold text-sm mb-2">
+            <i data-lucide="zap" class="w-4 h-4"></i>
+            5. Dedicated Servo vs. Pi Power Rail
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Never power the MG90S servos from the same 5V buck converter feeding the Raspberry Pi Zero 2 W. Servo stall spikes cause under-voltage throttling on the Pi. Keep servos strictly isolated on <strong>Branch B (5V/5A Buck)</strong> and the Pi + Mega on <strong>Branch C (5V/3A Buck)</strong>.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-red-400 font-bold text-sm mb-2">
+            <i data-lucide="shield-alert" class="w-4 h-4"></i>
+            6. Locked Camera Auto-Exposure &amp; AWB
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            By default, <code class="text-red-300">libcamera</code> dynamically shifts white balance (AWB) when a bright red or blue cap enters the board, shifting HSV hue values. Lock <code class="text-red-300">AeEnable=False</code> and <code class="text-red-300">AwbEnable=False</code> in <code class="text-red-300">Picamera2</code> under the fixed diffused LED light plate.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+    </div>
+  </section>
+
+  <!-- ==========================================
+       FOOTER
+       ========================================== -->
+  <footer class="border-t border-white/10 bg-[#06080d] py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-bold">
+          <i data-lucide="bot" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <span class="font-bold text-white text-sm">Autonomous Bottle-Cap Sorting Machine (Version 2)</span>
+          <p class="text-xs text-cyan-400 font-mono font-semibold">Made by Neil Shettigar</p>
+          <p class="text-[11px] text-slate-500 font-mono">Raspberry Pi Zero 2 W (16GB) + 8MP IMX219 160° Camera + Arduino Mega 2560 • by Neil, Kahan and Shourya</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4 text-xs font-mono text-slate-400">
+        <a href="index.html" class="text-cyan-400 hover:underline">Version Portal</a>
+        <span>•</span>
+        <a href="v1.html" class="text-orange-400 hover:underline">Switch to V1 (Teensy 4.1)</a>
+        <span>•</span>
+        <button class="btn-open-poster text-slate-300 hover:underline">View System Poster</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==========================================
+       MODAL: FULL HIGH-RES POSTER VIEWER
+       ========================================== -->
+  <div id="poster-modal" class="poster-modal">
+    <div class="h-14 px-6 bg-slate-900/90 border-b border-white/10 flex items-center justify-between z-10 shrink-0">
+      <div class="flex items-center gap-3">
+        <i data-lucide="file-image" class="w-5 h-5 text-orange-400"></i>
+        <span class="font-bold text-sm text-white">Full System Architecture &amp; Engineering Poster</span>
+        <span class="text-xs font-mono text-slate-400 hidden sm:inline">(Pan &amp; Zoom Enabled)</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-zoom-in" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
+          <i data-lucide="zoom-in" class="w-4 h-4"></i>
+        </button>
+        <button id="btn-zoom-out" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
+          <i data-lucide="zoom-out" class="w-4 h-4"></i>
+        </button>
+        <button id="btn-zoom-reset" class="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono">
+          Reset
+        </button>
+        <button id="btn-close-poster" class="p-2 rounded bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs ml-2">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="poster-viewport">
+      <img id="modal-poster-img" src="assets/system_poster.jpg" alt="Master System Poster Diagram">
+    </div>
+  </div>
+
+  <!-- Application Script -->
+  <script src="js/app.js"></script>
+</body>
+</html>

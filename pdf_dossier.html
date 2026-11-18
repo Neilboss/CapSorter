@@ -1747,21 +1747,28 @@ HardwareSerial TeensySerial(2);
   config.pixel_format = PIXFORMAT_RGB565;
   config.frame_size   = FRAMESIZE_QVGA; <span class="code-comment">// 320x240</span>
   config.fb_count     = 2;
+  config.grab_mode    = CAMERA_GRAB_LATEST;
 
-  esp_camera_init(&config);
+  esp_camera_init(&amp;config);
   TeensySerial.begin(921600, SERIAL_8N1, 14, 13);
 }
 
 <span class="code-type">void</span> loop() {
-  <span class="code-keyword">if</span> (TeensySerial.available() && 
+  <span class="code-keyword">if</span> (TeensySerial.available() &amp;&amp; 
       TeensySerial.read() == 0xAA) {
     camera_fb_t *fb = esp_camera_fb_get();
     <span class="code-keyword">if</span> (fb) {
+      <span class="code-type">uint32_t</span> len = fb-&gt;len; <span class="code-comment">// 153,600B</span>
+      <span class="code-type">uint16_t</span> crc = computeCRC16(fb-&gt;buf, len);
       TeensySerial.write(0x55);
       TeensySerial.write(0xAA);
-      TeensySerial.write((fb->len >> 8) & 0xFF);
-      TeensySerial.write(fb->len & 0xFF);
-      TeensySerial.write(fb->buf, fb->len);
+      TeensySerial.write((len &gt;&gt; 24) &amp; 0xFF);
+      TeensySerial.write((len &gt;&gt; 16) &amp; 0xFF);
+      TeensySerial.write((len &gt;&gt; 8)  &amp; 0xFF);
+      TeensySerial.write(len &amp; 0xFF);
+      TeensySerial.write(fb-&gt;buf, len);
+      TeensySerial.write((crc &gt;&gt; 8) &amp; 0xFF);
+      TeensySerial.write(crc &amp; 0xFF);
       esp_camera_fb_return(fb);
     }
   }
@@ -1872,6 +1879,8 @@ CapTarget currentCap;
 <span class="code-type">bool</span> hasInFlightCap = <span class="code-keyword">false</span>;
 
 <span class="code-type">void</span> setup() {
+  pinMode(8, OUTPUT); digitalWrite(8, LOW); <span class="code-comment">// TMC2208 EN</span>
+  pinMode(22, INPUT_PULLUP); pinMode(23, INPUT_PULLUP);
   Serial.begin(115200); Serial1.begin(115200);
   pca.begin(); pca.setPWMFreq(50);
   stepperX.setMaxSpeed(4000);

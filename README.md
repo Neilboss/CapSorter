@@ -16,25 +16,27 @@
 
 The **Autonomous Bottle-Cap Sorting Machine** is an embedded robotics project designed to detect, pick, and sort standard plastic bottle caps ($\varnothing 28\text{–}32\text{ mm}$) by colour across a $300 \times 300\text{ mm}$ grid workspace, depositing them into four designated color bins (Red, Yellow, Green, Blue).
 
-The system operates **100% offline** without laptops, Wi-Fi, or cloud connectivity. It employs a **dual-controller architecture** that segregates high-speed edge computer vision from deterministic real-time motion control and physical safety.
+The system operates **100% offline** without laptops, Wi-Fi, or cloud connectivity. The web portal (`index.html`) now presents **two complete hardware architecture versions**:
+
+- **Version 1 (`v1.html`)**: **Teensy 4.1 + ESP32-CAM (OV2640) + Arduino Mega 2560** (Bare-metal C++ dual-MCU + camera streamer architecture).
+- **Version 2 (`v2.html`)**: **Raspberry Pi Zero 2 W (16 GB microSD) + 8MP Sony IMX219 160° CSI Camera (or USB Webcam) + Arduino Mega 2560** (Consolidated offline Linux + Python OpenCV vision SBC paired with deterministic real-time Mega motion control).
 
 ---
 
-## 🚀 Key Specifications
+## 🚀 Key Specifications (V1 vs. V2)
 
-| Specification | Target Parameter |
-| :--- | :--- |
-| **Machine Envelope** | $500 \times 500 \times 500\text{ mm}$ |
-| **Sorting Workspace** | $300 \times 300\text{ mm}$ (10 × 10 cells, $30\text{ mm}$ pitch) |
-| **Cap Outer Diameter** | $\varnothing 28\text{–}32\text{ mm}$ standard beverage bottle caps |
-| **Colours Handled** | 4 primary colours (Red, Yellow, Green, Blue) |
-| **Cycle Time** | $\sim 4\text{–}6\text{ seconds}$ per cap |
-| **Network Dependency** | Zero (Completely air-gapped offline edge) |
-| **Primary Vision Processor** | Teensy 4.1 ($600\text{ MHz}$ ARM Cortex-M7, $1\text{ MB}$ RAM) |
-| **Motion Controller** | Arduino Mega 2560 ($16\text{ MHz}$ AVR) |
-| **Camera Sensor** | ESP32-CAM (AI-Thinker OV2640) |
-| **Actuation** | 2× NEMA 17 Steppers (TMC2208) + 2× MG90S Servos (PCA9685) |
-| **Main Power Supply** | $12\text{V}, 10\text{A}$ SMPS ($120\text{W}$) with isolated buck rails |
+| Specification | Version 1 (`v1.html`) | Version 2 (`v2.html`) |
+| :--- | :--- | :--- |
+| **Machine Envelope** | $500 \times 500 \times 500\text{ mm}$ | $500 \times 500 \times 500\text{ mm}$ |
+| **Sorting Workspace** | $300 \times 300\text{ mm}$ (10 × 10 cells, $30\text{ mm}$ pitch) | $300 \times 300\text{ mm}$ (10 × 10 cells, $30\text{ mm}$ pitch) |
+| **Cap Outer Diameter** | $\varnothing 28\text{–}32\text{ mm}$ standard beverage bottle caps | $\varnothing 28\text{–}32\text{ mm}$ standard beverage bottle caps |
+| **Colours Handled** | 4 primary colours (Red, Yellow, Green, Blue) | 4 primary colours (Red, Yellow, Green, Blue) |
+| **Primary Vision Processor** | Teensy 4.1 ($600\text{ MHz}$ Cortex-M7, $1\text{ MB}$ RAM) | **Raspberry Pi Zero 2 W** ($4\times 1\text{ GHz}$ Cortex-A53, $512\text{ MB}$ RAM, $16\text{ GB}$ microSD) |
+| **Camera Sensor** | ESP32-CAM (OV2640 • $320 \times 240$ RGB565) | **8MP Sony IMX219 160° Wide-Angle CSI** (or USB Webcam • $640 \times 480$ RGB888) |
+| **Capture + Vision Latency** | $\sim 1.67\text{ s}$ UART frame stream + $\sim 40\text{ ms}$ C++ vision | **$\sim 20\text{ ms}$ MIPI CSI-2 DMA + $\sim 25\text{ ms}$ Python OpenCV ($\sim 45\text{ ms}$ total)** |
+| **Motion Controller** | Arduino Mega 2560 ($16\text{ MHz}$ AVR) | Arduino Mega 2560 ($16\text{ MHz}$ AVR) |
+| **Actuation** | 2× NEMA 17 Steppers (TMC2208) + 2× MG90S Servos (PCA9685) | 2× NEMA 17 Steppers (TMC2208) + 2× MG90S Servos (PCA9685) |
+| **Main Power Supply** | $12\text{V}, 10\text{A}$ SMPS ($120\text{W}$) with 3 isolated buck rails | $12\text{V}, 10\text{A}$ SMPS ($120\text{W}$) with 3 isolated buck rails |
 
 ---
 
@@ -117,14 +119,13 @@ A publication-grade, 12-page technical dossier is included directly in this repo
 
 ---
 
-## 💻 Web Presentation & Live Interactive Simulator
+## 💻 Web Presentation & Multi-Version Interactive Simulator
 
-The repository includes a standalone, zero-dependency engineering web application:
-- **Interactive 2D Gantry Simulator**: Place and remove bottle caps on a virtual $10 \times 10$ board, click "Start Autonomous Sort", and test communication interruption recovery.
-- **Master Poster Pan & Zoom Lightbox**: Inspect high-resolution system diagrams.
-- **Searchable Pinout Matrix**: Filter all controller pins, logic voltages, and safety notes.
-- **Interactive BOM**: Real-time filtering between owned hardware and components to purchase.
-- **Firmware Code Vault**: Tabbed code templates for Teensy, Mega, ESP32-CAM, and packet protocol.
+The repository includes a standalone, zero-dependency engineering web application with a **Version Selector Portal**:
+- **`index.html` (Version Portal)**: Landing gateway with **V1** and **V2** buttons and a side-by-side architectural comparison matrix.
+- **`v1.html` (Version 1 Specification)**: Complete Teensy 4.1 + ESP32-CAM + Arduino Mega 2560 blueprint, simulator, pinout matrix, BOM, and C++ firmware vault.
+- **`v2.html` (Version 2 Specification)**: Complete Raspberry Pi Zero 2 W (16 GB microSD) + 8MP IMX219 160° Camera + Arduino Mega 2560 blueprint, 5-stage OpenCV fisheye pipeline, simulator, GPIO pinout matrix, V2 BOM, and Python OpenCV + C++ firmware vault (`pi_zero_vision.py`, `fisheye_calibrate.py`, `mega_motion.ino`, `packet_protocol.h`).
+- **`pdf_dossier.html` & `pdf_dossier_v2.html`**: 12-page printable A4 technical report dossiers for V1 and V2.
 
 ### How to Run Locally
 Simply open `index.html` in any modern web browser:

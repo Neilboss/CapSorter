@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initPinoutTable();
   initBOMTable();
   initCodeVault();
+  initEngineeringDrawer();
+  initScrollSpyNav();
   initSmoothScroll();
 });
 
@@ -249,7 +251,12 @@ function initSimulator() {
       curY = bin.y;
     }
 
-    showNotification(`Vision computed ${planQueue.length} cap targets. Sorting plan dispatched to Mega!`, 'success');
+    const isV2 = document.body?.dataset?.version === 'v2';
+    if (isV2) {
+      showNotification(`Pi Zero 2 W OpenCV computed ${planQueue.length} cap targets in 45ms. Batch sent to Mega!`, 'success');
+    } else {
+      showNotification(`Vision computed ${planQueue.length} cap targets. Sorting plan dispatched to Mega!`, 'success');
+    }
   }
 
   // Animation Loop
@@ -596,7 +603,10 @@ function initSimulator() {
 
       ctx.fillStyle = '#00d2ff';
       ctx.font = 'bold 14px Outfit, sans-serif';
-      ctx.fillText('CAMERA ACQUISITION & HSV SEGMENTATION ACTIVE...', PADDING_LEFT + 40, PADDING_TOP + boardPx / 2);
+      const scanText = document.body?.dataset?.version === 'v2'
+        ? 'PI ZERO 2 W OPENCV + 160° FISHEYE UNDISTORT ACTIVE...'
+        : 'CAMERA ACQUISITION & HSV SEGMENTATION ACTIVE...';
+      ctx.fillText(scanText, PADDING_LEFT + 28, PADDING_TOP + boardPx / 2);
     }
 
     // Telemetry text overlay
@@ -938,11 +948,192 @@ function showNotification(msg, type = 'info') {
 function initSmoothScroll() {
   document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
-      const target = document.querySelector(this.getAttribute('href'));
+      const href = this.getAttribute('href');
+      if (!href || href === '#') return;
+
+      const engHashes = ['#engineering', '#vision', '#electrical', '#safety', '#code', '#considerations'];
+      if (engHashes.includes(href) && typeof window.openEngineeringModule === 'function') {
+        e.preventDefault();
+        const mod = href === '#engineering' ? 'all' : href.substring(1);
+        window.openEngineeringModule(mod, true);
+        return;
+      }
+
+      const target = document.querySelector(href);
       if (target) {
         e.preventDefault();
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     });
   });
+}
+
+/* ==========================================================================
+   8. On-Demand Engineering Deep-Dive Drawer & Sub-Tab Filter
+   ========================================================================== */
+function initEngineeringDrawer() {
+  const drawer = document.getElementById('engineering-drawer');
+  const toggleBtn = document.getElementById('btn-toggle-engineering');
+  const toggleLabel = document.getElementById('btn-toggle-engineering-label');
+  const closeBtn = document.getElementById('btn-close-engineering');
+  const quickCards = document.querySelectorAll('.eng-quick-card');
+  const subTabs = document.querySelectorAll('.eng-subtab-btn');
+  const modules = document.querySelectorAll('.eng-module-panel');
+  const engSection = document.getElementById('engineering');
+
+  if (!drawer || !engSection) return;
+
+  let isOpen = false;
+
+  function setEngineeringSubTab(tabKey) {
+    subTabs.forEach(btn => {
+      if (btn.dataset.engTab === tabKey) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    modules.forEach(mod => {
+      if (tabKey === 'all' || mod.dataset.engModule === tabKey) {
+        mod.classList.remove('hidden');
+      } else {
+        mod.classList.add('hidden');
+      }
+    });
+  }
+
+  function setDrawerOpen(openState, tabKey = 'all', shouldScroll = false) {
+    isOpen = openState;
+    if (isOpen) {
+      drawer.classList.remove('hidden');
+      setEngineeringSubTab(tabKey);
+      if (toggleLabel) {
+        toggleLabel.textContent = 'Hide Engineering Deep-Dive';
+      }
+      if (shouldScroll) {
+        requestAnimationFrame(() => {
+          const scrollTarget = (tabKey !== 'all' && document.getElementById(tabKey))
+            ? document.getElementById(tabKey)
+            : drawer;
+          scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+    } else {
+      drawer.classList.add('hidden');
+      if (toggleLabel) {
+        toggleLabel.textContent = 'Show Engineering Deep-Dive (5 Modules)';
+      }
+      if (shouldScroll) {
+        engSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+    if (typeof window.refreshScrollSpy === 'function') {
+      window.refreshScrollSpy();
+    }
+  }
+
+  window.openEngineeringModule = (modKey = 'all', scroll = true) => {
+    setDrawerOpen(true, modKey, scroll);
+  };
+
+  toggleBtn?.addEventListener('click', () => {
+    setDrawerOpen(!isOpen, 'all', !isOpen);
+  });
+
+  closeBtn?.addEventListener('click', () => {
+    setDrawerOpen(false, 'all', true);
+  });
+
+  quickCards.forEach(card => {
+    card.addEventListener('click', () => {
+      const targetMod = card.dataset.openEng || 'all';
+      setDrawerOpen(true, targetMod, true);
+    });
+  });
+
+  subTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabKey = tab.dataset.engTab || 'all';
+      setEngineeringSubTab(tabKey);
+      drawer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // Auto-open if page loads with an engineering hash (e.g. v1.html#code or v2.html#code)
+  const initialHash = window.location.hash;
+  if (['#engineering', '#vision', '#electrical', '#safety', '#code', '#considerations'].includes(initialHash)) {
+    const mod = initialHash === '#engineering' ? 'all' : initialHash.substring(1);
+    setTimeout(() => setDrawerOpen(true, mod, true), 120);
+  }
+}
+
+/* ==========================================================================
+   9. Dynamic Scroll-Spy Sliding Selection Pill in Top Navigation Bar
+   ========================================================================== */
+function initScrollSpyNav() {
+  const navContainer = document.getElementById('top-nav-pill');
+  const selectionPill = document.getElementById('nav-selection-pill');
+  const navLinks = Array.from(document.querySelectorAll('#top-nav-pill .nav-pill-link'));
+
+  if (!navContainer || !selectionPill || navLinks.length === 0) return;
+
+  const sectionIds = navLinks.map(link => link.dataset.section).filter(Boolean);
+  let currentActiveId = sectionIds[0];
+
+  function movePillToLink(activeLink) {
+    if (!activeLink) return;
+    const left = activeLink.offsetLeft;
+    const width = activeLink.offsetWidth;
+
+    selectionPill.style.width = `${width}px`;
+    selectionPill.style.transform = `translateX(${left}px)`;
+
+    if (activeLink.dataset.section === 'engineering') {
+      selectionPill.classList.add('pill-engineering');
+    } else {
+      selectionPill.classList.remove('pill-engineering');
+    }
+
+    navLinks.forEach(link => {
+      if (link === activeLink) {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    });
+  }
+
+  function computeActiveSection() {
+    // Use viewport trigger line at 32% from top of window
+    const triggerY = window.innerHeight * 0.32;
+    let bestId = sectionIds[0];
+
+    for (const id of sectionIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.top <= triggerY) {
+        bestId = id;
+      }
+    }
+
+    // If scrolled to the very bottom of the page, highlight the last visible section
+    if ((window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 30)) {
+      bestId = sectionIds[sectionIds.length - 1];
+    }
+
+    currentActiveId = bestId;
+    const activeLink = navLinks.find(l => l.dataset.section === currentActiveId) || navLinks[0];
+    movePillToLink(activeLink);
+  }
+
+  window.refreshScrollSpy = computeActiveSection;
+
+  window.addEventListener('scroll', computeActiveSection, { passive: true });
+  window.addEventListener('resize', computeActiveSection);
+
+  // Initial positioning after layout & font load
+  requestAnimationFrame(computeActiveSection);
+  setTimeout(computeActiveSection, 250);
 }
