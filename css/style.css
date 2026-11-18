@@ -310,11 +310,26 @@ pre code {
 /* ==========================================================================
    Dynamic Sliding Top Navigation Pill & Engineering Drawer
    ========================================================================== */
-#top-nav-pill {
-  position: relative;
+section[id] {
+  scroll-margin-top: 4.75rem;
 }
 
-#nav-selection-pill {
+.eng-module-panel[id] {
+  scroll-margin-top: 8.25rem;
+}
+
+#top-nav-pill,
+#eng-nav-pill {
+  position: relative;
+  scrollbar-width: none;
+}
+#top-nav-pill::-webkit-scrollbar,
+#eng-nav-pill::-webkit-scrollbar {
+  display: none;
+}
+
+#nav-selection-pill,
+#eng-selection-pill {
   position: absolute;
   top: 4px;
   bottom: 4px;
@@ -324,21 +339,23 @@ pre code {
   background: rgba(0, 210, 255, 0.14);
   border: 1px solid rgba(0, 210, 255, 0.35);
   box-shadow: 0 0 14px rgba(0, 210, 255, 0.18);
-  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-              width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+              width 0.26s cubic-bezier(0.22, 1, 0.36, 1),
               background-color 0.25s ease,
               border-color 0.25s ease;
   pointer-events: none;
   z-index: 0;
 }
 
+#eng-selection-pill,
 #nav-selection-pill.pill-engineering {
   background: rgba(255, 107, 0, 0.18);
   border-color: rgba(255, 107, 0, 0.45);
   box-shadow: 0 0 16px rgba(255, 107, 0, 0.22);
 }
 
-.nav-pill-link {
+.nav-pill-link,
+.eng-pill-link {
   position: relative;
   z-index: 10;
   transition: color 0.2s ease;
@@ -349,14 +366,32 @@ pre code {
   font-weight: 600;
 }
 
-.nav-pill-link[data-section="engineering"].active {
+.nav-pill-link[data-section="engineering"].active,
+.eng-pill-link.active {
   color: #fb923c;
   font-weight: 600;
 }
 
-.eng-subtab-btn.active {
-  background: rgba(255, 107, 0, 0.2);
+/* IDE Syntax Highlighting in Firmware Vault */
+.tok-comment {
+  color: #64748b;
+  font-style: italic;
+}
+.tok-preproc {
+  color: #38bdf8;
+  font-weight: 600;
+}
+.tok-kw {
   color: #fb923c;
-  border-color: rgba(255, 107, 0, 0.45);
+  font-weight: 600;
+}
+.tok-type {
+  color: #34d399;
+}
+.tok-num {
+  color: #c084fc;
+}
+.tok-str {
+  color: #facc15;
 }
 

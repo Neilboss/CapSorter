@@ -361,7 +361,7 @@
         <div>
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-xs font-mono uppercase tracking-wider mb-2">
             <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
-            Live Interactive V2 Simulator
+            02 / Live Interactive V2 Simulator
           </div>
           <h2 class="text-3xl sm:text-4xl font-bold text-white">Pi Zero 2 W + Mega Pick &amp; Place Simulator</h2>
         </div>
@@ -1255,35 +1255,25 @@
     <!-- Collapsible Engineering Drawer (Hidden by Default) -->
     <div id="engineering-drawer" class="hidden mt-8">
       <!-- Sticky Sub-Navigation Bar Inside Engineering Drawer -->
-      <div class="sticky top-16 z-30 bg-[#0d121d]/95 backdrop-blur-md border-y border-orange-500/30 py-3 px-4">
-        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div class="flex flex-wrap items-center gap-1.5">
-            <span class="text-[11px] font-mono uppercase text-orange-400 mr-2 font-bold flex items-center gap-1">
-              <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
-              <span>Engineering Filter:</span>
-            </span>
-            <button data-eng-tab="all" class="eng-subtab-btn active px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
-              All 5 Modules
-            </button>
-            <button data-eng-tab="vision" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
-              1. Vision Pipeline
-            </button>
-            <button data-eng-tab="electrical" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
-              2. Electrical &amp; Pinouts
-            </button>
-            <button data-eng-tab="safety" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
-              3. Motion &amp; Fail-Safe
-            </button>
-            <button data-eng-tab="code" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
-              4. Embedded Firmware
-            </button>
-            <button data-eng-tab="considerations" class="eng-subtab-btn px-3 py-1 rounded-lg text-xs font-mono font-semibold border border-slate-700 bg-slate-800 text-slate-300 transition-all cursor-pointer">
-              5. Critical Considerations
-            </button>
+      <div class="sticky top-16 z-30 bg-[#0a0e17]/95 backdrop-blur-md border-y border-orange-500/30 py-2.5 px-4 shadow-xl shadow-black/50">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div class="hidden xl:flex items-center gap-1.5 text-[11px] font-mono uppercase text-orange-400 font-bold shrink-0">
+            <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+            <span>V2 Engineering Suite</span>
           </div>
-          <button id="btn-close-engineering" class="px-3 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs font-mono font-semibold flex items-center gap-1 transition-all cursor-pointer">
+
+          <nav id="eng-nav-pill" class="relative flex items-center gap-0.5 px-1.5 py-1 rounded-full bg-slate-900/95 border border-orange-500/25 text-xs font-medium text-slate-300 whitespace-nowrap overflow-x-auto">
+            <div id="eng-selection-pill"></div>
+            <a href="#vision" data-eng-section="vision" class="eng-pill-link active px-3 py-1 rounded-full hover:text-white transition-all">01. OpenCV Vision</a>
+            <a href="#electrical" data-eng-section="electrical" class="eng-pill-link px-3 py-1 rounded-full hover:text-white transition-all">02. Electrical &amp; Pinouts</a>
+            <a href="#safety" data-eng-section="safety" class="eng-pill-link px-3 py-1 rounded-full hover:text-white transition-all">03. Motion &amp; Fail-Safe</a>
+            <a href="#code" data-eng-section="code" class="eng-pill-link px-3 py-1 rounded-full hover:text-white transition-all">04. Firmware Vault</a>
+            <a href="#considerations" data-eng-section="considerations" class="eng-pill-link px-3 py-1 rounded-full hover:text-white transition-all">05. Critical Guidelines</a>
+          </nav>
+
+          <button id="btn-close-engineering" class="px-3.5 py-1.5 rounded-full bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer">
             <i data-lucide="x" class="w-3.5 h-3.5"></i>
-            <span>Hide Engineering</span>
+            <span>Hide</span>
           </button>
         </div>
       </div>
@@ -1294,7 +1284,7 @@
       
       <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
         <div>
-          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">04 / Python 3 + OpenCV on Raspberry Pi Zero 2 W</span>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">07.1 / Python 3 + OpenCV on Raspberry Pi Zero 2 W</span>
           <h2 class="text-3xl sm:text-4xl font-bold text-white">V2 OpenCV Vision &amp; Fisheye Homography Pipeline</h2>
         </div>
         <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
@@ -1539,7 +1529,7 @@
       
       <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
         <div>
-          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">05 / Power &amp; GPIO Wiring (V2)</span>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">07.2 / Power &amp; GPIO Wiring (V2)</span>
           <h2 class="text-3xl sm:text-4xl font-bold text-white">V2 Electrical Architecture &amp; Power Tree</h2>
         </div>
         <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
@@ -1812,7 +1802,7 @@
       
       <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
         <div>
-          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">06 / Motion &amp; Fault Tolerance</span>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">07.3 / Motion &amp; Fault Tolerance</span>
           <h2 class="text-3xl sm:text-4xl font-bold text-white">Control Strategy &amp; Fail-Safe Logic</h2>
         </div>
         <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
@@ -1954,7 +1944,7 @@
       
       <div class="flex flex-col md:flex-row md:items-end justify-between mb-8">
         <div>
-          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">09 / V2 Embedded &amp; OpenCV Software</span>
+          <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">07.4 / V2 Embedded &amp; OpenCV Software</span>
           <h2 class="text-3xl sm:text-4xl font-bold text-white">V2 Production Firmware Vault</h2>
         </div>
         <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
@@ -2872,7 +2862,7 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       
       <div class="mb-12">
-        <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">10 / V2 Production Quality</span>
+        <span class="text-cyan-400 font-mono text-xs uppercase tracking-wider block mb-2">07.5 / V2 Production Quality</span>
         <h2 class="text-3xl sm:text-4xl font-bold text-white">Critical V2 Engineering Considerations</h2>
         <p class="text-slate-400 text-sm max-w-2xl mt-2">
           Essential hardware and Linux edge-computing safeguards specific to the Raspberry Pi Zero 2 W + 8MP IMX219 160° camera architecture.
@@ -2975,6 +2965,25 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
 
     </div>
   </div>
+      <!-- Engineering Drawer Bottom Action Bar -->
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4">
+        <div class="mt-4 p-4 rounded-2xl bg-slate-900/80 border border-orange-500/25 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="flex items-center gap-2 text-xs text-slate-400 font-mono">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+            <span>End of Engineering Deep-Dive &bull; 5 of 5 modules</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-eng-back-top" class="px-4 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer">
+              <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>
+              <span>Back to Engineering Top</span>
+            </button>
+            <button id="btn-eng-collapse-bottom" class="px-4 py-2 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition-all cursor-pointer">
+              <i data-lucide="chevrons-up" class="w-3.5 h-3.5"></i>
+              <span>Collapse Engineering</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 

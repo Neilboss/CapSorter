@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initBOMTable();
   initCodeVault();
   initEngineeringDrawer();
+  initEngineeringScrollSpy();
   initScrollSpyNav();
   initSmoothScroll();
 });
@@ -946,7 +947,7 @@ function showNotification(msg, type = 'info') {
 }
 
 function initSmoothScroll() {
-  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  document.querySelectorAll('a[href^="#"]:not(.eng-pill-link)').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
       const href = this.getAttribute('href');
       if (!href || href === '#') return;
@@ -954,7 +955,7 @@ function initSmoothScroll() {
       const engHashes = ['#engineering', '#vision', '#electrical', '#safety', '#code', '#considerations'];
       if (engHashes.includes(href) && typeof window.openEngineeringModule === 'function') {
         e.preventDefault();
-        const mod = href === '#engineering' ? 'all' : href.substring(1);
+        const mod = href.substring(1);
         window.openEngineeringModule(mod, true);
         return;
       }
@@ -969,7 +970,7 @@ function initSmoothScroll() {
 }
 
 /* ==========================================================================
-   8. On-Demand Engineering Deep-Dive Drawer & Sub-Tab Filter
+   8. On-Demand Engineering Deep-Dive Drawer
    ========================================================================== */
 function initEngineeringDrawer() {
   const drawer = document.getElementById('engineering-drawer');
@@ -977,45 +978,32 @@ function initEngineeringDrawer() {
   const toggleLabel = document.getElementById('btn-toggle-engineering-label');
   const closeBtn = document.getElementById('btn-close-engineering');
   const quickCards = document.querySelectorAll('.eng-quick-card');
-  const subTabs = document.querySelectorAll('.eng-subtab-btn');
   const modules = document.querySelectorAll('.eng-module-panel');
   const engSection = document.getElementById('engineering');
+  const backToTopBtn = document.getElementById('btn-eng-back-top');
+  const collapseBottomBtn = document.getElementById('btn-eng-collapse-bottom');
 
   if (!drawer || !engSection) return;
 
   let isOpen = false;
 
-  function setEngineeringSubTab(tabKey) {
-    subTabs.forEach(btn => {
-      if (btn.dataset.engTab === tabKey) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-
-    modules.forEach(mod => {
-      if (tabKey === 'all' || mod.dataset.engModule === tabKey) {
-        mod.classList.remove('hidden');
-      } else {
-        mod.classList.add('hidden');
-      }
-    });
-  }
-
-  function setDrawerOpen(openState, tabKey = 'all', shouldScroll = false) {
+  function setDrawerOpen(openState, targetModuleId = null, shouldScroll = false) {
     isOpen = openState;
     if (isOpen) {
       drawer.classList.remove('hidden');
-      setEngineeringSubTab(tabKey);
+      // Ensure all 5 modules are unhidden for natural, continuous scrolling
+      modules.forEach(mod => mod.classList.remove('hidden'));
       if (toggleLabel) {
         toggleLabel.textContent = 'Hide Engineering Deep-Dive';
       }
+      if (typeof window.refreshEngineeringScrollSpy === 'function') {
+        window.refreshEngineeringScrollSpy();
+      }
       if (shouldScroll) {
         requestAnimationFrame(() => {
-          const scrollTarget = (tabKey !== 'all' && document.getElementById(tabKey))
-            ? document.getElementById(tabKey)
-            : drawer;
+          const scrollTarget = (targetModuleId && targetModuleId !== 'engineering' && targetModuleId !== 'all' && document.getElementById(targetModuleId))
+            ? document.getElementById(targetModuleId)
+            : engSection;
           scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       }
@@ -1033,43 +1021,136 @@ function initEngineeringDrawer() {
     }
   }
 
-  window.openEngineeringModule = (modKey = 'all', scroll = true) => {
+  window.openEngineeringModule = (modKey = 'vision', scroll = true) => {
     setDrawerOpen(true, modKey, scroll);
   };
 
   toggleBtn?.addEventListener('click', () => {
-    setDrawerOpen(!isOpen, 'all', !isOpen);
+    setDrawerOpen(!isOpen, 'engineering', !isOpen);
   });
 
   closeBtn?.addEventListener('click', () => {
-    setDrawerOpen(false, 'all', true);
+    setDrawerOpen(false, null, true);
+  });
+
+  backToTopBtn?.addEventListener('click', () => {
+    const firstMod = document.getElementById('vision') || drawer;
+    firstMod.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  collapseBottomBtn?.addEventListener('click', () => {
+    setDrawerOpen(false, null, true);
   });
 
   quickCards.forEach(card => {
     card.addEventListener('click', () => {
-      const targetMod = card.dataset.openEng || 'all';
+      const targetMod = card.dataset.openEng || 'vision';
       setDrawerOpen(true, targetMod, true);
-    });
-  });
-
-  subTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const tabKey = tab.dataset.engTab || 'all';
-      setEngineeringSubTab(tabKey);
-      drawer.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 
   // Auto-open if page loads with an engineering hash (e.g. v1.html#code or v2.html#code)
   const initialHash = window.location.hash;
   if (['#engineering', '#vision', '#electrical', '#safety', '#code', '#considerations'].includes(initialHash)) {
-    const mod = initialHash === '#engineering' ? 'all' : initialHash.substring(1);
-    setTimeout(() => setDrawerOpen(true, mod, true), 120);
+    const mod = initialHash === '#engineering' ? 'vision' : initialHash.substring(1);
+    setTimeout(() => setDrawerOpen(true, mod, true), 150);
   }
 }
 
 /* ==========================================================================
-   9. Dynamic Scroll-Spy Sliding Selection Pill in Top Navigation Bar
+   9. Dynamic Engineering Sub-Nav Scroll-Spy Sliding Highlight Pill
+   ========================================================================== */
+function initEngineeringScrollSpy() {
+  const engNav = document.getElementById('eng-nav-pill');
+  const selectionPill = document.getElementById('eng-selection-pill');
+  const engLinks = Array.from(document.querySelectorAll('#eng-nav-pill .eng-pill-link'));
+  const drawer = document.getElementById('engineering-drawer');
+
+  if (!engNav || !selectionPill || engLinks.length === 0) return;
+
+  const engSectionIds = engLinks.map(link => link.dataset.engSection).filter(Boolean);
+  let currentActiveId = engSectionIds[0];
+
+  function movePillToLink(activeLink) {
+    if (!activeLink) return;
+    const left = activeLink.offsetLeft;
+    const width = activeLink.offsetWidth;
+
+    selectionPill.style.width = `${width}px`;
+    selectionPill.style.transform = `translateX(${left}px)`;
+
+    engLinks.forEach(link => {
+      if (link === activeLink) {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    });
+
+    // Auto-scroll the capsule horizontally on narrow viewports if needed
+    if (engNav.scrollWidth > engNav.clientWidth) {
+      const pillCenter = left + width / 2;
+      const navCenter = engNav.clientWidth / 2;
+      engNav.scrollTo({
+        left: Math.max(0, pillCenter - navCenter),
+        behavior: 'smooth'
+      });
+    }
+  }
+
+  function computeActiveEngineeringSection() {
+    if (!drawer || drawer.classList.contains('hidden')) return;
+
+    // Viewport trigger line (accounting for sticky headers)
+    const triggerY = window.innerHeight * 0.35;
+    let bestId = engSectionIds[0];
+
+    for (const id of engSectionIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.top <= triggerY) {
+        bestId = id;
+      }
+    }
+
+    // If user scrolled to the bottom of the drawer
+    const drawerRect = drawer.getBoundingClientRect();
+    if (drawerRect.bottom <= window.innerHeight + 80) {
+      bestId = engSectionIds[engSectionIds.length - 1];
+    }
+
+    currentActiveId = bestId;
+    const activeLink = engLinks.find(l => l.dataset.engSection === currentActiveId) || engLinks[0];
+    movePillToLink(activeLink);
+  }
+
+  window.refreshEngineeringScrollSpy = () => {
+    requestAnimationFrame(computeActiveEngineeringSection);
+  };
+
+  // Click on pill links: smooth scroll directly to target module
+  engLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const secId = link.dataset.engSection;
+      const targetEl = document.getElementById(secId);
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        movePillToLink(link);
+      }
+    });
+  });
+
+  window.addEventListener('scroll', computeActiveEngineeringSection, { passive: true });
+  window.addEventListener('resize', computeActiveEngineeringSection);
+
+  // Initial positioning
+  requestAnimationFrame(computeActiveEngineeringSection);
+}
+
+/* ==========================================================================
+   10. Dynamic Scroll-Spy Sliding Selection Pill in Top Navigation Bar
    ========================================================================== */
 function initScrollSpyNav() {
   const navContainer = document.getElementById('top-nav-pill');
