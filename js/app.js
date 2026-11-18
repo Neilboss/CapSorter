@@ -678,6 +678,10 @@ function initPosterModal() {
   openBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
+      if (btn.dataset.poster) {
+        posterImg.src = btn.dataset.poster;
+        updateToggleButtons(btn.dataset.poster);
+      }
       modal.classList.add('open');
       document.body.style.overflow = 'hidden';
       scale = 1;
@@ -685,6 +689,40 @@ function initPosterModal() {
       translateY = 0;
       updateTransform();
     });
+  });
+
+  const btnV1 = document.getElementById('btn-poster-v1');
+  const btnV2 = document.getElementById('btn-poster-v2');
+
+  function updateToggleButtons(currentSrc) {
+    const isV2 = currentSrc.includes('_v2');
+    if (btnV1 && btnV2) {
+      if (isV2) {
+        btnV2.className = 'px-2.5 py-1 text-xs rounded bg-cyan-600 text-white font-semibold transition-all shadow-sm';
+        btnV1.className = 'px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all';
+      } else {
+        btnV1.className = 'px-2.5 py-1 text-xs rounded bg-orange-600 text-white font-semibold transition-all shadow-sm';
+        btnV2.className = 'px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all';
+      }
+    }
+  }
+
+  btnV1?.addEventListener('click', () => {
+    posterImg.src = 'assets/system_poster.jpg';
+    scale = 1;
+    translateX = 0;
+    translateY = 0;
+    updateTransform();
+    updateToggleButtons('assets/system_poster.jpg');
+  });
+
+  btnV2?.addEventListener('click', () => {
+    posterImg.src = 'assets/system_poster_v2.jpg';
+    scale = 1;
+    translateX = 0;
+    translateY = 0;
+    updateTransform();
+    updateToggleButtons('assets/system_poster_v2.jpg');
   });
 
   function closeModal() {

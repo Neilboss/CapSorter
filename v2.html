@@ -98,9 +98,9 @@
           <i data-lucide="file-text" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
           <span>V2 Dossier</span>
         </a>
-        <button class="btn-open-poster px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-all whitespace-nowrap">
-          <i data-lucide="file-image" class="w-3.5 h-3.5 text-orange-400 shrink-0"></i>
-          <span>Poster</span>
+        <button class="btn-open-poster px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-700 text-cyan-200 border border-cyan-500/30 flex items-center gap-1.5 transition-all whitespace-nowrap" data-poster="assets/system_poster_v2.jpg">
+          <i data-lucide="file-image" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
+          <span>Poster 4K</span>
         </button>
         <a href="#simulator" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition-all whitespace-nowrap">
           <i data-lucide="play" class="w-3.5 h-3.5 shrink-0"></i>
@@ -189,6 +189,10 @@
               <i data-lucide="play" class="w-4 h-4"></i>
               <span>Launch V2 Gantry Simulator</span>
             </a>
+            <button class="btn-open-poster px-5 py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-cyan-300 font-semibold border border-cyan-500/40 flex items-center gap-2 transition-all" data-poster="assets/system_poster_v2.jpg">
+              <i data-lucide="file-image" class="w-4 h-4 text-cyan-400"></i>
+              <span>View V2 4K Poster</span>
+            </button>
             <a href="v1.html" class="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold border border-white/10 flex items-center gap-2 transition-all">
               <i data-lucide="arrow-left-right" class="w-4 h-4 text-orange-400"></i>
               <span>Compare with V1 (Teensy)</span>
@@ -3010,7 +3014,7 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
         <span>•</span>
         <a href="v1.html" class="text-orange-400 hover:underline">Switch to V1 (Teensy 4.1)</a>
         <span>•</span>
-        <button class="btn-open-poster text-slate-300 hover:underline">View System Poster</button>
+        <button class="btn-open-poster text-cyan-300 hover:underline" data-poster="assets/system_poster_v2.jpg">View V2 System Poster (4K)</button>
       </div>
     </div>
   </footer>
@@ -3019,11 +3023,17 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
        MODAL: FULL HIGH-RES POSTER VIEWER
        ========================================== -->
   <div id="poster-modal" class="poster-modal">
-    <div class="h-14 px-6 bg-slate-900/90 border-b border-white/10 flex items-center justify-between z-10 shrink-0">
+    <div class="h-14 px-6 bg-slate-900/95 border-b border-white/10 flex items-center justify-between z-10 shrink-0">
       <div class="flex items-center gap-3">
-        <i data-lucide="file-image" class="w-5 h-5 text-orange-400"></i>
-        <span class="font-bold text-sm text-white">Full System Architecture &amp; Engineering Poster</span>
-        <span class="text-xs font-mono text-slate-400 hidden sm:inline">(Pan &amp; Zoom Enabled)</span>
+        <i data-lucide="file-image" class="w-5 h-5 text-cyan-400"></i>
+        <span class="font-bold text-sm text-white">System Architecture &amp; Engineering Poster</span>
+        <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">4K UHD</span>
+        
+        <!-- Version Toggles -->
+        <div class="hidden sm:flex items-center gap-1.5 ml-3 pl-3 border-l border-white/10">
+          <button id="btn-poster-v2" class="px-2.5 py-1 text-xs rounded bg-cyan-600 text-white font-semibold transition-all shadow-sm">V2 (Pi Zero 2 W)</button>
+          <button id="btn-poster-v1" class="px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all">V1 (Teensy)</button>
+        </div>
       </div>
       <div class="flex items-center gap-2">
         <button id="btn-zoom-in" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
@@ -3042,7 +3052,7 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
     </div>
 
     <div class="poster-viewport">
-      <img id="modal-poster-img" src="assets/system_poster.jpg" alt="Master System Poster Diagram">
+      <img id="modal-poster-img" src="assets/system_poster_v2.jpg" alt="V2 Master System Poster Diagram (4K UHD)">
     </div>
   </div>
 

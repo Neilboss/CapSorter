@@ -349,11 +349,17 @@
        MODAL: FULL HIGH-RES POSTER VIEWER
        ========================================== -->
   <div id="poster-modal" class="poster-modal">
-    <div class="h-14 px-6 bg-slate-900/90 border-b border-white/10 flex items-center justify-between z-10 shrink-0">
+    <div class="h-14 px-6 bg-slate-900/95 border-b border-white/10 flex items-center justify-between z-10 shrink-0">
       <div class="flex items-center gap-3">
         <i data-lucide="file-image" class="w-5 h-5 text-orange-400"></i>
-        <span class="font-bold text-sm text-white">Full System Architecture &amp; Engineering Poster</span>
-        <span class="text-xs font-mono text-slate-400 hidden sm:inline">(Pan &amp; Zoom Enabled)</span>
+        <span class="font-bold text-sm text-white">System Architecture &amp; Engineering Poster</span>
+        <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">4K UHD</span>
+        
+        <!-- Quick Version Toggles -->
+        <div class="hidden sm:flex items-center gap-1.5 ml-3 pl-3 border-l border-white/10">
+          <button id="btn-poster-v1" class="px-2.5 py-1 text-xs rounded bg-orange-600 text-white font-semibold transition-all shadow-sm">V1 (Teensy 4.1)</button>
+          <button id="btn-poster-v2" class="px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all">V2 (Pi Zero 2 W)</button>
+        </div>
       </div>
       <div class="flex items-center gap-2">
         <button id="btn-zoom-in" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
