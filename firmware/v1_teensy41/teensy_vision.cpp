@@ -9,18 +9,22 @@
 #include <math.h>
 #include "../common/packet_protocol.h"
 
-#define FRAME_WIDTH       320
-#define FRAME_HEIGHT      240
-#define FRAME_PIXELS      (FRAME_WIDTH * FRAME_HEIGHT)
-#define FRAME_BYTES       (FRAME_PIXELS * 2) // 153,600 bytes RGB565
-#define BFS_QUEUE_SIZE    4096
+#define FRAME_WIDTH        320
+#define FRAME_HEIGHT       240
+#define FRAME_PIXELS       (FRAME_WIDTH * FRAME_HEIGHT)
+#define FRAME_BYTES        (FRAME_PIXELS * 2) // 153,600 bytes RGB565
+#define BFS_QUEUE_SIZE     4096
+#define MIN_CAP_SEP_MM     24.0f              // Spatial NMS radius (caps are 28-32mm)
 
 // Allocate large buffers in Teensy 4.1 DMAMEM (512 KB RAM2)
+DMAMEM uint8_t  serial2RxBuf[16384]; // 16 KB DMA RX buffer prevents 921,600 baud drops
 DMAMEM uint8_t  imageBuffer[FRAME_BYTES];
+DMAMEM uint8_t  rawMask[FRAME_PIXELS];
 DMAMEM uint8_t  colorMask[FRAME_PIXELS];
 DMAMEM uint32_t bfsQueue[BFS_QUEUE_SIZE];
 
 CapTarget detectedCaps[100];
+uint32_t  detectedAreas[100];
 uint8_t   capCount = 0;
 uint16_t  currentBatchId = 1;
 
@@ -115,6 +119,35 @@ uint8_t classifyRgb565Pixel(uint16_t pixel) {
   return COLOR_NONE;
 }
 
+void cleanColorMask3x3() {
+  // 3x3 morphological majority filter: removes speckle noise & fills specular glare pinholes
+  memset(colorMask, COLOR_NONE, FRAME_PIXELS);
+  for (uint16_t y = 1; y < FRAME_HEIGHT - 1; y++) {
+    for (uint16_t x = 1; x < FRAME_WIDTH - 1; x++) {
+      uint32_t idx = (uint32_t)y * FRAME_WIDTH + x;
+      uint8_t center = rawMask[idx];
+      uint8_t counts[5] = {0, 0, 0, 0, 0};
+      for (int8_t dy = -1; dy <= 1; dy++) {
+        for (int8_t dx = -1; dx <= 1; dx++) {
+          uint8_t c = rawMask[(uint32_t)(y + dy) * FRAME_WIDTH + (x + dx)];
+          if (c <= 4) counts[c]++;
+        }
+      }
+      if (center != COLOR_NONE && counts[center] >= 5) {
+        colorMask[idx] = center;
+      } else if (center == COLOR_NONE) {
+        // Fill internal specular highlight pinhole if >= 6 of 8 neighbors share a cap color
+        for (uint8_t col = 1; col <= 4; col++) {
+          if (counts[col] >= 6) {
+            colorMask[idx] = col;
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
 void transformToMillimeters(CapTarget *cap) {
   float u = (float)cap->pixelX;
   float v = (float)cap->pixelY;
@@ -123,15 +156,44 @@ void transformToMillimeters(CapTarget *cap) {
   cap->boardY_mm = (H[3] * u + H[4] * v + H[5]) / w;
 }
 
+void deduplicateTargetsNMS(CapTarget *caps, const uint32_t *areas, uint8_t *count) {
+  uint8_t n = *count;
+  if (n <= 1) return;
+  bool suppressed[100] = {false};
+  uint8_t kept = 0;
+
+  for (uint8_t i = 0; i < n; i++) {
+    if (suppressed[i]) continue;
+    for (uint8_t j = i + 1; j < n; j++) {
+      if (suppressed[j]) continue;
+      float dist = hypotf(caps[i].boardX_mm - caps[j].boardX_mm,
+                          caps[i].boardY_mm - caps[j].boardY_mm);
+      if (dist < MIN_CAP_SEP_MM) {
+        if (areas[j] > areas[i]) {
+          caps[i] = caps[j];
+        }
+        suppressed[j] = true;
+      }
+    }
+    caps[kept] = caps[i];
+    caps[kept].capId = kept + 1;
+    kept++;
+  }
+  *count = kept;
+}
+
 void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCount) {
   *outCount = 0;
-  // 1. Classify every pixel into colorMask
+  // 1. Classify every pixel into rawMask
   for (uint32_t i = 0; i < FRAME_PIXELS; i++) {
     uint16_t px = ((uint16_t)frameBuf[i * 2] << 8) | frameBuf[i * 2 + 1];
-    colorMask[i] = classifyRgb565Pixel(px);
+    rawMask[i] = classifyRgb565Pixel(px);
   }
 
-  // 2. Iterative Connected-Components BFS with Circularity Gating
+  // 2. Apply 3x3 morphological noise & specular pinhole filter
+  cleanColorMask3x3();
+
+  // 3. Iterative Connected-Components BFS with Circularity Gating
   const int8_t dx[4] = { 1, -1, 0, 0 };
   const int8_t dy[4] = { 0, 0, 1, -1 };
 
@@ -194,12 +256,16 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
 
           if (cap.boardX_mm >= 0.0f && cap.boardX_mm <= 300.0f &&
               cap.boardY_mm >= 0.0f && cap.boardY_mm <= 300.0f) {
+            detectedAreas[*outCount] = area;
             (*outCount)++;
           }
         }
       }
     }
   }
+
+  // 4. Spatial NMS deduplication (merges split blobs closer than 24 mm)
+  deduplicateTargetsNMS(outCaps, detectedAreas, outCount);
 }
 
 void optimizeSortingPath(CapTarget *caps, uint8_t count) {
@@ -226,6 +292,18 @@ void optimizeSortingPath(CapTarget *caps, uint8_t count) {
   }
 }
 
+void writePacedSerial1(const uint8_t *data, uint32_t len) {
+  // Pace transmissions in 32-byte chunks with 2ms pause so Mega's 64B RX FIFO never overflows
+  uint32_t offset = 0;
+  while (offset < len) {
+    uint32_t chunk = min((uint32_t)32, len - offset);
+    Serial1.write(data + offset, chunk);
+    Serial1.flush();
+    offset += chunk;
+    if (offset < len) delay(2);
+  }
+}
+
 bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
   if (count == 0) return false;
   uint32_t payloadBytes = (uint32_t)count * sizeof(CapTarget);
@@ -236,18 +314,23 @@ bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
   hdr.totalCaps = count;
   hdr.crc16     = computeCRC16((const uint8_t*)caps, payloadBytes);
 
-  Serial1.write((const uint8_t*)&hdr, sizeof(BatchHeader));
-  Serial1.write((const uint8_t*)caps, payloadBytes);
-  Serial1.flush();
+  for (uint8_t attempt = 0; attempt < 3; attempt++) {
+    while (Serial1.available() > 0) Serial1.read();
+    Serial1.write((const uint8_t*)&hdr, sizeof(BatchHeader));
+    Serial1.flush();
+    delay(2);
+    writePacedSerial1((const uint8_t*)caps, payloadBytes);
 
-  // Wait for CMD_BATCH_ACK from Mega
-  uint32_t waitStart = millis();
-  while (millis() - waitStart < 1000) {
-    if (Serial1.available() > 0) {
-      uint8_t resp = (uint8_t)Serial1.read();
-      if (resp == CMD_BATCH_ACK) return true;
-      if (resp == CMD_BATCH_NACK) return false;
+    // Wait for CMD_BATCH_ACK from Mega
+    uint32_t waitStart = millis();
+    while (millis() - waitStart < 1000) {
+      if (Serial1.available() > 0) {
+        uint8_t resp = (uint8_t)Serial1.read();
+        if (resp == CMD_BATCH_ACK) return true;
+        if (resp == CMD_BATCH_NACK) break; // Retry on NACK
+      }
     }
+    delay(50);
   }
   return false;
 }
@@ -256,7 +339,7 @@ void superviseMegaExecutionWithHeartbeat() {
   // Send 250ms keep-alive heartbeat while Mega moves gantry across workspace
   uint32_t lastPingMs = millis();
   uint32_t batchStartMs = millis();
-  while (millis() - batchStartMs < 120000) {
+  while (millis() - batchStartMs < 180000UL) {
     if (millis() - lastPingMs >= 250) {
       Serial1.write(CMD_HEARTBEAT_PING);
       lastPingMs = millis();
@@ -273,6 +356,7 @@ void superviseMegaExecutionWithHeartbeat() {
 void setup() {
   Serial.begin(115200);   // USB Debug
   Serial1.begin(115200);  // Arduino Mega Link (3.3V <-> 5V Level Shifter)
+  Serial2.addMemoryForRead(serial2RxBuf, sizeof(serial2RxBuf));
   Serial2.begin(921600);  // ESP32-CAM High-Speed Wired Link
   pinMode(LED_BUILTIN, OUTPUT);
   delay(1500);            // Allow Mega to complete initial homing

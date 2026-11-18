@@ -32,6 +32,7 @@ CMD_HEARTBEAT_PING  = 0xF0
 CMD_RECOVERY_HALT   = 0xEE
 
 COLOR_RED, COLOR_YELLOW, COLOR_GREEN, COLOR_BLUE = 1, 2, 3, 4
+MIN_CAP_SEPARATION_MM = 24.0  # Physical caps are 28-32mm diameter; prevents duplicate picks
 
 # Bin Coordinates (mm) outside 300x300mm sorting board
 BIN_COORDS = {
@@ -62,7 +63,8 @@ class PiZeroVisionController:
                  serial_port="/dev/serial0", init_hardware=True):
         self.width, self.height = 640, 480
         self.batch_id = 1
-        self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        self.kernel_open  = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        self.kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
 
         # Load 160-deg Fisheye (K, D) and 3x3 Planar Homography (H) matrices
         try:
@@ -91,18 +93,23 @@ class PiZeroVisionController:
                 self.uart = serial.Serial(serial_port, baudrate=115200, timeout=0.5)
             if HAS_PICAMERA2:
                 self.picam2 = Picamera2()
-                # Note: In Picamera2/DRM naming, "RGB888" outputs 24-bit [B, G, R]
+                # Note 1: raw={"size": (1640, 1232)} forces the 8MP Sony IMX219 into
+                # full-sensor 2x2 binned mode before hardware ISP downscaling to 640x480,
+                # preserving the full 160-deg FOV instead of a center crop.
+                # Note 2: In Picamera2/DRM naming, "RGB888" outputs 24-bit [B, G, R]
                 # byte order in memory, matching OpenCV's default BGR format directly.
                 cfg = self.picam2.create_still_configuration(
-                    main={"size": (self.width, self.height), "format": "RGB888"}
+                    main={"size": (self.width, self.height), "format": "RGB888"},
+                    raw={"size": (1640, 1232)}
                 )
                 self.picam2.configure(cfg)
                 self.picam2.start()
-                time.sleep(0.5)
-                # Lock auto-exposure and white balance under diffused LED light plate
+                time.sleep(0.8)  # Warm up sensor under diffused LED light plate
+                # Lock auto-exposure and white balance so colored caps never shift hue
                 self.picam2.set_controls({"AeEnable": False, "AwbEnable": False})
             else:
                 self.usb_cam = cv2.VideoCapture(0)
+                self.usb_cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 self.usb_cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
                 self.usb_cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
 
@@ -113,6 +120,9 @@ class PiZeroVisionController:
         if self.picam2 is not None:
             raw = self.picam2.capture_array("main")
         elif self.usb_cam is not None:
+            # Flush stale V4L2 ring-buffer frames queued during previous gantry sort cycle
+            for _ in range(4):
+                self.usb_cam.grab()
             ok, raw = self.usb_cam.read()
             if not ok:
                 raise RuntimeError("Camera frame acquisition failed")
@@ -120,17 +130,32 @@ class PiZeroVisionController:
             raise RuntimeError("No active camera hardware initialized")
         return self.undistort_frame(raw)
 
+    def deduplicate_spatial_nms(self, candidates: list) -> list:
+        # Sort by contour area descending so primary cap contour dominates any rim fragment
+        sorted_cands = sorted(candidates, key=lambda c: c.get("_area", 0.0), reverse=True)
+        accepted = []
+        for cand in sorted_cands:
+            if any(math.hypot(cand["boardX_mm"] - a["boardX_mm"],
+                              cand["boardY_mm"] - a["boardY_mm"]) < MIN_CAP_SEPARATION_MM
+                   for a in accepted):
+                continue
+            item = {k: v for k, v in cand.items() if k != "_area"}
+            item["capId"] = len(accepted) + 1
+            accepted.append(item)
+        return accepted[:100]
+
     def detect_caps(self, rectified_bgr: np.ndarray) -> list:
         hsv = cv2.cvtColor(rectified_bgr, cv2.COLOR_BGR2HSV)
-        detected = []
-        cap_id = 1
+        candidates = []
 
         for color_id, ranges in HSV_RANGES.items():
             mask = np.zeros((self.height, self.width), dtype=np.uint8)
             for lower, upper in ranges:
                 mask |= cv2.inRange(hsv, np.array(lower, dtype=np.uint8), np.array(upper, dtype=np.uint8))
 
-            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernel)
+            # MORPH_OPEN removes background speckle; MORPH_CLOSE seals central specular glare holes
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  self.kernel_open)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.kernel_close)
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             for cnt in contours:
@@ -139,7 +164,7 @@ class PiZeroVisionController:
                     continue
                 perim = cv2.arcLength(cnt, True)
                 circularity = (4.0 * math.pi * area) / (perim * perim + 1e-5)
-                if circularity < 0.75:
+                if circularity < 0.74:
                     continue
 
                 M = cv2.moments(cnt)
@@ -155,17 +180,17 @@ class PiZeroVisionController:
 
                 if 0.0 <= x_mm <= 300.0 and 0.0 <= y_mm <= 300.0:
                     _, _, bin_id = BIN_COORDS[color_id]
-                    detected.append({
-                        "capId": cap_id,
+                    candidates.append({
+                        "capId": 0,
                         "color": color_id,
                         "pixelX": int(round(u)),
                         "pixelY": int(round(v)),
                         "boardX_mm": x_mm,
                         "boardY_mm": y_mm,
-                        "targetBinId": bin_id
+                        "targetBinId": bin_id,
+                        "_area": area
                     })
-                    cap_id += 1
-        return detected
+        return self.deduplicate_spatial_nms(candidates)
 
     def optimize_path(self, caps: list) -> list:
         ordered, remaining = [], [dict(c) for c in caps]
@@ -195,22 +220,35 @@ class PiZeroVisionController:
         self.batch_id = ((self.batch_id + 1) & 0xFFFF) or 1
         return header + bytes(payload)
 
+    def write_paced_uart(self, packet: bytes, chunk_size: int = 32):
+        # Pace in 32-byte chunks with 2ms pause so Arduino Mega's 64-byte RX ring buffer never overflows
+        for offset in range(0, len(packet), chunk_size):
+            self.uart.write(packet[offset:offset + chunk_size])
+            self.uart.flush()
+            if offset + chunk_size < len(packet):
+                time.sleep(0.002)
+
     def transmit_batch_and_supervise(self, ordered_caps: list) -> bool:
         if not ordered_caps or self.uart is None:
             return False
         packet = self.pack_batch_packet(ordered_caps)
-        self.uart.reset_input_buffer()
-        self.uart.write(packet)
-        self.uart.flush()
 
-        # Wait for CMD_BATCH_ACK (0xA1) from Arduino Mega
-        ack = self.uart.read(1)
-        if not ack or ack[0] != CMD_BATCH_ACK:
+        ack_received = False
+        for _ in range(3):
+            self.uart.reset_input_buffer()
+            self.write_paced_uart(packet)
+            ack = self.uart.read(1)
+            if ack and ack[0] == CMD_BATCH_ACK:
+                ack_received = True
+                break
+            time.sleep(0.05)
+
+        if not ack_received:
             return False
 
         # Send 250ms heartbeat pings while Mega sorts batch & returns to (0,0)
         start_t = time.monotonic()
-        while time.monotonic() - start_t < 120.0:
+        while time.monotonic() - start_t < 180.0:
             self.uart.write(bytes([CMD_HEARTBEAT_PING]))
             self.uart.flush()
             time.sleep(0.25)

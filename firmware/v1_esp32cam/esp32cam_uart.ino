@@ -19,8 +19,8 @@ void setup() {
   config.pin_sscb_sda = 26; config.pin_sscb_scl = 27;
   config.pin_pwdn     = 32; config.pin_reset = -1;
   config.xclk_freq_hz = 20000000;
-  config.pixel_format = PIXFORMAT_RGB565; // Raw 16-bit color (320x240x2 = 153,600 bytes)
-  config.frame_size   = FRAMESIZE_QVGA;   // 320x240
+  config.pixel_format = PIXFORMAT_RGB565;   // Raw 16-bit color (320x240x2 = 153,600 bytes)
+  config.frame_size   = FRAMESIZE_QVGA;     // 320x240
   config.fb_count     = 2;
   config.grab_mode    = CAMERA_GRAB_LATEST; // Always capture freshest frame on trigger
 
@@ -28,12 +28,27 @@ void setup() {
     while (true) { delay(1000); }
   }
 
-  // Lock exposure & white balance under fixed diffused LED plate
+  // 1. Allow AWB, AEC, and AGC to converge under diffused LED light plate for 800 ms
   sensor_t *s = esp_camera_sensor_get();
   if (s) {
     s->set_whitebal(s, 1);
     s->set_awb_gain(s, 1);
     s->set_exposure_ctrl(s, 1);
+    s->set_gain_ctrl(s, 1);
+    delay(800);
+
+    // Flush 2 warm-up frames
+    for (int i = 0; i < 2; i++) {
+      camera_fb_t *warmFb = esp_camera_fb_get();
+      if (warmFb) esp_camera_fb_return(warmFb);
+      delay(50);
+    }
+
+    // 2. Lock AWB, Exposure, and Gain so colored caps never shift hue balance!
+    s->set_whitebal(s, 0);
+    s->set_awb_gain(s, 0);
+    s->set_exposure_ctrl(s, 0);
+    s->set_gain_ctrl(s, 0);
   }
 
   TeensySerial.begin(921600, SERIAL_8N1, 14, 13);

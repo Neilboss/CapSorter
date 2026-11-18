@@ -1676,9 +1676,9 @@
                 <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (X)</td>
                 <td class="font-mono text-xs">Mega Pin 2</td>
                 <td class="font-mono text-xs">X Driver STEP Pin</td>
-                <td>X-Axis Step Pulse Train (80 steps/mm, 370mm range)</td>
+                <td>X-Axis Step Pulse Train (40 steps/mm, 370mm range)</td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
-                <td>4000 steps/s max speed (50 mm/s)</td>
+                <td>2400 steps/s max speed (60 mm/s on 16 MHz AVR)</td>
               </tr>
               <tr data-controller="tmc2208">
                 <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (X)</td>
@@ -1692,9 +1692,9 @@
                 <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (Y)</td>
                 <td class="font-mono text-xs">Mega Pin 3</td>
                 <td class="font-mono text-xs">Y Driver STEP Pin</td>
-                <td>Y-Axis Step Pulse Train (80 steps/mm, 300mm range)</td>
+                <td>Y-Axis Step Pulse Train (40 steps/mm, 300mm range)</td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
-                <td>Moving bridge actuator</td>
+                <td>Moving bridge actuator (2400 steps/s = 60 mm/s)</td>
               </tr>
               <tr data-controller="tmc2208">
                 <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (Y)</td>
@@ -1710,25 +1710,25 @@
                 <td class="font-mono text-xs">Shared Driver EN Pin</td>
                 <td>Shared Driver Enable (Active LOW)</td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Logic</span></td>
-                <td>Driven LOW in setup() to energize stepper coils</td>
+                <td>Driven LOW to energize; driven HIGH on limit-fault stop</td>
               </tr>
               <tr data-controller="tmc2208">
                 <td class="font-bold text-orange-400">TMC2208 Config &amp; Power</td>
                 <td class="font-mono text-xs">MS1, MS2, VMOT, VIO</td>
-                <td class="font-mono text-xs">MS1=5V, MS2=5V | VMOT=12V | 1A/1B/2A/2B</td>
-                <td>1/16 Microstepping Select &amp; 12V Motor Coil Output</td>
+                <td class="font-mono text-xs">MS1=GND, MS2=GND | VMOT=12V | 1A/1B/2A/2B</td>
+                <td>1/8 Microstep (256 MicroPlyer) &amp; 12V Motor Coils</td>
                 <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">12V VM / 5V VIO</span></td>
-                <td>Tie MS1 &amp; MS2 HIGH for 1/16 microsteps (80 steps/mm); 100µF cap on VMOT</td>
+                <td>1/8 mode = 40 steps/mm (0.025mm/step) within 16 MHz AVR budget; 100µF cap on VMOT</td>
               </tr>
 
               <!-- Mega to PCA9685 I2C -->
               <tr data-controller="pca9685">
                 <td class="font-bold text-purple-400">Mega ⟶ PCA9685</td>
-                <td class="font-mono text-xs">Mega Pin 20 (SDA) &amp; 21 (SCL)</td>
-                <td class="font-mono text-xs">PCA9685 SDA &amp; SCL (I2C 0x40)</td>
-                <td>I2C Bus (400 kHz) | V+ fed by 5V/5A Buck (Branch B)</td>
+                <td class="font-mono text-xs">Pins 20 (SDA), 21 (SCL), 9 (OE)</td>
+                <td class="font-mono text-xs">PCA9685 SDA, SCL &amp; OE (I2C 0x40)</td>
+                <td>I2C Bus (400 kHz) + Active-LOW Output Enable</td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V Logic / 5V V+</span></td>
-                <td>4.7kΩ pull-ups; OE pin pulled LOW (enabled)</td>
+                <td>Pin 9 holds OE HIGH during boot to prevent power-on servo twitch</td>
               </tr>
               <tr data-controller="pca9685">
                 <td class="font-bold text-purple-400">PCA9685 Channel 0</td>
@@ -1957,18 +1957,22 @@
 #include &lt;math.h&gt;
 #include &quot;packet_protocol.h&quot;
 
-#define FRAME_WIDTH       320
-#define FRAME_HEIGHT      240
-#define FRAME_PIXELS      (FRAME_WIDTH * FRAME_HEIGHT)
-#define FRAME_BYTES       (FRAME_PIXELS * 2) // 153,600 bytes RGB565
-#define BFS_QUEUE_SIZE    4096
+#define FRAME_WIDTH        320
+#define FRAME_HEIGHT       240
+#define FRAME_PIXELS       (FRAME_WIDTH * FRAME_HEIGHT)
+#define FRAME_BYTES        (FRAME_PIXELS * 2) // 153,600 bytes RGB565
+#define BFS_QUEUE_SIZE     4096
+#define MIN_CAP_SEP_MM     24.0f              // Spatial NMS radius (caps are 28-32mm)
 
 // Allocate large buffers in Teensy 4.1 DMAMEM (512 KB RAM2)
+DMAMEM uint8_t  serial2RxBuf[16384]; // 16 KB DMA RX buffer prevents 921,600 baud drops
 DMAMEM uint8_t  imageBuffer[FRAME_BYTES];
+DMAMEM uint8_t  rawMask[FRAME_PIXELS];
 DMAMEM uint8_t  colorMask[FRAME_PIXELS];
 DMAMEM uint32_t bfsQueue[BFS_QUEUE_SIZE];
 
 CapTarget detectedCaps[100];
+uint32_t  detectedAreas[100];
 uint8_t   capCount = 0;
 uint16_t  currentBatchId = 1;
 
@@ -2063,6 +2067,35 @@ uint8_t classifyRgb565Pixel(uint16_t pixel) {
   return COLOR_NONE;
 }
 
+void cleanColorMask3x3() {
+  // 3x3 morphological majority filter: removes speckle noise &amp; fills specular glare pinholes
+  memset(colorMask, COLOR_NONE, FRAME_PIXELS);
+  for (uint16_t y = 1; y &lt; FRAME_HEIGHT - 1; y++) {
+    for (uint16_t x = 1; x &lt; FRAME_WIDTH - 1; x++) {
+      uint32_t idx = (uint32_t)y * FRAME_WIDTH + x;
+      uint8_t center = rawMask[idx];
+      uint8_t counts[5] = {0, 0, 0, 0, 0};
+      for (int8_t dy = -1; dy &lt;= 1; dy++) {
+        for (int8_t dx = -1; dx &lt;= 1; dx++) {
+          uint8_t c = rawMask[(uint32_t)(y + dy) * FRAME_WIDTH + (x + dx)];
+          if (c &lt;= 4) counts[c]++;
+        }
+      }
+      if (center != COLOR_NONE &amp;&amp; counts[center] &gt;= 5) {
+        colorMask[idx] = center;
+      } else if (center == COLOR_NONE) {
+        // Fill internal specular highlight pinhole if &gt;= 6 of 8 neighbors share a cap color
+        for (uint8_t col = 1; col &lt;= 4; col++) {
+          if (counts[col] &gt;= 6) {
+            colorMask[idx] = col;
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
 void transformToMillimeters(CapTarget *cap) {
   float u = (float)cap-&gt;pixelX;
   float v = (float)cap-&gt;pixelY;
@@ -2071,15 +2104,44 @@ void transformToMillimeters(CapTarget *cap) {
   cap-&gt;boardY_mm = (H[3] * u + H[4] * v + H[5]) / w;
 }
 
+void deduplicateTargetsNMS(CapTarget *caps, const uint32_t *areas, uint8_t *count) {
+  uint8_t n = *count;
+  if (n &lt;= 1) return;
+  bool suppressed[100] = {false};
+  uint8_t kept = 0;
+
+  for (uint8_t i = 0; i &lt; n; i++) {
+    if (suppressed[i]) continue;
+    for (uint8_t j = i + 1; j &lt; n; j++) {
+      if (suppressed[j]) continue;
+      float dist = hypotf(caps[i].boardX_mm - caps[j].boardX_mm,
+                          caps[i].boardY_mm - caps[j].boardY_mm);
+      if (dist &lt; MIN_CAP_SEP_MM) {
+        if (areas[j] &gt; areas[i]) {
+          caps[i] = caps[j];
+        }
+        suppressed[j] = true;
+      }
+    }
+    caps[kept] = caps[i];
+    caps[kept].capId = kept + 1;
+    kept++;
+  }
+  *count = kept;
+}
+
 void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCount) {
   *outCount = 0;
-  // 1. Classify every pixel into colorMask
+  // 1. Classify every pixel into rawMask
   for (uint32_t i = 0; i &lt; FRAME_PIXELS; i++) {
     uint16_t px = ((uint16_t)frameBuf[i * 2] &lt;&lt; 8) | frameBuf[i * 2 + 1];
-    colorMask[i] = classifyRgb565Pixel(px);
+    rawMask[i] = classifyRgb565Pixel(px);
   }
 
-  // 2. Iterative Connected-Components BFS with Circularity Gating
+  // 2. Apply 3x3 morphological noise &amp; specular pinhole filter
+  cleanColorMask3x3();
+
+  // 3. Iterative Connected-Components BFS with Circularity Gating
   const int8_t dx[4] = { 1, -1, 0, 0 };
   const int8_t dy[4] = { 0, 0, 1, -1 };
 
@@ -2142,12 +2204,16 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
 
           if (cap.boardX_mm &gt;= 0.0f &amp;&amp; cap.boardX_mm &lt;= 300.0f &amp;&amp;
               cap.boardY_mm &gt;= 0.0f &amp;&amp; cap.boardY_mm &lt;= 300.0f) {
+            detectedAreas[*outCount] = area;
             (*outCount)++;
           }
         }
       }
     }
   }
+
+  // 4. Spatial NMS deduplication (merges split blobs closer than 24 mm)
+  deduplicateTargetsNMS(outCaps, detectedAreas, outCount);
 }
 
 void optimizeSortingPath(CapTarget *caps, uint8_t count) {
@@ -2174,6 +2240,18 @@ void optimizeSortingPath(CapTarget *caps, uint8_t count) {
   }
 }
 
+void writePacedSerial1(const uint8_t *data, uint32_t len) {
+  // Pace transmissions in 32-byte chunks with 2ms pause so Mega&#x27;s 64B RX FIFO never overflows
+  uint32_t offset = 0;
+  while (offset &lt; len) {
+    uint32_t chunk = min((uint32_t)32, len - offset);
+    Serial1.write(data + offset, chunk);
+    Serial1.flush();
+    offset += chunk;
+    if (offset &lt; len) delay(2);
+  }
+}
+
 bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
   if (count == 0) return false;
   uint32_t payloadBytes = (uint32_t)count * sizeof(CapTarget);
@@ -2184,18 +2262,23 @@ bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
   hdr.totalCaps = count;
   hdr.crc16     = computeCRC16((const uint8_t*)caps, payloadBytes);
 
-  Serial1.write((const uint8_t*)&amp;hdr, sizeof(BatchHeader));
-  Serial1.write((const uint8_t*)caps, payloadBytes);
-  Serial1.flush();
+  for (uint8_t attempt = 0; attempt &lt; 3; attempt++) {
+    while (Serial1.available() &gt; 0) Serial1.read();
+    Serial1.write((const uint8_t*)&amp;hdr, sizeof(BatchHeader));
+    Serial1.flush();
+    delay(2);
+    writePacedSerial1((const uint8_t*)caps, payloadBytes);
 
-  // Wait for CMD_BATCH_ACK from Mega
-  uint32_t waitStart = millis();
-  while (millis() - waitStart &lt; 1000) {
-    if (Serial1.available() &gt; 0) {
-      uint8_t resp = (uint8_t)Serial1.read();
-      if (resp == CMD_BATCH_ACK) return true;
-      if (resp == CMD_BATCH_NACK) return false;
+    // Wait for CMD_BATCH_ACK from Mega
+    uint32_t waitStart = millis();
+    while (millis() - waitStart &lt; 1000) {
+      if (Serial1.available() &gt; 0) {
+        uint8_t resp = (uint8_t)Serial1.read();
+        if (resp == CMD_BATCH_ACK) return true;
+        if (resp == CMD_BATCH_NACK) break; // Retry on NACK
+      }
     }
+    delay(50);
   }
   return false;
 }
@@ -2204,7 +2287,7 @@ void superviseMegaExecutionWithHeartbeat() {
   // Send 250ms keep-alive heartbeat while Mega moves gantry across workspace
   uint32_t lastPingMs = millis();
   uint32_t batchStartMs = millis();
-  while (millis() - batchStartMs &lt; 120000) {
+  while (millis() - batchStartMs &lt; 180000UL) {
     if (millis() - lastPingMs &gt;= 250) {
       Serial1.write(CMD_HEARTBEAT_PING);
       lastPingMs = millis();
@@ -2221,6 +2304,7 @@ void superviseMegaExecutionWithHeartbeat() {
 void setup() {
   Serial.begin(115200);   // USB Debug
   Serial1.begin(115200);  // Arduino Mega Link (3.3V &lt;-&gt; 5V Level Shifter)
+  Serial2.addMemoryForRead(serial2RxBuf, sizeof(serial2RxBuf));
   Serial2.begin(921600);  // ESP32-CAM High-Speed Wired Link
   pinMode(LED_BUILTIN, OUTPUT);
   delay(1500);            // Allow Mega to complete initial homing
@@ -2259,7 +2343,7 @@ void loop() {
 //   X Stepper (TMC2208): STEP = Pin 2, DIR = Pin 5, EN = Pin 8 (Active LOW)
 //   Y Stepper (TMC2208): STEP = Pin 3, DIR = Pin 6, EN = Pin 8 (Active LOW)
 //   Limit Switches (NC to GND, INPUT_PULLUP): X = Pin 22, Y = Pin 23, Z = Pin 24
-//   PCA9685 Servo Driver (I2C 0x40): SDA = Pin 20, SCL = Pin 21
+//   PCA9685 Servo Driver (I2C 0x40): SDA = Pin 20, SCL = Pin 21, OE = Pin 9
 // =========================================================================
 #include &lt;Wire.h&gt;
 #include &lt;Adafruit_PWMServoDriver.h&gt;
@@ -2272,26 +2356,37 @@ void loop() {
 #define PIN_Y_STEP         3
 #define PIN_Y_DIR          6
 #define PIN_STEPPER_EN     8   // Active LOW enable shared by both TMC2208 drivers
-#define PIN_X_HOME        22   // NC switch to GND: LOW = normal, HIGH = triggered/open
-#define PIN_Y_HOME        23   // NC switch to GND: LOW = normal, HIGH = triggered/open
-#define PIN_Z_HOME        24   // NC switch to GND: LOW = normal, HIGH = triggered/open
+#define PIN_SERVO_OE       9   // Active LOW PCA9685 Output Enable (prevents power-on glitch)
+#define PIN_X_HOME        22   // NC switch to GND: LOW = normal, HIGH = triggered/wire break
+#define PIN_Y_HOME        23   // NC switch to GND: LOW = normal, HIGH = triggered/wire break
+#define PIN_Z_HOME        24   // NC switch to GND: LOW = normal, HIGH = triggered/wire break
 
-// Kinematics: 200 steps/rev * 16 microsteps / (20T * 2mm GT2 belt) = 80 steps/mm
-#define STEPS_PER_MM      80.0f
-#define MAX_TRAVEL_X_MM  370.0f // 300mm sorting board + 55-65mm external bin zone
-#define MAX_TRAVEL_Y_MM  300.0f
+// Real-World 16 MHz AVR Kinematics:
+// 200 steps/rev * 8 microsteps (TMC2208 1/8 + 256 MicroPlyer) / 40mm GT2 pulley = 40 steps/mm
+// 2800 steps/sec = 70 mm/s per axis; 6000 steps/s^2 = 150 mm/s^2 belt gantry acceleration
+// Achieves ~5.2s total 8-step cycle time per cap while staying well within 16 MHz AVR step budget
+#define STEPS_PER_MM       40.0f
+#define MAX_SPEED_STEPS  2800.0f // 70 mm/s linear speed (&lt;4000 steps/s 16 MHz AVR ceiling)
+#define ACCEL_STEPS      6000.0f // 150 mm/s^2 smooth GT2 belt acceleration (0.47s ramp)
+#define MAX_TRAVEL_X_MM   370.0f // 300mm sorting board + 55-65mm external bin zone
+#define MAX_TRAVEL_Y_MM   300.0f
+
+// Physical Toolhead Offset (mm) from Homed (0,0) to Board (0,0) Fiducial Corner
+#define TOOL_OFFSET_X_MM    0.0f
+#define TOOL_OFFSET_Y_MM    0.0f
 
 // PCA9685 50Hz (12-bit, 4096 ticks / 20ms) Calibrated MG90S Servo Pulse Counts
-#define SERVO_Z_CH         0
-#define SERVO_GRIPPER_CH   1
-#define PWM_Z_RAISED     180   // 0 mm (retracted overhead clearance)
-#define PWM_Z_LOWER_PICK 410   // ~40 mm (lowered onto cap on board)
-#define PWM_Z_LOWER_BIN  320   // ~25 mm (lowered into bin opening)
-#define PWM_GRIP_OPEN    210   // ~36 mm jaw gap (open)
-#define PWM_GRIP_CLOSE   385   // ~26 mm jaw gap (clamped on 28-32mm cap)
+#define SERVO_Z_CH          0
+#define SERVO_GRIPPER_CH    1
+#define PWM_Z_RAISED      180    // 0 mm (retracted overhead clearance)
+#define PWM_Z_LOWER_PICK  410    // ~40 mm (lowered onto cap on board)
+#define PWM_Z_LOWER_BIN   320    // ~25 mm (lowered into bin opening)
+#define PWM_GRIP_OPEN     210    // ~36 mm jaw gap (open)
+#define PWM_GRIP_CLOSE    385    // ~26 mm jaw gap (clamped on 28-32mm cap)
 
-// Watchdog timeout (if no heartbeat byte 0xF0 from Teensy/Pi Zero 2W for &gt;1.2s)
-#define COMMS_TIMEOUT_MS 1200UL
+// Safety &amp; Watchdog Timeouts
+#define COMMS_TIMEOUT_MS  1200UL // 1.2s without 0xF0 heartbeat triggers localized fail-safe
+#define HOMING_TIMEOUT_MS 15000UL // 15s max homing duration (protects against belt slip)
 
 AccelStepper stepperX(AccelStepper::DRIVER, PIN_X_STEP, PIN_X_DIR);
 AccelStepper stepperY(AccelStepper::DRIVER, PIN_Y_STEP, PIN_Y_DIR);
@@ -2313,7 +2408,9 @@ enum RobotState : uint8_t {
   STATE_RELEASE_CAP,
   STATE_RETRACT_Z,
   STATE_PARKING_HOME,
-  STATE_FAILSAFE_HALT
+  STATE_FAILSAFE_PARKING,
+  STATE_FAILSAFE_HALT,
+  STATE_HARD_FAULT
 };
 
 RobotState    currentState      = STATE_HOMING;
@@ -2323,47 +2420,87 @@ uint8_t       batchTotal        = 0;
 uint8_t       currentIdx        = 0;
 bool          hasInFlightCap    = false;
 bool          commsFaultLatched = false;
+uint8_t       recoveryPingCount = 0;
+uint8_t       limitFaultCount   = 0;
 unsigned long stateTimerMs      = 0;
 unsigned long lastHeartbeatMs   = 0;
 
-void moveGantryToMm(float targetX_mm, float targetY_mm) {
-  float clampedX = constrain(targetX_mm, 0.0f, MAX_TRAVEL_X_MM);
-  float clampedY = constrain(targetY_mm, 0.0f, MAX_TRAVEL_Y_MM);
-  stepperX.moveTo(lroundf(clampedX * STEPS_PER_MM));
-  stepperY.moveTo(lroundf(clampedY * STEPS_PER_MM));
+void moveGantryToMm(float boardX_mm, float boardY_mm) {
+  float targetX = constrain(boardX_mm + TOOL_OFFSET_X_MM, 0.0f, MAX_TRAVEL_X_MM);
+  float targetY = constrain(boardY_mm + TOOL_OFFSET_Y_MM, 0.0f, MAX_TRAVEL_Y_MM);
+  stepperX.moveTo(lroundf(targetX * STEPS_PER_MM));
+  stepperY.moveTo(lroundf(targetY * STEPS_PER_MM));
 }
 
 bool isGantryAtTarget() {
   return (stepperX.distanceToGo() == 0 &amp;&amp; stepperY.distanceToGo() == 0);
 }
 
+void triggerHardFault() {
+  stepperX.stop();
+  stepperY.stop();
+  digitalWrite(PIN_STEPPER_EN, HIGH); // Disable stepper coils immediately
+  pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+  Serial1.write(CMD_RECOVERY_HALT);
+  currentState = STATE_HARD_FAULT;
+}
+
 void homeAxes() {
   currentState = STATE_HOMING;
-  digitalWrite(PIN_STEPPER_EN, LOW); // Enable TMC2208 drivers
+  digitalWrite(PIN_STEPPER_EN, LOW);  // Enable TMC2208 drivers
 
   // 1. Retract Z-axis and open gripper before any XY homing travel
   pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
   pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+  digitalWrite(PIN_SERVO_OE, LOW);    // Enable PCA9685 outputs cleanly after latching PWM
   delay(400);
 
-  // 2. Seek X &amp; Y Normally-Closed home switches (LOW = closed, HIGH = hit/open)
-  stepperX.setMaxSpeed(1600);
-  stepperY.setMaxSpeed(1600);
+  stepperX.setMinPulseWidth(2);
+  stepperY.setMinPulseWidth(2);
+  stepperX.setMaxSpeed(1000.0f);
+  stepperY.setMaxSpeed(1000.0f);
+  stepperX.setAcceleration(800.0f);
+  stepperY.setAcceleration(800.0f);
+
+  // 2. Broken NC Wire Pre-Check: If switch already reads HIGH, back off +10mm first
+  if (digitalRead(PIN_X_HOME) == HIGH || digitalRead(PIN_Y_HOME) == HIGH) {
+    stepperX.setCurrentPosition(0);
+    stepperY.setCurrentPosition(0);
+    moveGantryToMm(10.0f, 10.0f);
+    unsigned long preStart = millis();
+    while (!isGantryAtTarget() &amp;&amp; (millis() - preStart &lt; 2000UL)) {
+      stepperX.run();
+      stepperY.run();
+    }
+    // If switch STILL reads HIGH after 10mm backoff, NC wire is broken/unplugged!
+    if (digitalRead(PIN_X_HOME) == HIGH || digitalRead(PIN_Y_HOME) == HIGH) {
+      triggerHardFault();
+      return;
+    }
+  }
+
+  // 3. Seek X &amp; Y Normally-Closed home switches with strict 15-second timeout
+  unsigned long homeStartMs = millis();
   while (digitalRead(PIN_X_HOME) == LOW || digitalRead(PIN_Y_HOME) == LOW) {
+    if (millis() - homeStartMs &gt; HOMING_TIMEOUT_MS) {
+      triggerHardFault(); // Belt slip or motor stall timeout
+      return;
+    }
     if (digitalRead(PIN_X_HOME) == LOW) {
-      stepperX.setSpeed(-1200);
+      stepperX.setSpeed(-800.0f);
       stepperX.runSpeed();
     }
     if (digitalRead(PIN_Y_HOME) == LOW) {
-      stepperY.setSpeed(-1200);
+      stepperY.setSpeed(-800.0f);
       stepperY.runSpeed();
     }
   }
 
-  // 3. Back off 3.0 mm (240 steps) off the switches and zero coordinates
+  // 4. Back off 3.0 mm (120 steps) off switches so switches close (LOW) again
   stepperX.setCurrentPosition(0);
   stepperY.setCurrentPosition(0);
-  moveGantryToMm(3.0f, 3.0f);
+  stepperX.moveTo(lroundf(3.0f * STEPS_PER_MM));
+  stepperY.moveTo(lroundf(3.0f * STEPS_PER_MM));
   while (!isGantryAtTarget()) {
     stepperX.run();
     stepperY.run();
@@ -2371,19 +2508,22 @@ void homeAxes() {
   stepperX.setCurrentPosition(0);
   stepperY.setCurrentPosition(0);
 
-  // 4. Restore normal operating speed (4000 steps/s = 50 mm/s) &amp; acceleration
-  stepperX.setMaxSpeed(4000);
-  stepperX.setAcceleration(2000);
-  stepperY.setMaxSpeed(4000);
-  stepperY.setAcceleration(2000);
+  // 5. Restore production operating speed (2400 steps/s = 60 mm/s) &amp; acceleration
+  stepperX.setMaxSpeed(MAX_SPEED_STEPS);
+  stepperX.setAcceleration(ACCEL_STEPS);
+  stepperY.setMaxSpeed(MAX_SPEED_STEPS);
+  stepperY.setAcceleration(ACCEL_STEPS);
 
   hasInFlightCap    = false;
   commsFaultLatched = false;
+  recoveryPingCount = 0;
+  limitFaultCount   = 0;
   lastHeartbeatMs   = millis();
   currentState      = STATE_IDLE;
 }
 
 bool readSerial1Bytes(uint8_t *dest, uint16_t len, unsigned long timeoutMs) {
+  // Called only during STATE_IDLE when steppers are stationary; drains 64B FIFO at max rate
   unsigned long start = millis();
   uint16_t idx = 0;
   while (idx &lt; len) {
@@ -2392,8 +2532,6 @@ bool readSerial1Bytes(uint8_t *dest, uint16_t len, unsigned long timeoutMs) {
     } else if (millis() - start &gt; timeoutMs) {
       return false;
     }
-    stepperX.run();
-    stepperY.run();
   }
   return true;
 }
@@ -2405,6 +2543,15 @@ void pollVisionHostPackets() {
     // 1. Heartbeat Keep-Alive Ping from Teensy 4.1 or Raspberry Pi Zero 2 W
     if (peekByte == CMD_HEARTBEAT_PING) {
       lastHeartbeatMs = millis();
+      // Auto-recover from comms-loss STATE_FAILSAFE_HALT after 3 consecutive pings
+      if (currentState == STATE_FAILSAFE_HALT &amp;&amp; commsFaultLatched) {
+        recoveryPingCount++;
+        if (recoveryPingCount &gt;= 3) {
+          commsFaultLatched = false;
+          recoveryPingCount = 0;
+          currentState      = STATE_IDLE;
+        }
+      }
       continue;
     }
 
@@ -2412,7 +2559,7 @@ void pollVisionHostPackets() {
     if (peekByte == PROTOCOL_MAGIC_BYTE &amp;&amp; currentState == STATE_IDLE) {
       BatchHeader hdr;
       hdr.magic = PROTOCOL_MAGIC_BYTE;
-      if (!readSerial1Bytes(((uint8_t*)&amp;hdr) + 1, sizeof(BatchHeader) - 1, 200)) {
+      if (!readSerial1Bytes(((uint8_t*)&amp;hdr) + 1, sizeof(BatchHeader) - 1, 250)) {
         Serial1.write(CMD_BATCH_NACK);
         return;
       }
@@ -2422,7 +2569,7 @@ void pollVisionHostPackets() {
       }
 
       uint16_t payloadBytes = (uint16_t)hdr.totalCaps * sizeof(CapTarget);
-      if (!readSerial1Bytes((uint8_t*)batchQueue, payloadBytes, 500)) {
+      if (!readSerial1Bytes((uint8_t*)batchQueue, payloadBytes, 1000)) {
         Serial1.write(CMD_BATCH_NACK);
         return;
       }
@@ -2437,6 +2584,7 @@ void pollVisionHostPackets() {
       batchTotal        = hdr.totalCaps;
       currentIdx        = 0;
       commsFaultLatched = false;
+      recoveryPingCount = 0;
       lastHeartbeatMs   = millis();
       Serial1.write(CMD_BATCH_ACK);
 
@@ -2448,9 +2596,23 @@ void pollVisionHostPackets() {
   }
 }
 
+void checkRuntimeLimitSwitches() {
+  if (currentState == STATE_HOMING || currentState == STATE_HARD_FAULT) return;
+  // NC switches read LOW during normal travel; HIGH indicates endstop collision or broken wire
+  if (digitalRead(PIN_X_HOME) == HIGH || digitalRead(PIN_Y_HOME) == HIGH) {
+    limitFaultCount++;
+    if (limitFaultCount &gt;= 3) {
+      triggerHardFault();
+    }
+  } else {
+    limitFaultCount = 0;
+  }
+}
+
 bool checkCommunicationLoss() {
   if (currentState == STATE_IDLE || currentState == STATE_HOMING ||
-      currentState == STATE_FAILSAFE_HALT || commsFaultLatched) {
+      currentState == STATE_FAILSAFE_PARKING || currentState == STATE_FAILSAFE_HALT ||
+      currentState == STATE_HARD_FAULT || commsFaultLatched) {
     return false;
   }
   return (millis() - lastHeartbeatMs &gt; COMMS_TIMEOUT_MS);
@@ -2458,9 +2620,10 @@ bool checkCommunicationLoss() {
 
 void executeSafeLocalizedCompletion() {
   commsFaultLatched = true;
+  recoveryPingCount = 0;
   if (hasInFlightCap) {
     // Cap is currently gripped: allow state machine to finish depositing
-    // this cap into its assigned bin, then halt at STATE_RETRACT_Z!
+    // this cap into its assigned bin, then park at STATE_RETRACT_Z!
     return;
   }
   // No cap gripped yet: immediately retract Z, open jaws, and park at (0,0)
@@ -2468,13 +2631,14 @@ void executeSafeLocalizedCompletion() {
   pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
   Serial1.write(CMD_RECOVERY_HALT);
   moveGantryToMm(0.0f, 0.0f);
-  currentState = STATE_FAILSAFE_HALT;
+  currentState = STATE_FAILSAFE_PARKING;
 }
 
 void executeMotionStateMachine() {
   switch (currentState) {
     case STATE_IDLE:
     case STATE_HOMING:
+    case STATE_HARD_FAULT:
       break;
 
     // Step 01: Traverse to Cap (X, Y) with Z raised and Gripper open
@@ -2546,10 +2710,10 @@ void executeMotionStateMachine() {
     case STATE_RETRACT_Z:
       if (millis() - stateTimerMs &gt;= 300) {
         if (commsFaultLatched) {
-          // Fail-safe recovery completed in-flight cap drop; now park &amp; halt
+          // Fail-safe recovery completed in-flight cap drop; now return to (0,0)
           Serial1.write(CMD_RECOVERY_HALT);
           moveGantryToMm(0.0f, 0.0f);
-          currentState = STATE_FAILSAFE_HALT;
+          currentState = STATE_FAILSAFE_PARKING;
           return;
         }
 
@@ -2575,19 +2739,30 @@ void executeMotionStateMachine() {
       }
       break;
 
+    case STATE_FAILSAFE_PARKING:
+      if (isGantryAtTarget()) {
+        batchTotal = 0;
+        currentIdx = 0;
+        currentState = STATE_FAILSAFE_HALT;
+      }
+      break;
+
     case STATE_FAILSAFE_HALT:
-      // Safely parked at (0,0); wait for operator reset or new ping
+      // Parked at (0,0); auto-recovers to STATE_IDLE after 3 consecutive 0xF0 pings
       break;
   }
 }
 
 void setup() {
+  pinMode(PIN_SERVO_OE, OUTPUT);
+  digitalWrite(PIN_SERVO_OE, HIGH);  // Hold PCA9685 outputs disabled during power-up
+
   pinMode(PIN_STEPPER_EN, OUTPUT);
   digitalWrite(PIN_STEPPER_EN, LOW); // Enable TMC2208 drivers (Active LOW)
 
-  pinMode(PIN_X_HOME, INPUT_PULLUP); // NC limit switch
-  pinMode(PIN_Y_HOME, INPUT_PULLUP); // NC limit switch
-  pinMode(PIN_Z_HOME, INPUT_PULLUP); // NC limit switch
+  pinMode(PIN_X_HOME, INPUT_PULLUP); // NC limit switch to GND
+  pinMode(PIN_Y_HOME, INPUT_PULLUP); // NC limit switch to GND
+  pinMode(PIN_Z_HOME, INPUT_PULLUP); // NC limit switch to GND
 
   Serial.begin(115200);   // USB Debug
   Serial1.begin(115200);  // Vision Host UART (Level shifted)
@@ -2603,6 +2778,9 @@ void setup() {
 void loop() {
   stepperX.run();
   stepperY.run();
+
+  // Monitor NC limit switches for mid-run overtravel or broken wire
+  checkRuntimeLimitSwitches();
 
   // Poll incoming batch packets &amp; 250ms heartbeat pings
   pollVisionHostPackets();
@@ -2640,8 +2818,8 @@ void setup() {
   config.pin_sscb_sda = 26; config.pin_sscb_scl = 27;
   config.pin_pwdn     = 32; config.pin_reset = -1;
   config.xclk_freq_hz = 20000000;
-  config.pixel_format = PIXFORMAT_RGB565; // Raw 16-bit color (320x240x2 = 153,600 bytes)
-  config.frame_size   = FRAMESIZE_QVGA;   // 320x240
+  config.pixel_format = PIXFORMAT_RGB565;   // Raw 16-bit color (320x240x2 = 153,600 bytes)
+  config.frame_size   = FRAMESIZE_QVGA;     // 320x240
   config.fb_count     = 2;
   config.grab_mode    = CAMERA_GRAB_LATEST; // Always capture freshest frame on trigger
 
@@ -2649,12 +2827,27 @@ void setup() {
     while (true) { delay(1000); }
   }
 
-  // Lock exposure &amp; white balance under fixed diffused LED plate
+  // 1. Allow AWB, AEC, and AGC to converge under diffused LED light plate for 800 ms
   sensor_t *s = esp_camera_sensor_get();
   if (s) {
     s-&gt;set_whitebal(s, 1);
     s-&gt;set_awb_gain(s, 1);
     s-&gt;set_exposure_ctrl(s, 1);
+    s-&gt;set_gain_ctrl(s, 1);
+    delay(800);
+
+    // Flush 2 warm-up frames
+    for (int i = 0; i &lt; 2; i++) {
+      camera_fb_t *warmFb = esp_camera_fb_get();
+      if (warmFb) esp_camera_fb_return(warmFb);
+      delay(50);
+    }
+
+    // 2. Lock AWB, Exposure, and Gain so colored caps never shift hue balance!
+    s-&gt;set_whitebal(s, 0);
+    s-&gt;set_awb_gain(s, 0);
+    s-&gt;set_exposure_ctrl(s, 0);
+    s-&gt;set_gain_ctrl(s, 0);
   }
 
   TeensySerial.begin(921600, SERIAL_8N1, 14, 13);
