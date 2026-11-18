@@ -49,17 +49,17 @@
        NAVIGATION BAR
        ========================================== -->
   <header class="sticky top-0 z-40 bg-[#0a0d14]/90 backdrop-blur-md border-b border-white/10">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+    <div class="w-full max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 h-16 flex items-center justify-between gap-2 lg:gap-3">
       
       <!-- Brand & Version Switcher -->
-      <div class="flex items-center gap-3 shrink-0">
-        <a href="index.html" class="flex items-center gap-3 shrink-0 group">
-          <img src="assets/logo.png" alt="CapSorter Logo" class="h-9 sm:h-10 w-auto object-contain transform group-hover:scale-105 transition-transform shrink-0">
-          <div class="leading-tight whitespace-nowrap hidden md:block border-l border-white/10 pl-3">
-            <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <a href="index.html" class="flex items-center gap-2 shrink-0 group">
+          <img src="assets/logo.png" alt="CapSorter Logo" class="h-8 sm:h-9 w-auto object-contain transform group-hover:scale-105 transition-transform shrink-0">
+          <div class="leading-tight whitespace-nowrap hidden md:block border-l border-white/10 pl-2">
+            <div class="flex items-center gap-1.5">
               <span class="text-[10px] font-mono uppercase text-cyan-300 px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30 font-bold">V2 • Pi Zero 2 W</span>
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 mt-1">
+            <div class="hidden 2xl:flex items-center gap-1.5 text-[10px] font-mono text-slate-400 mt-0.5">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
               <span>by Neil, Kahan and Shourya</span>
             </div>
@@ -67,44 +67,44 @@
         </a>
 
         <!-- V1 / V2 Version Switcher Pill -->
-        <div class="flex items-center p-1 rounded-lg bg-slate-900 border border-white/10 text-[11px] font-mono">
-          <a href="index.html" class="px-2 py-1 rounded text-slate-400 hover:text-white transition-colors" title="Back to Version Selection Portal">Portal</a>
-          <a href="v1.html" class="px-2.5 py-1 rounded text-slate-400 hover:text-orange-300 transition-colors">V1</a>
-          <a href="v2.html" class="px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold">V2</a>
+        <div class="flex items-center p-0.5 rounded-lg bg-slate-900 border border-white/10 text-[10.5px] font-mono shrink-0">
+          <a href="index.html" class="hidden xl:inline-block px-1.5 py-0.5 rounded text-slate-400 hover:text-white transition-colors" title="Back to Version Selection Portal">Portal</a>
+          <a href="v1.html" class="px-2 py-0.5 rounded text-slate-400 hover:text-orange-300 transition-colors">V1</a>
+          <a href="v2.html" class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold">V2</a>
         </div>
       </div>
 
       <!-- Nav Links Pill (with Dynamic Scroll-Spy Selection Indicator) -->
-      <nav id="top-nav-pill" class="hidden lg:flex relative items-center gap-0.5 px-1.5 py-1 rounded-full bg-slate-900/90 border border-white/10 text-xs font-medium text-slate-300 whitespace-nowrap">
+      <nav id="top-nav-pill" class="hidden lg:flex relative items-center gap-0.5 px-1 py-1 rounded-full bg-slate-900/90 border border-white/10 text-[11px] xl:text-[11.5px] font-medium text-slate-300 whitespace-nowrap shrink-0">
         <div id="nav-selection-pill"></div>
-        <a href="#overview" data-section="overview" class="nav-pill-link active px-2.5 py-1 rounded-full hover:text-white transition-all">Overview</a>
-        <a href="#simulator" data-section="simulator" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all flex items-center gap-1">
+        <a href="#overview" data-section="overview" class="nav-pill-link active px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">Overview</a>
+        <a href="#simulator" data-section="simulator" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all flex items-center gap-1">
           <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
           <span>Simulator</span>
         </a>
-        <a href="#architecture" data-section="architecture" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all">Architecture</a>
-        <a href="#mechanical" data-section="mechanical" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all">Mechanics</a>
-        <a href="#bom" data-section="bom" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all">BOM</a>
-        <a href="#roadmap" data-section="roadmap" class="nav-pill-link px-2.5 py-1 rounded-full hover:text-white transition-all">Roadmap</a>
-        <a href="#engineering" data-section="engineering" id="nav-btn-engineering" class="nav-pill-link px-3 py-1 rounded-full text-orange-300 hover:text-orange-200 transition-all flex items-center gap-1">
+        <a href="#architecture" data-section="architecture" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">Architecture</a>
+        <a href="#mechanical" data-section="mechanical" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">Mechanics</a>
+        <a href="#bom" data-section="bom" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">BOM</a>
+        <a href="#roadmap" data-section="roadmap" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">Roadmap</a>
+        <a href="#engineering" data-section="engineering" id="nav-btn-engineering" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full text-cyan-300 hover:text-cyan-200 transition-all flex items-center gap-1">
           <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
           <span>Engineering</span>
         </a>
       </nav>
 
       <!-- CTA Buttons -->
-      <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
-        <a href="pdf_dossier_v2.html" target="_blank" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 flex items-center gap-1.5 transition-all whitespace-nowrap">
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ml-auto lg:ml-0">
+        <a href="pdf_dossier_v2.html" target="_blank" class="hidden sm:flex px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 items-center gap-1.5 transition-all whitespace-nowrap">
           <i data-lucide="file-text" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
-          <span>V2 Dossier</span>
+          <span>V2<span class="hidden xl:inline"> Dossier</span></span>
         </a>
-        <button class="btn-open-poster px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-700 text-cyan-200 border border-cyan-500/30 flex items-center gap-1.5 transition-all whitespace-nowrap" data-poster="assets/system_poster_v2.jpg">
+        <button class="btn-open-poster px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-700 text-cyan-200 border border-cyan-500/30 flex items-center gap-1.5 transition-all whitespace-nowrap" data-poster="assets/system_poster_v2.jpg">
           <i data-lucide="file-image" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
-          <span>Poster 4K</span>
+          <span>Poster<span class="hidden xl:inline"> 4K</span></span>
         </button>
-        <a href="#simulator" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition-all whitespace-nowrap">
-          <i data-lucide="play" class="w-3.5 h-3.5 shrink-0"></i>
-          <span>Run Demo</span>
+        <a href="#simulator" class="px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-bold shadow-md shadow-cyan-500/25 flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0">
+          <i data-lucide="play" class="w-3.5 h-3.5 fill-current shrink-0"></i>
+          <span>Simulation</span>
         </a>
       </div>
     </div>
