@@ -559,7 +559,7 @@
               <tr>
                 <td class="font-bold text-slate-200">TMC2208 × 2</td>
                 <td class="font-mono text-xs">Trinamic SilentStepStick Driver</td>
-                <td>Drives the X and Y NEMA 17 stepper motors with StealthChop2 silence at 1/16 microstepping (80 steps/mm).</td>
+                <td>Drives the X and Y NEMA 17 stepper motors with StealthChop2 silence at 1/8 microstepping (40 steps/mm + 1/256 internal MicroPlyer interpolation).</td>
                 <td class="font-mono text-xs text-slate-300">STEP / DIR / EN</td>
                 <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">12V VMOT / 5V VIO</span></td>
               </tr>
@@ -1064,8 +1064,8 @@
             <ul class="text-xs text-slate-300 space-y-1.5 mb-4">
               <li>• Assemble 2020 extrusion frame &amp; linear rails</li>
               <li>• Install dual NEMA 17 steppers &amp; TMC2208s</li>
-              <li>• Calibrate steps/mm: <span class="font-mono text-cyan-300">200 × 16 / 40 = 80</span> steps/mm</li>
-              <li>• Validate repeatable homing to NC switches</li>
+              <li>• Calibrate steps/mm: <span class="font-mono text-cyan-300">200 × 8 / 40 = 40</span> steps/mm (256 MicroPlyer)</li>
+              <li>• Validate repeatable homing &amp; broken-wire pre-check on NC switches</li>
             </ul>
           </div>
           <div class="p-2.5 rounded bg-slate-900 border border-white/5 text-[11px] text-orange-300 font-mono">
@@ -2934,10 +2934,40 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
         <div class="tech-card p-5">
           <div class="flex items-center gap-2 text-red-400 font-bold text-sm mb-2">
             <i data-lucide="shield-alert" class="w-4 h-4"></i>
-            6. Locked Camera Auto-Exposure &amp; AWB
+            6. Locked AWB/AEC &amp; Full-Sensor 1640×1232 Binning
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
-            By default, <code class="text-red-300">libcamera</code> dynamically shifts white balance (AWB) when a bright red or blue cap enters the board, shifting HSV hue values. Lock <code class="text-red-300">AeEnable=False</code> and <code class="text-red-300">AwbEnable=False</code> in <code class="text-red-300">Picamera2</code> under the fixed diffused LED light plate.
+            In <code class="text-red-300">Picamera2</code>, configuring <code class="text-red-300">raw={"size": (1640, 1232)}</code> forces the 8MP IMX219 into 2×2 full-sensor binning before ISP downscaling to 640×480 (preventing center-crop FOV loss), while locking <code class="text-red-300">AeEnable=False, AwbEnable=False</code> after warm-up.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-cyan-400 font-bold text-sm mb-2">
+            <i data-lucide="cpu" class="w-4 h-4"></i>
+            7. 16 MHz AVR Step Budget (40 steps/mm)
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            On an 8-bit 16 MHz ATmega2560, <code class="text-cyan-300">AccelStepper::run()</code> has a ~4,000 steps/s combined ceiling. Running TMC2208 at 1/8 microstepping (<code class="text-cyan-300">40 steps/mm</code> with 1/256 MicroPlyer interpolation) achieves 70 mm/s (<code class="text-cyan-300">2800 steps/s</code>) and 0.025 mm resolution without CPU saturation.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-orange-400 font-bold text-sm mb-2">
+            <i data-lucide="activity" class="w-4 h-4"></i>
+            8. 64-Byte AVR UART FIFO Pacing &amp; Auto-Recovery
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            <code class="text-orange-300">pi_zero_vision.py</code> streams batches in 32-byte paced chunks (2 ms pause) so the Mega's 64-byte UART FIFO never overflows. After any UART disconnect, 3 consecutive <code class="text-orange-300">0xF0</code> heartbeats auto-recover the Mega from <code class="text-orange-300">STATE_FAILSAFE_HALT</code>.
+          </p>
+        </div>
+
+        <div class="tech-card p-5">
+          <div class="flex items-center gap-2 text-emerald-400 font-bold text-sm mb-2">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            9. Specular Glare Closing, 24mm NMS &amp; NC Wire Guard
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            <code class="text-emerald-300">MORPH_CLOSE</code> seals specular highlights on glossy cap domes and 24 mm Spatial NMS prevents duplicate picks. On the Mega, Pin 9 holds PCA9685 <code class="text-emerald-300">OE</code> HIGH during boot to eliminate servo twitch and NC switches are monitored continuously in <code class="text-emerald-300">loop()</code>.
           </p>
         </div>
 
