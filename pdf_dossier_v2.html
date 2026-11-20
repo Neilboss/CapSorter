@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Autonomous Bottle-Cap Sorting Machine | Comprehensive Technical Dossier</title>
-  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CapSorter V2 (Pi Zero 2 W) | Comprehensive Technical Dossier</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png?v=3">
   <style>
     /* ==========================================================================
        Print & Pagination Setup for PDF Generation
@@ -322,15 +323,115 @@
     }
     .flow-arrow {
       text-align: center;
-      color: #ff6b00;
+      color: #00d2ff;
       font-size: 8pt;
       font-weight: bold;
       line-height: 1;
       margin: 1mm 0;
     }
+
+    /* Screen-Only Paper Presentation & Floating Toolbar (Print Layout Unchanged) */
+    .screen-toolbar {
+      display: none;
+    }
+    @media screen {
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background: radial-gradient(ellipse 900px 480px at 50% 0%, rgba(0, 210, 255, 0.09), transparent 70%), #070a10;
+        padding: 0 16px 48px;
+        font-size: 10.5pt;
+      }
+      .screen-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        max-width: 960px;
+        margin: 0 auto 20px;
+        padding: 12px 18px;
+        background: rgba(10, 13, 20, 0.92);
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(0, 210, 255, 0.22);
+        border-top: none;
+        border-radius: 0 0 14px 14px;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+      }
+      .toolbar-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .toolbar-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #141b2b;
+        color: #e2e8f0;
+        transition: all 0.2s ease;
+      }
+      .toolbar-btn:hover {
+        background: #1e293b;
+        border-color: rgba(0, 210, 255, 0.35);
+        color: #ffffff;
+      }
+      .toolbar-btn-primary {
+        background: #00d2ff;
+        border-color: #38bdf8;
+        color: #06101c;
+        font-weight: 700;
+      }
+      .toolbar-btn-primary:hover {
+        background: #38bdf8;
+        color: #06101c;
+      }
+      .page {
+        max-width: 960px;
+        margin: 0 auto 28px;
+        padding: 28px 34px 48px;
+        background: #0d121d;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        box-shadow: 0 20px 55px rgba(0, 0, 0, 0.6);
+        min-height: auto;
+      }
+      .doc-footer {
+        position: static;
+        margin-top: 24px;
+        padding-top: 10px;
+      }
+      @media (max-width: 720px) {
+        .page { padding: 18px 16px 28px; }
+        .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      }
+    }
+    @media print {
+      .screen-toolbar { display: none !important; }
+    }
   </style>
 </head>
 <body>
+  <div class="screen-toolbar">
+    <div class="toolbar-group">
+      <a href="v2.html" class="toolbar-btn">&larr; Back to CapSorter V2</a>
+      <a href="pdf_dossier.html" class="toolbar-btn">View V1 Dossier</a>
+    </div>
+    <div class="toolbar-group">
+      <button type="button" onclick="window.print()" class="toolbar-btn toolbar-btn-primary">Print / Save as PDF</button>
+    </div>
+  </div>
 
   <!-- =========================================================================
        PAGE 1: COVER PAGE & EXECUTIVE SUMMARY
@@ -384,9 +485,9 @@
           <div style="color: #38bdf8; font-size: 6.5pt;">10×10 Grid (30mm Pitch)</div>
         </div>
         <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Pick Cycle Time</div>
-          <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">~4–6 s / cap</div>
-          <div style="color: #34d399; font-size: 6.5pt;">4 Colours (R, Y, G, B)</div>
+          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Pick Cycle Time (Est.)</div>
+          <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">~5–13 s / cap</div>
+          <div style="color: #34d399; font-size: 6.5pt;">Pending Bench Timing</div>
         </div>
         <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
           <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Connectivity</div>
@@ -438,9 +539,9 @@
         </p>
       </div>
       <div class="card card-purple" style="margin: 0;">
-        <h4>Fail-Safe Recovery</h4>
+        <h4>Fail-Safe Halt</h4>
         <p style="font-size: 7pt; margin-top: 1mm; color: #94a3b8;">
-          Completes in-flight pickup and placement safely if inter-controller communication is severed mid-operation.
+          Latches a safe controlled halt on UART loss or limit/E-stop trip, requiring explicit operator re-arm &amp; re-homing.
         </p>
       </div>
     </div>
@@ -477,19 +578,19 @@
           <tr>
             <td><strong style="color: #34d399;">Arduino Mega 2560</strong></td>
             <td class="font-mono">ATmega2560 AVR @ 16 MHz, 54 I/O</td>
-            <td>Real-time deterministic motion control: AccelStepper pulse generation, homing sequence, limit switch ISR monitoring, PCA9685 I2C sequencing, and fail-safe recovery watchdog.</td>
+            <td>Real-time motion control: AccelStepper pulse generation, homing sequence, polled X/Y/Z NC limits &amp; E-stop sense, PCA9685 I2C sequencing, and comms watchdog.</td>
             <td><span class="badge badge-orange">5.0V Logic</span></td>
           </tr>
           <tr>
             <td><strong style="color: #c084fc;">PCA9685</strong></td>
             <td class="font-mono">16-Channel 12-Bit PWM Driver (I2C)</td>
-            <td>Offloads analog servo pulse width generation (50 Hz) from the Mega, guaranteeing rock-steady jitter-free holding torque on Z-linkage and gripper servos.</td>
+            <td>Offloads analog servo pulse width generation (50 Hz) from the Mega with active-LOW OE startup/fault suppression on Z-linkage and gripper servos.</td>
             <td><span class="badge badge-purple">5V VCC / 5V V+</span></td>
           </tr>
           <tr>
             <td><strong style="color: #e2e8f0;">TMC2208 × 2</strong></td>
             <td class="font-mono">Trinamic SilentStepStick Driver</td>
-            <td>Ultra-quiet, resonance-free driving of X and Y NEMA 17 steppers using StealthChop2 technology with up to 1/16 microstepping.</td>
+            <td>StealthChop2 driving of X and Y NEMA 17 steppers at 1/8 microstepping (MS1/MS2=GND -> 40 steps/mm nominal + 1/256 internal MicroPlyer).</td>
             <td><span class="badge badge-orange">12V VMOT / 5V VIO</span></td>
           </tr>
         </tbody>
@@ -499,32 +600,32 @@
     <!-- Communication Pipeline Visual Block -->
     <div class="card" style="margin-top: 3mm;">
       <div style="font-weight: bold; font-size: 7.5pt; color: #38bdf8; margin-bottom: 2mm; text-transform: uppercase;">
-        Hierarchical Wired Communication Pipeline
+        V2 Consolidated Wired Communication Pipeline
       </div>
       <div class="grid-3" style="text-align: center; font-size: 7.5pt;">
         <div style="background: #0d121d; border: 1px solid rgba(255,107,0,0.3); border-radius: 4px; padding: 2.5mm;">
-          <div style="color: #ff9142; font-weight: bold;">ESP32-CAM</div>
-          <div style="font-size: 6.5pt; color: #94a3b8;">Sensor Acquisition</div>
-          <div style="margin: 1.5mm 0; font-size: 8pt; color: #38bdf8;">⇣ 921,600 Baud UART ⇣</div>
-          <div style="font-size: 6.5pt; color: #cbd5e1;">Raw RGB565 Framed Bytes</div>
+          <div style="color: #ff9142; font-weight: bold;">8MP IMX219 160° CSI</div>
+          <div style="font-size: 6.5pt; color: #94a3b8;">(or Calibrated USB Webcam)</div>
+          <div style="margin: 1.5mm 0; font-size: 8pt; color: #38bdf8;">⇣ MIPI CSI-2 DMA / USB ⇣</div>
+          <div style="font-size: 6.5pt; color: #cbd5e1;">640×480 RGB888 Frames</div>
         </div>
         <div style="background: #0d121d; border: 1px solid rgba(0,210,255,0.4); border-radius: 4px; padding: 2.5mm;">
-          <div style="color: #38bdf8; font-weight: bold;">Teensy 4.1</div>
-          <div style="font-size: 6.5pt; color: #94a3b8;">Vision & Sorting Planner</div>
+          <div style="color: #38bdf8; font-weight: bold;">Raspberry Pi Zero 2 W</div>
+          <div style="font-size: 6.5pt; color: #94a3b8;">OpenCV Vision &amp; Planner</div>
           <div style="margin: 1.5mm 0; font-size: 8pt; color: #34d399;">⇣ 115,200 Baud (Level Shifted) ⇣</div>
-          <div style="font-size: 6.5pt; color: #cbd5e1;">Atomic Task List & Heartbeat</div>
+          <div style="font-size: 6.5pt; color: #cbd5e1;">READY Handshake, CRC16 Batch &amp; Heartbeat</div>
         </div>
         <div style="background: #0d121d; border: 1px solid rgba(16,185,129,0.4); border-radius: 4px; padding: 2.5mm;">
           <div style="color: #34d399; font-weight: bold;">Arduino Mega 2560</div>
-          <div style="font-size: 6.5pt; color: #94a3b8;">Motion & Safety Watchdog</div>
+          <div style="font-size: 6.5pt; color: #94a3b8;">Motion &amp; Safety Watchdog</div>
           <div style="margin: 1.5mm 0; font-size: 8pt; color: #c084fc;">⇣ STEP/DIR + I2C ⇣</div>
-          <div style="font-size: 6.5pt; color: #cbd5e1;">Steppers, Servos, Limit Switches</div>
+          <div style="font-size: 6.5pt; color: #cbd5e1;">Steppers, Servos, X/Y/Z Limits &amp; E-Stop</div>
         </div>
       </div>
     </div>
 
     <div class="callout callout-warning">
-      <strong>Important Engineering Rule:</strong> The ESP32-CAM does not perform image analytics; it acts exclusively as a wired video digitizer. The Teensy 4.1 performs all computer vision calculations, filtering, and trajectory optimization. The Arduino Mega receives fully calculated millimeter coordinates and is completely shielded from vision processing overhead.
+      <strong>V2 Architectural Partitioning Rule:</strong> The Raspberry Pi Zero 2 W consolidates camera acquisition, validated lens undistortion (fisheye or pinhole), HSV segmentation, homography mapping, and path planning on Linux/OpenCV, while the Arduino Mega 2560 remains strictly dedicated to real-time stepper/servo timing, polled X/Y/Z NC limit sensing, and fail-safe halt supervision.
     </div>
 
     <div class="doc-footer">
@@ -732,7 +833,7 @@
           The 8MP IMX219 160° camera streams frames over the 22-pin Pi Zero CSI port via Picamera2. Precomputed lookup maps remove radial barrel curvature in ~5 ms:
         </p>
         <div class="code-box">
-raw = picam2.capture_array("main") # 640x480 BGR888 (~20 ms)
+raw = picam2.capture_array("main") # 640x480 Picamera2 RGB888 ([B,G,R] in memory, ~20 ms)
 rectified = cv2.remap(raw, map1, map2, cv2.INTER_LINEAR)</div>
       </div>
 
@@ -806,7 +907,7 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
 
     <h2><span class="sec-num">05.</span> Electrical Architecture & 3-Branch Power Distribution</h2>
     <p>
-      Inductive motor noise and high servo stall currents are the leading causes of spontaneous microcontroller resets in robotics projects. To eliminate brownouts and voltage transients, power distribution is partitioned into <strong>three electrically isolated branches</strong> derived from a central 12V 10A (120W) switched-mode power supply (SMPS).
+      Inductive motor noise and high servo stall currents are common causes of SBC undervoltage and MCU resets. Power distribution is partitioned into <strong>three separate regulated branches sharing a common star ground</strong> (not galvanically isolated) from a 12V 10A (120W) SMPS. Combined Branch B (5V/5A) and Branch C (5V/3A) equal 40W rated output (~45–47W drawn at 12V input at ~85–90% efficiency); confirm exact buck SKUs, wire gauges, fuses, and connector ratings before build.
     </p>
 
     <!-- 3-Branch Power Breakdown Cards -->
@@ -816,16 +917,16 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
       <div class="card card-orange" style="margin: 0;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h4 style="color: #ff9142;">Branch A: Steppers</h4>
-          <span class="badge badge-orange">12V Direct</span>
+          <span class="badge badge-orange">12V Direct (E-Stop Cut)</span>
         </div>
         <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1.5mm;">
-          Direct 12V rail supplying VMOT to both TMC2208 stepper motor driver modules.
+          Direct 12V rail (switched via dual-pole hardware E-stop) supplying VMOT to both TMC2208 modules.
         </p>
         <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
-          <li>• TMC2208 X-Axis ⟶ NEMA 17 (1.3 A)</li>
-          <li>• TMC2208 Y-Axis ⟶ NEMA 17 (1.3 A)</li>
+          <li>• TMC2208 X-Axis ⟶ NEMA 17 (verify SKU)</li>
+          <li>• TMC2208 Y-Axis ⟶ NEMA 17 (verify SKU)</li>
           <li>• 100 µF low-ESR capacitors on VMOT</li>
-          <li>• Dedicated 5.0A fast-acting inline fuse</li>
+          <li>• 5.0A fast-acting fuse + 18 AWG wiring</li>
         </ul>
       </div>
 
@@ -833,16 +934,16 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
       <div class="card card-purple" style="margin: 0;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h4 style="color: #c084fc;">Branch B: Servos</h4>
-          <span class="badge badge-purple">5V / 5A Buck</span>
+          <span class="badge badge-purple">5V / 5A Buck (E-Stop Cut)</span>
         </div>
         <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1.5mm;">
-          Isolated high-efficiency buck converter feeding the high-current PCA9685 V+ rail.
+          Separate high-current buck converter (12V input switched via E-stop) feeding PCA9685 V+. Verify MG90S SKU voltage (TowerPro original = 4.8V nominal).
         </p>
         <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
-          <li>• PCA9685 Channel 0 ⟶ MG90S (Z-Axis)</li>
-          <li>• PCA9685 Channel 1 ⟶ MG90S (Gripper)</li>
-          <li>• Absorbs 1.8A instantaneous stall spikes</li>
-          <li>• Dedicated 3.0A fast-acting inline fuse</li>
+          <li>• PCA9685 CH0 ⟶ Z-Axis Servo</li>
+          <li>• PCA9685 CH1 ⟶ Gripper Servo</li>
+          <li>• 1000 µF bulk cap on V+ (verify board rating)</li>
+          <li>• 3.0A fuse + 18 AWG wiring</li>
         </ul>
       </div>
 
@@ -853,12 +954,12 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
           <span class="badge badge-cyan">5V / 3A Regulated</span>
         </div>
         <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1.5mm;">
-          Clean, noise-free regulated 5V line powering microcontrollers and logic ICs.
+          Separate regulated 5V logic rail (stays live during E-stop to protect the Pi SD card; common star GND).
         </p>
         <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
-          <li>• Arduino Mega 2560 5V/VIN pin</li>
-          <li>• Teensy 4.1 VIN (internally regulated 3.3V)</li>
-          <li>• ESP32-CAM 5V input rail</li>
+          <li>• Raspberry Pi Zero 2 W 5V (Pins 2/4 or USB PWR)</li>
+          <li>• 8MP IMX219 camera powered via Pi CSI port</li>
+          <li>• Arduino Mega 2560 5V pin (NOT VIN; avoid USB backfeed)</li>
           <li>• PCA9685 VCC logic supply</li>
         </ul>
       </div>
@@ -867,32 +968,31 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
 
     <!-- Mandatory Level Shifter Safety Warning -->
     <div class="callout callout-danger">
-      <strong style="font-size: 8pt; display: block; margin-bottom: 1mm;">⚠️ MANDATORY LOGIC LEVEL SHIFTER SPECIFICATION:</strong>
-      The Arduino Mega 2560 operates strictly on <strong>5.0V TTL logic</strong>. The Teensy 4.1 and ESP32-CAM operate strictly on <strong>3.3V LVCMOS logic and are NOT 5V tolerant</strong>. Exposing Teensy Pin 0 (RX1) directly to Arduino Mega Pin 18 (TX1, 5V) will cause irreversible dielectric breakdown of the ARM Cortex-M7 I/O ring. A dedicated bidirectional logic level shifter (TXS0108E or BSS138-based MOSFET shifter) must be placed between Mega TX1 and Teensy RX1. Teensy Pin 1 (TX1, 3.3V) can connect directly to Mega Pin 19 (RX1) because the ATmega2560 recognizes 3.3V as a logic HIGH (V_{IH} = 0.6 × V_{CC} = 3.0V).
+      <strong style="font-size: 8pt; display: block; margin-bottom: 1mm;">⚠️ MANDATORY LOGIC LEVEL SHIFTER SPECIFICATION (PI ZERO 2 W):</strong>
+      The Arduino Mega 2560 operates strictly on <strong>5.0V TTL logic</strong>. The Raspberry Pi Zero 2 W GPIO header operates strictly on <strong>3.3V LVCMOS logic — NO pins are 5V tolerant</strong>. Exposing Pi Pin 10 (GPIO15/RXD0) directly to Mega Pin 18 (TX1, 5V) will permanently damage the BCM2710A1 SoC. Route <strong>BOTH TXD0 and RXD0</strong> through a 4-channel bidirectional level shifter (HV=5V, LV=3.3V) so Mega RX1 also receives full 5V noise margin.
     </div>
 
     <!-- Power Tree Schematic ASCII / Visual Diagram -->
     <div class="card">
       <div style="font-weight: bold; font-size: 7.5pt; color: #ff9142; margin-bottom: 2mm; text-transform: uppercase;">
-        Electrical Power Flow & Star Grounding Topology
+        V2 Electrical Power Flow, Hardwired E-Stop Cutoff &amp; Star Grounding Topology
       </div>
-      <div class="code-box" style="font-size: 7pt; line-height: 1.3;">
+      <div class="code-box" style="font-size: 6.8pt; line-height: 1.3;">
 +-------------------+
-|  12V, 10A SMPS    | ────── Master 10A Fuse ──┬── [BRANCH A: 12V Direct] ────────> TMC2208 Motor VMOT (X & Y Steppers)
-|  (120W DC Supply) |                          │
-+-------------------+                          ├── [BRANCH B: 12V -> 5V/5A Buck] ─> PCA9685 V+ Power Terminal (Servos)
-         │                                     │
-    Common GND Star Point                      └── [BRANCH C: 12V -> 5V/3A Buck] ─┬─> Arduino Mega 2560 5V Pin
-         │                                                                        ├─> Teensy 4.1 VIN Pin
-         └───────────── Tied to Single Earth Terminal Chassis                     ├─> ESP32-CAM 5V Pin
-                                                                                  └─> PCA9685 VCC Logic Pin</div>
+|  12V, 10A SMPS    | ── Master 10A Fuse ─┬─ [E-STOP POLE 1 (NC, >=10A)] ─┬─ [BRANCH A: 12V Direct, 5A Fuse] ───> TMC2208 VMOT (X &amp; Y)
+|  (120W DC Supply) |                     │                               └─ [BRANCH B: 12V->5V/5A Buck, 3A] ──> PCA9685 V+ (Servos)
++-------------------+                     │
+         │                                └─ [BRANCH C: 12V->5V/3A Buck] ──┬─> Raspberry Pi Zero 2 W 5V (Pins 2/4 or PWR IN) + CSI Cam
+    Common GND Star Point                                                  ├─> Arduino Mega 2560 5V Pin (NOT VIN; check USB backfeed)
+    (Non-Isolated Return)                                                  ├─> PCA9685 VCC Logic Pin &amp; Level Shifter HV Ref
+    [E-STOP POLE 2 (NC)] ──────────────────────────────────────────────────┴─> Mega Pin 25 (PIN_ESTOP, INPUT_PULLUP -> STATE_HARD_FAULT)</div>
     </div>
 
     <!-- Grounding Best Practices -->
     <div class="card card-emerald">
       <h4 style="color: #34d399; margin-bottom: 1mm;">Single-Point Star Grounding Protocol</h4>
       <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-        High-current return paths from the NEMA 17 stepper coils and MG90S servos must never share return PCB traces with sensitive 3.3V logic grounds. All ground wires must route back independently to a <strong>single-point star grounding terminal</strong> located adjacent to the 12V SMPS negative terminal. This eliminates ground bounce and ground loops that trigger false limit switch interrupts.
+        High-current return paths from the NEMA 17 stepper coils and MG90S servos must never share return PCB traces with sensitive 3.3V logic grounds. All ground wires must route back independently to a <strong>single-point star grounding terminal</strong> located adjacent to the 12V SMPS negative terminal. This reduces ground bounce and ground loops that could trigger false limit switch readings.
       </p>
     </div>
 
@@ -970,11 +1070,11 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
           <!-- Mega to TMC2208 X-Axis -->
           <tr>
             <td><strong style="color: #e2e8f0;">Mega ⟶ TMC2208 (X)</strong></td>
-            <td class="font-mono">Mega Pin 2 (or 54)</td>
+            <td class="font-mono">Mega Pin 2</td>
             <td class="font-mono">Driver STEP Pin</td>
             <td>X-Axis stepper pulse train</td>
             <td><span class="badge badge-orange">5V Logic VIO</span></td>
-            <td>Up to 20 kHz pulse rate via AccelStepper</td>
+            <td>2.8 kHz max (70 mm/s nominal; &lt;4 kHz AVR AccelStepper ceiling)</td>
           </tr>
           <tr>
             <td><strong style="color: #e2e8f0;">Mega ⟶ TMC2208 (X)</strong></td>
@@ -1066,9 +1166,17 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
             <td><strong style="color: #34d399;">Limit Switches ⟶ Mega</strong></td>
             <td class="font-mono">NC Contact Pin</td>
             <td class="font-mono">Mega Pin 24</td>
-            <td>Z-Axis Retracted Home Switch</td>
+            <td>Z-Axis Overtravel / Retract NC Switch</td>
             <td><span class="badge badge-emerald">5V Internal Pull-Up</span></td>
-            <td>Normally Closed: open circuit = fault/endstop</td>
+            <td>Polled in loop (Port A has no ISR); open = fault/endstop</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #f87171;">E-Stop Aux Pole ⟶ Mega</strong></td>
+            <td class="font-mono">Latching E-Stop Pole 2</td>
+            <td class="font-mono">Mega Pin 25</td>
+            <td>Hardwired E-Stop State Sense (NC to GND)</td>
+            <td><span class="badge badge-red">5V Internal Pull-Up</span></td>
+            <td>Latches STATE_HARD_FAULT; Pole 1 cuts 12V actuator power</td>
           </tr>
         </tbody>
       </table>
@@ -1180,28 +1288,28 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
 
     <!-- Communication-Loss Safe Recovery Architecture -->
     <div class="card card-orange" style="margin-top: 3mm;">
-      <h3 style="color: #ff9142; margin-bottom: 1.5mm;">Autonomous Communication-Loss Recovery Architecture</h3>
+      <h3 style="color: #ff9142; margin-bottom: 1.5mm;">Fail-Closed Communication-Loss Halt &amp; Re-Arm Policy</h3>
       <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-        A major failure mode in distributed robotic systems is host communication loss mid-trajectory. If an embedded system depends on receiving continuous streaming instructions, an unexpected cable disconnect or Teensy reboot could leave the gripper stranded holding a cap mid-air, risking collision or motor burnout.
+        Because the default gripper has no physical cap-presence or grip-force sensor (<code>HAS_GRIP_SENSOR == 0</code>), firmware never assumes a cap was gripped on UART loss. The Raspberry Pi Zero 2 W maintains 250 ms heartbeats across the entire batch via per-cap <code>CMD_CAP_PROGRESS</code> updates.
       </p>
       
       <div class="grid-3" style="font-size: 7.5pt; margin-top: 2mm;">
         <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #ff9142;">
-          <strong style="color: #ff9142;">1. Atomic Batch Plan Storage</strong>
+          <strong style="color: #ff9142;">1. READY Handshake &amp; CRC16</strong>
           <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
-            The Teensy transmits the entire batch sorting plan (up to 100 caps) with batch IDs and CRC16 checksums before physical motion commences. The Mega stores this plan in local SRAM.
+            Pi Zero 2 W polls <code>CMD_QUERY_STATUS</code> and waits for <code>CMD_STATUS_READY</code> after homing before transmitting a CRC16-CCITT batch (32-byte chunks, 2 ms pause).
           </p>
         </div>
         <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #38bdf8;">
-          <strong style="color: #38bdf8;">2. In-Flight Cap Safe Completion</strong>
+          <strong style="color: #38bdf8;">2. Safe Controlled Halt</strong>
           <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
-            If the UART link drops while a cap is being picked or carried, the Mega recognizes the heartbeat loss but <strong>completes depositing that specific cap into its assigned bin</strong>.
+            If heartbeats stop (&gt;1.2 s), Mega immediately halts XY travel, raises Z (preserving jaw state), disables steppers, and emits <code>CMD_RECOVERY_HALT</code> without blind bin travel.
           </p>
         </div>
         <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #34d399;">
-          <strong style="color: #34d399;">3. Safe Retraction & Park</strong>
+          <strong style="color: #34d399;">3. Explicit Operator Re-Arm</strong>
           <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
-            After releasing the in-flight cap, the Z-axis fully retracts to height 0 mm, further pickups are suppressed, the carriage returns to safe parking (0, 0), and enters a safe standby state.
+            Heartbeat pings never auto-clear a halt. Leaving <code>STATE_FAILSAFE_HALT</code> or <code>STATE_HARD_FAULT</code> requires explicit <code>CMD_REARM_HOME</code> + full re-homing.
           </p>
         </div>
       </div>
@@ -1210,15 +1318,15 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
     <!-- Safety Circuits -->
     <div class="grid-2" style="margin-top: 3mm;">
       <div class="card card-emerald" style="margin: 0;">
-        <h4 style="color: #34d399;">Normally Closed (NC) Endstops</h4>
+        <h4 style="color: #34d399;">Normally Closed (NC) Polled Endstops</h4>
         <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.35; margin-top: 1mm;">
-          All limit switches utilize Normally Closed contacts held at 5V logic via internal pull-ups. If a cable snags or disconnects, the circuit breaks instantly, triggering an immediate hardware e-stop interrupt.
+          X, Y, and Z limit switches (Pins 22–24, Port A — no AVR ISR) are polled in <code>loop()</code> with 3-sample debounce. Any open contact or wire break latches <code>STATE_HARD_FAULT</code> and disables stepper &amp; servo outputs.
         </p>
       </div>
       <div class="card card-red" style="margin: 0;">
-        <h4 style="color: #f87171;">Hardware Master Emergency Stop</h4>
+        <h4 style="color: #f87171;">Hardwired Dual-Pole E-Stop</h4>
         <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.35; margin-top: 1mm;">
-          A latching red mushroom E-Stop button cuts the primary 12V supply to the TMC2208 drivers and servo buck. Logic remains energized to report telemetry while hazardous actuator movement halts in &lt;10 µs.
+          Pole 1 cuts 12V actuator power (Branch A steppers + Branch B servo buck) independently of firmware while Branch C keeps Pi Zero 2 W live (protecting the microSD). Pole 2 signals Mega Pin 25 so reset requires deliberate re-arm; counterbalance Z against gravity drop and measure actual stop distance on the machine.
         </p>
       </div>
     </div>
@@ -1365,17 +1473,17 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
           <tr>
             <td class="font-mono">14</td>
             <td><strong style="color: #c084fc;">5V 5A Buck Converter</strong></td>
-            <td class="font-mono">High-efficiency step-down (12V ⟶ 5V)</td>
+            <td class="font-mono">Step-down (12V ⟶ 5V; verify IC &amp; servo voltage SKU)</td>
             <td class="font-mono">1</td>
-            <td>Dedicated high-current servo power rail (PCA9685 V+)</td>
+            <td>Separate regulated servo rail (PCA9685 V+, common star GND)</td>
             <td><span class="badge badge-orange">To Purchase</span></td>
           </tr>
           <tr>
             <td class="font-mono">15</td>
             <td><strong style="color: #38bdf8;">5V 3A Logic Buck</strong></td>
-            <td class="font-mono">Regulated step-down for microcontrollers</td>
+            <td class="font-mono">Regulated step-down for Pi Zero 2 W &amp; Mega</td>
             <td class="font-mono">1</td>
-            <td>Stable logic rail for Mega, Teensy 4.1, ESP32-CAM</td>
+            <td>Separate regulated logic rail for Pi Zero 2 W, IMX219 &amp; Mega 5V pin</td>
             <td><span class="badge badge-orange">To Purchase</span></td>
           </tr>
           <tr>
@@ -1383,15 +1491,15 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
             <td><strong style="color: #f87171;">Logic Level Shifter</strong></td>
             <td class="font-mono">4-Channel bidirectional (5.0V ⇄ 3.3V)</td>
             <td class="font-mono">1</td>
-            <td>Protects Teensy 3.3V RX from Mega 5.0V TX</td>
+            <td>Shifts BOTH Pi Zero 2 W TXD0 &amp; RXD0 (no 5V-tolerant Pi pins)</td>
             <td><span class="badge badge-orange">To Purchase</span></td>
           </tr>
           <tr>
             <td class="font-mono">17</td>
-            <td><strong>NC Limit Switches & E-Stop</strong></td>
-            <td class="font-mono">Roller-lever microswitches + Latching E-Stop</td>
+            <td><strong>NC Limit Switches &amp; Dual-Pole E-Stop</strong></td>
+            <td class="font-mono">Roller-lever NC switches + Dual-pole latching E-Stop (&ge;10A)</td>
             <td class="font-mono">3 + 1</td>
-            <td>Homing endstops and master hardware power cutoff</td>
+            <td>X/Y/Z NC limits, hardwired 12V actuator cutoff &amp; Pin 25 sense</td>
             <td><span class="badge badge-orange">To Purchase</span></td>
           </tr>
         </tbody>
@@ -1430,7 +1538,7 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
           <span class="badge badge-emerald">Complete</span>
         </div>
         <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
-          Validate ESP32-CAM UART frame streaming to Teensy 4.1. Calibrate HSV segmentation and planar homography matrix.
+          Run checkerboard intrinsic calibration &amp; 4-corner fiducial homography on Pi Zero 2 W (separately for CSI IMX219 fisheye or USB pinhole webcam).
         </p>
         <div style="font-size: 6.5pt; color: #34d399; font-weight: bold; margin-top: 1.5mm;">
           Milestone: Accurate cap detection and millimeter localization without internet.
@@ -1477,10 +1585,10 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
           <span class="badge badge-orange">Next</span>
         </div>
         <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
-          Connect Teensy Serial1 to Mega Serial1 via logic shifter. Test framed packet batch transfers and simulate cable loss.
+          Connect Pi Zero 2 W UART0 (/dev/serial0) to Mega Serial1 via bidirectional level shifter. Verify READY handshake, CRC16 batch transfer, and fail-safe halt on link cut.
         </p>
         <div style="font-size: 6.5pt; color: #ff9142; font-weight: bold; margin-top: 1.5mm;">
-          Milestone: Mega completes in-flight cap safely when UART connection is severed.
+          Milestone: Safe halt &amp; explicit operator re-arm verified when UART link is severed.
         </div>
       </div>
 
@@ -1522,10 +1630,10 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
     <div class="card" style="margin: 0;">
       <h4 style="color: #ff9142; margin-bottom: 1.5mm;">Recommended Engineering Execution Order</h4>
       <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-        <strong>Step 1:</strong> Confirm that the Teensy 4.1 receives and decodes raw QVGA frames from the ESP32-CAM reliably.<br>
-        <strong>Step 2:</strong> Assemble the XY gantry and confirm TMC2208 stepper steps/mm calibration.<br>
-        <strong>Step 3:</strong> Validate that the MG90S Z-axis vertical linkage reliably lifts the gripper assembly without gear slipping.<br>
-        <strong>Step 4:</strong> Interconnect Teensy and Mega, validating the fail-safe communication recovery protocol under active motion.
+        <strong>Step 1:</strong> Calibrate the exact installed camera (8MP IMX219 CSI fisheye or USB pinhole webcam) via <code>fisheye_calibrate.py</code> and verify grid error across board edges.<br>
+        <strong>Step 2:</strong> Assemble the XY gantry, confirm TMC2208 carrier R_sense &amp; V_ref, and measure actual steps/mm and homing from max travel.<br>
+        <strong>Step 3:</strong> Validate MG90S Z-axis counterbalance, servo SKU voltage, and safe Z settle when hardwired E-stop cuts actuator power.<br>
+        <strong>Step 4:</strong> Interconnect Pi Zero 2 W and Mega via the bidirectional level shifter, validating READY handshake, dynamic heartbeats, and fail-closed halt under link loss.
       </p>
     </div>
 
@@ -1557,19 +1665,19 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
       <div class="card card-orange" style="margin: 0;">
         <h4 style="color: #ff9142;">1. TMC2208 Vref Calculation & Thermals</h4>
         <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
-          The NEMA 17 motors are rated at 1.3 A per phase. Standard TMC2208 carrier boards with small heatsinks cannot sustain 1.3 A RMS continuously without triggering internal overtemperature thermal shutdown (T_J > 150^°C).
+          Inspect the exact R_sense resistor on your TMC2208 carrier (commonly 0.11 Ω). Using the ADI TMC2208 Datasheet Rev 1.13 equation (30 mΩ internal sense path):
         </p>
         <div class="code-box">
-I_RMS = V_ref / (1.414 * R_sense)  [For R_sense = 0.11 Ω]
-Set V_ref = 1.15 V  ⟶  I_RMS ≈ 0.74 A (Peak: 1.05 A)
-Sufficient torque for gantry acceleration with safe thermal headroom.</div>
+I_RMS = (0.325 V / (R_sense + 0.03 Ω)) * (1 / 1.414) * (V_ref / 2.5 V)
+At R_sense = 0.11 Ω, V_ref = 1.15 V ⟶ I_RMS ≈ 0.75 A (Peak: ~1.07 A)
+Verify actual phase current &amp; heatsink temperature on the bench.</div>
       </div>
 
-      <!-- 2. Servo Power Isolation -->
+      <!-- 2. Servo Power Decoupling -->
       <div class="card card-purple" style="margin: 0;">
-        <h4 style="color: #c084fc;">2. Servo Power Isolation & Inrush Currents</h4>
+        <h4 style="color: #c084fc;">2. Separate Servo Rail &amp; SKU Verification</h4>
         <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
-          <strong>Never power servos from the Arduino Mega 5V regulator pin!</strong> The onboard linear regulator can only supply ~500 mA before entering thermal shutdown. Two MG90S servos under active clamping draw transient stall current spikes up to 1.8 A. Powering them via the Mega will cause immediate brownouts and CPU reboot loops.
+          <strong>Never power servos from the Raspberry Pi or Mega 5V pin!</strong> Feed PCA9685 V+ from Branch B (separate regulated buck, common star GND) with a 1000 µF cap. Verify your exact MG90S SKU voltage rating (original TowerPro MG90S specifies 4.8 V nominal) and PCA9685 V+ terminal limits.
         </p>
       </div>
 
@@ -1623,19 +1731,19 @@ Sufficient torque for gantry acceleration with safe thermal headroom.</div>
         </thead>
         <tbody>
           <tr>
-            <td style="color: #f87171;">Teensy reboots or halts during image transfer</td>
-            <td>UART baud rate timing mismatch or buffer overflow</td>
-            <td>Verify Serial2 buffer is enlarged via `SERIAL2_RX_BUFFER_SIZE 1024`. Ensure baud rate is locked to 921,600 baud.</td>
+            <td style="color: #f87171;">Pi Zero 2 W refuses to start with CalibrationError</td>
+            <td>Missing, placeholder, or mismatched camera calibration .npz</td>
+            <td>Run <code>fisheye_calibrate.py</code> with real checkerboards &amp; fiducials matching active camera (<code>picamera2_imx219</code> vs <code>usb_v4l2</code>).</td>
           </tr>
           <tr>
-            <td style="color: #f87171;">Mega resets when gripper clamps cap</td>
+            <td style="color: #f87171;">Mega or Pi resets when gripper clamps cap</td>
             <td>Servo inrush current causing logic voltage dip</td>
-            <td>Ensure Branch B (Servos) is powered via dedicated 5V 5A buck and decoupling capacitor (1000\,µF) is on PCA9685 V+.</td>
+            <td>Ensure Branch B (Servos) uses its separate 5V 5A buck with 1000 µF cap on PCA9685 V+ and star GND.</td>
           </tr>
           <tr>
             <td style="color: #f87171;">Stepper motor stutters or loses steps mid-travel</td>
-            <td>TMC2208 overheating or acceleration set too high</td>
-            <td>Lower acceleration from 2000 to 1200 mm/s^2. Verify driver heatsink airflow and adjust V_{ref} potentiometer.</td>
+            <td>TMC2208 thermal throttle or high acceleration</td>
+            <td>Verify <code>ACCEL_STEPS = 6000</code> (150 mm/s²), <code>MAX_SPEED_STEPS = 2800</code> (70 mm/s), cooling airflow, and carrier V_ref.</td>
           </tr>
           <tr>
             <td style="color: #f87171;">Red caps detected as yellow or missing</td>
@@ -1663,9 +1771,9 @@ Sufficient torque for gantry acceleration with safe thermal headroom.</div>
       <span>DOC-REV 2.4</span>
     </div>
 
-    <h2><span class="sec-num">11.</span> Core Embedded Firmware Architecture (Part 1)</h2>
+    <h2><span class="sec-num">11.</span> Core Embedded &amp; OpenCV Firmware Architecture (Part 1)</h2>
     <p>
-      Complete production C++ firmware implementations for inter-controller wire packet structures and the ESP32-CAM frame acquisition streamer.
+      Pre-validation wire protocol header (CRC16-CCITT + READY handshake) and V2 camera calibration CLI supporting separate CSI fisheye and USB pinhole calibrations (full source in <code>firmware/</code>).
     </p>
 
     <div class="grid-2">
@@ -1677,82 +1785,63 @@ Sufficient torque for gantry acceleration with safe thermal headroom.</div>
           <span class="badge badge-orange">Header</span>
         </div>
         <div class="code-box" style="font-size: 6.2pt; line-height: 1.3;">
-<span class="code-comment">// packet_protocol.h - Inter-Controller Definitions</span>
+<span class="code-comment">// packet_protocol.h - Shared V1 &amp; V2 Definitions</span>
 #ifndef PACKET_PROTOCOL_H
 #define PACKET_PROTOCOL_H
-
+#define MAX_BATCH_CAPS        100
 #define PROTOCOL_MAGIC_BYTE   0x5A
-#define CMD_CAPTURE_FRAME     0xAA
-#define CMD_BATCH_START       0xB1
-#define CMD_EXECUTE_PICK      0xC2
+#define CMD_BATCH_ACK         0xA1
+#define CMD_BATCH_NACK        0xA2
+#define CMD_BATCH_COMPLETE    0xA3
+#define CMD_CAP_PROGRESS      0xA4
+#define CMD_QUERY_STATUS      0xB0
+#define CMD_STATUS_READY      0xB1
+#define CMD_STATUS_BUSY       0xB2
+#define CMD_STATUS_FAULT      0xB3
+#define CMD_REARM_HOME        0xB4
+#define CMD_HEARTBEAT_PING    0xF0
 #define CMD_RECOVERY_HALT     0xEE
-
-<span class="code-keyword">enum</span> CapColor : <span class="code-type">uint8_t</span> {
-  COLOR_RED    = 0x01,
-  COLOR_YELLOW = 0x02,
-  COLOR_GREEN  = 0x03,
-  COLOR_BLUE   = 0x04
-};
+#define CMD_HARD_FAULT        0xEF
 
 #pragma pack(push, 1)
-<span class="code-keyword">struct</span> CapTarget {
-  <span class="code-type">uint8_t</span>  capId;
-  CapColor color;
-  <span class="code-type">uint16_t</span> pixelX;
-  <span class="code-type">uint16_t</span> pixelY;
-  <span class="code-type">float</span>    boardX_mm;
-  <span class="code-type">float</span>    boardY_mm;
+<span class="code-keyword">struct</span> CapTarget { <span class="code-comment">// 15B (&lt;BBHHffB)</span>
+  <span class="code-type">uint8_t</span>  capId, color;
+  <span class="code-type">uint16_t</span> pixelX, pixelY;
+  <span class="code-type">float</span>    boardX_mm, boardY_mm;
   <span class="code-type">uint8_t</span>  targetBinId;
 };
-
-<span class="code-keyword">struct</span> BatchHeader {
-  <span class="code-type">uint8_t</span>  magic;
-  <span class="code-type">uint16_t</span> batchId;
-  <span class="code-type">uint8_t</span>  totalCaps;
-  <span class="code-type">uint16_t</span> crc16;
+<span class="code-keyword">struct</span> BatchHeader { <span class="code-comment">// 6B (&lt;BHBH)</span>
+  <span class="code-type">uint8_t</span>  magic;   <span class="code-type">uint16_t</span> batchId;
+  <span class="code-type">uint8_t</span>  totalCaps; <span class="code-type">uint16_t</span> crc16;
 };
 #pragma pack(pop)
-
 #endif</div>
       </div>
 
       <!-- fisheye_calibrate.py -->
       <div class="card card-cyan" style="margin: 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5mm;">
-          <h4 style="color: #38bdf8;">fisheye_calibrate.py — 160° Lens &amp; Homography</h4>
+          <h4 style="color: #38bdf8;">fisheye_calibrate.py — Intrinsic &amp; Homography CLI</h4>
           <span class="badge badge-cyan">Pi Zero 2 W</span>
         </div>
-        <div class="code-box" style="font-size: 6.2pt; line-height: 1.3;">
-<span class="code-comment"># fisheye_calibrate.py - Saves K, D, H to calibration.npz</span>
-<span class="code-keyword">import</span> cv2
-<span class="code-keyword">import</span> numpy <span class="code-keyword">as</span> np
+        <div class="code-box" style="font-size: 6.0pt; line-height: 1.28;">
+<span class="code-comment"># fisheye_calibrate.py - Real checkerboard + 4-corner calibration</span>
+<span class="code-comment"># CSI IMX219 (fisheye):</span>
+<span class="code-comment">#   python3 fisheye_calibrate.py --camera-type picamera2_imx219 \</span>
+<span class="code-comment">#     --lens-model fisheye --checkerboard-glob "csi/*.png" \</span>
+<span class="code-comment">#     --corners "u0,v0;u1,v1;u2,v2;u3,v3" --out calibration_csi_imx219.npz</span>
+<span class="code-comment"># USB Webcam (pinhole):</span>
+<span class="code-comment">#   python3 fisheye_calibrate.py --camera-type usb_v4l2 \</span>
+<span class="code-comment">#     --lens-model pinhole --checkerboard-glob "usb/*.png" \</span>
+<span class="code-comment">#     --corners "u0,v0;u1,v1;u2,v2;u3,v3" --out calibration_usb.npz</span>
 
-BOARD_CORNERS_MM = np.array([
-    [0.0, 0.0], [300.0, 0.0],
-    [300.0, 300.0], [0.0, 300.0]
-], dtype=np.float32)
-
-K_imx219_160 = np.array([
-    [245.8,   0.0, 320.0],
-    [  0.0, 245.8, 240.0],
-    [  0.0,   0.0,   1.0]
-], dtype=np.float64)
-
-D_imx219_160 = np.array([
-    [-0.042], [0.011], [-0.004], [0.0005]
-], dtype=np.float64)
-
-rectified_corners_px = np.array([
-    [92.0, 34.0],   [548.0, 34.0],
-    [548.0, 446.0], [92.0, 446.0]
-], dtype=np.float32)
-
-H, _ = cv2.findHomography(
-    rectified_corners_px, BOARD_CORNERS_MM
+K, D, img_size, rms = calibrate_intrinsics_from_checkerboards(
+    image_paths, pattern_size=(9, 6), square_size_mm=25.0,
+    lens_model=lens_model, max_reproj_err=1.0
 )
-np.savez(
-    "/home/pi/capsorter/calibration.npz",
-    K=K_imx219_160, D=D_imx219_160, H=H
+H = compute_homography_from_fiducials(rectified_corners_px)
+save_validated_calibration(
+    out_path, K, D, H, camera_type, lens_model, img_size, rms
 )</div>
       </div>
 
@@ -1766,18 +1855,18 @@ np.savez(
   </div>
 
   <!-- =========================================================================
-       PAGE 12: SECTION 11 - CORE FIRMWARE (PART 2) & PROJECT SIGN-OFF
+       PAGE 12: SECTION 11 - CORE FIRMWARE (PART 2) & PRE-BUILD REVIEW
        ========================================================================= -->
   <div class="page">
     <div class="doc-header">
-      <span>SECTION 11 • CORE FIRMWARE VAULT (VISION & MOTION CONTROL)</span>
+      <span>SECTION 11 • CORE FIRMWARE VAULT (VISION &amp; MOTION CONTROL)</span>
       <span class="brand">CAPSORTER ROBOTICS</span>
-      <span>DOC-REV 2.4</span>
+      <span>DOC-REV 2.5</span>
     </div>
 
-    <h2><span class="sec-num">11.</span> Core Embedded Firmware Architecture (Part 2)</h2>
+    <h2><span class="sec-num">11.</span> Core Embedded &amp; OpenCV Firmware Architecture (Part 2)</h2>
     <p>
-      High-speed embedded image analytics running on Teensy 4.1 alongside non-blocking stepper pulse sequencing on Arduino Mega.
+      Summary of Raspberry Pi Zero 2 W fail-closed OpenCV vision supervision and Arduino Mega fail-safe motion sequencing (full verified source in <code>firmware/</code>).
     </p>
 
     <div class="grid-2" style="margin-bottom: 3.5mm;">
@@ -1789,31 +1878,23 @@ np.savez(
           <span class="badge badge-cyan">Pi Zero 2 W</span>
         </div>
         <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
-<span class="code-comment"># pi_zero_vision.py - Quad-Core Cortex-A53 @ 1 GHz</span>
-<span class="code-keyword">import</span> struct, math, serial, cv2, numpy <span class="code-keyword">as</span> np
-<span class="code-keyword">from</span> picamera2 <span class="code-keyword">import</span> Picamera2
+<span class="code-comment"># pi_zero_vision.py - Fail-closed calibration &amp; dynamic heartbeat</span>
+cal = load_and_validate_calibration(
+    calib_file, expected_camera_type=camera_type,
+    expected_size=(640, 480)
+) <span class="code-comment"># Raises CalibrationError on missing/mismatched/placeholder .npz</span>
 
-cal = np.load("/home/pi/capsorter/calibration.npz")
-K, D, H = cal["K"], cal["D"], cal["H"]
-map1, map2 = cv2.fisheye.initUndistortRectifyMap(
-    K, D, np.eye(3), K, (640, 480), cv2.CV_16SC2
+<span class="code-comment"># Picamera2 full-sensor 1640x1232 binning + RGB888 ([B,G,R] in memory)</span>
+cfg = picam2.create_still_configuration(
+    main={"size": (640, 480), "format": "RGB888"},
+    raw={"size": (1640, 1232)},
 )
-picam2 = Picamera2()
-picam2.configure(picam2.create_still_configuration(
-    main={"size": (640, 480), "format": "BGR888"}
-))
-picam2.start()
-uart = serial.Serial("/dev/serial0", 115200)
+<span class="code-comment"># Wait for Mega CMD_STATUS_READY (never fixed 1.5s sleep)</span>
+<span class="code-keyword">while not</span> controller.wait_for_mega_ready(timeout_s=5.0):
+    time.sleep(1.0)
 
-<span class="code-keyword">def</span> scan_and_dispatch(batch_id):
-    raw = picam2.capture_array("main")
-    rect = cv2.remap(raw, map1, map2, cv2.INTER_LINEAR)
-    hsv = cv2.cvtColor(rect, cv2.COLOR_BGR2HSV)
-    <span class="code-comment"># Segment 4 HSV masks, filter circularity &gt; 0.75,</span>
-    <span class="code-comment"># map (u,v) -&gt; (X_mm, Y_mm) via cv2.perspectiveTransform,</span>
-    <span class="code-comment"># pack &lt;BHBH header + &lt;BBHHffB targets with CRC16:</span>
-    targets = extract_and_sort_targets(hsv, H)
-    send_packed_batch(uart, batch_id, targets)</div>
+<span class="code-comment"># Paced 32B/2ms CRC16 batch + 250ms heartbeat until COMPLETE/FAULT</span>
+status = controller.transmit_batch_and_supervise(caps)</div>
       </div>
 
       <!-- mega_motion.ino -->
@@ -1823,67 +1904,56 @@ uart = serial.Serial("/dev/serial0", 115200)
           <span class="badge badge-emerald">Arduino Mega</span>
         </div>
         <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
-<span class="code-comment">// mega_motion.ino - ATmega2560 @ 16 MHz</span>
-#include &lt;Wire.h&gt;
-#include &lt;Adafruit_PWMServoDriver.h&gt;
-#include &lt;AccelStepper.h&gt;
-#include "packet_protocol.h"
-
-AccelStepper stepperX(AccelStepper::DRIVER, 2, 5);
-AccelStepper stepperY(AccelStepper::DRIVER, 3, 6);
-Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver(0x40);
-
-<span class="code-keyword">enum</span> RobotState { 
-  STATE_IDLE, STATE_HOMING, STATE_MOVING,
-  STATE_LOWER_Z, STATE_GRIP, STATE_LIFT,
-  STATE_TRAVERSE, STATE_RELEASE, STATE_RETRACT,
-  STATE_FAILSAFE 
-};
-RobotState currentState = STATE_HOMING;
-CapTarget currentCap;
-<span class="code-type">bool</span> hasInFlightCap = <span class="code-keyword">false</span>;
+<span class="code-comment">// mega_motion.ino - ATmega2560 @ 16 MHz (70 mm/s, 150 mm/s^2)</span>
+#define MAX_SPEED_STEPS    2800.0f <span class="code-comment">// 70 mm/s nominal</span>
+#define ACCEL_STEPS        6000.0f <span class="code-comment">// 150 mm/s^2</span>
+#define HOMING_TIMEOUT_MS 30000UL  <span class="code-comment">// 370mm@20mm/s + margin</span>
+#define PIN_Z_HOME 24  <span class="code-comment">// NC Z limit (polled)</span>
+#define PIN_ESTOP  25  <span class="code-comment">// NC E-Stop aux contact</span>
 
 <span class="code-type">void</span> setup() {
-  pinMode(8, OUTPUT); digitalWrite(8, LOW); <span class="code-comment">// TMC2208 EN</span>
-  pinMode(22, INPUT_PULLUP); pinMode(23, INPUT_PULLUP);
+  pinMode(PIN_SERVO_OE, OUTPUT);   digitalWrite(PIN_SERVO_OE, HIGH);
+  pinMode(PIN_STEPPER_EN, OUTPUT); digitalWrite(PIN_STEPPER_EN, HIGH);
+  pinMode(PIN_X_HOME, INPUT_PULLUP); pinMode(PIN_Y_HOME, INPUT_PULLUP);
+  pinMode(PIN_Z_HOME, INPUT_PULLUP); pinMode(PIN_ESTOP,  INPUT_PULLUP);
   Serial.begin(115200); Serial1.begin(115200);
+  Wire.begin(); Wire.setClock(400000);
   pca.begin(); pca.setPWMFreq(50);
-  stepperX.setMaxSpeed(4000);
-  stepperX.setAcceleration(2000);
-  stepperY.setMaxSpeed(4000);
-  stepperY.setAcceleration(2000);
-  homeAxes();
+  homeAxes(); <span class="code-comment">// Emits CMD_STATUS_READY on success</span>
 }
 
 <span class="code-type">void</span> loop() {
-  stepperX.run(); stepperY.run();
-  executeMotionStateMachine();
-  <span class="code-keyword">if</span> (checkCommunicationLoss() && hasInFlightCap) {
-    executeSafeLocalizedCompletion(); <span class="code-comment">// FAIL-SAFE</span>
+  checkRuntimeSafetyInputs(); <span class="code-comment">// E-Stop + X/Y/Z NC limits</span>
+  <span class="code-keyword">if</span> (currentState != STATE_HARD_FAULT &amp;&amp;
+      currentState != STATE_FAILSAFE_HALT) {
+    stepperX.run(); stepperY.run();
   }
+  pollVisionHostPackets();   <span class="code-comment">// READY/BUSY/REARM/CRC16</span>
+  executeMotionStateMachine(); <span class="code-comment">// Emits CMD_CAP_PROGRESS</span>
+  <span class="code-keyword">if</span> (checkCommunicationLoss()) executeSafeCommsLossPolicy();
 }</div>
       </div>
 
     </div>
 
-    <!-- Final Verification & Project Sign-Off Card -->
+    <!-- Pre-Build Design Review & Bench Validation Gate -->
     <div class="card card-emerald" style="margin: 0; padding: 3mm 4mm;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5mm;">
-        <h3 style="color: #34d399; margin: 0;">Engineering Verification & Project Sign-Off</h3>
-        <span class="badge badge-emerald">Approved for Production</span>
+        <h3 style="color: #facc15; margin: 0;">Pre-Build Engineering Status &amp; Bench Validation Gate</h3>
+        <span class="badge badge-orange">Pending Physical Bench Validation</span>
       </div>
       <div class="grid-2" style="font-size: 7.2pt; color: #cbd5e1; line-height: 1.45;">
         <div>
           <strong>Document Title:</strong> Autonomous Bottle-Cap Sorting Machine V2 Technical Dossier<br>
           <strong>Authored &amp; Engineered by:</strong> Neil Shettigar, Kahan, and Shourya<br>
           <strong>Principal Architecture, Firmware &amp; Design:</strong> Neil Shettigar<br>
-          <strong>Hardware Revisions (V2):</strong> Raspberry Pi Zero 2 W (16GB) • 8MP IMX219 160° CSI • Arduino Mega 2560 R3
+          <strong>Target Hardware (V2):</strong> Raspberry Pi Zero 2 W (16GB) • 8MP IMX219 160° CSI (or USB) • Arduino Mega 2560 R3
         </div>
         <div>
           <strong>GitHub Code Repository:</strong> github.com/Neilboss/CapSorter<br>
-          <strong>Interactive Web Application:</strong> neilboss.github.io/CapSorter<br>
-          <strong>Operational Safety Status:</strong> Fully Isolated Rails with Master Hardware E-Stop<br>
-          <strong>Release Date & Timestamp:</strong> November 2026 • Production Release
+          <strong>Safety Architecture:</strong> Hardwired Dual-Pole Actuator E-Stop + Polled X/Y/Z NC Limits<br>
+          <strong>Required Before Sign-Off:</strong> SKU verification, power/thermal tests, E-stop/limit tests, camera checkerboard/fiducial calibration &amp; endurance run<br>
+          <strong>Revision Status:</strong> Pre-Build Review Rev 2.5 (Not Yet Production-Validated)
         </div>
       </div>
     </div>

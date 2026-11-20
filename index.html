@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Autonomous Bottle-Cap Sorting Machine (V1 &amp; V2 Portal) by Neil, Kahan and Shourya</title>
-  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="icon" type="image/png" href="assets/favicon.png?v=3">
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -48,13 +48,13 @@
   <!-- ==========================================
        NAVIGATION BAR
        ========================================== -->
-  <header class="sticky top-0 z-40 bg-[#0a0d14]/90 backdrop-blur-md border-b border-white/10">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+  <header class="sticky top-0 z-40 bg-[#0a0d14]/88 backdrop-blur-md border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
       
       <!-- Brand & Authors -->
-      <a href="index.html" class="flex items-center gap-3 shrink-0 group">
-        <img src="assets/logo.png" alt="CapSorter Logo" class="h-9 sm:h-10 w-auto object-contain transform group-hover:scale-105 transition-transform shrink-0">
-        <div class="leading-tight whitespace-nowrap hidden sm:block border-l border-white/10 pl-3">
+      <a href="index.html" class="flex items-center gap-2.5 sm:gap-3 shrink-0 group min-w-0">
+        <img src="assets/logo.png?v=3" alt="CapSorter Logo" class="h-7 sm:h-9 w-auto object-contain transform group-hover:scale-[1.03] transition-transform shrink-0">
+        <div class="leading-tight whitespace-nowrap hidden md:block border-l border-white/10 pl-3">
           <div class="flex items-center gap-2">
             <span class="text-[10px] font-mono uppercase text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/25 font-bold">Architecture Portal</span>
           </div>
@@ -66,18 +66,18 @@
       </a>
 
       <!-- Direct V1 & V2 Header Switcher Buttons -->
-      <div class="flex items-center gap-2.5">
-        <a href="v1.html" class="px-4 py-1.5 text-xs font-mono font-bold rounded-lg bg-orange-500/20 hover:bg-orange-500 text-orange-300 hover:text-white border border-orange-500/40 flex items-center gap-1.5 transition-all">
-          <span class="w-2 h-2 rounded-full bg-orange-400"></span>
-          <span>V1 (Teensy + ESP32-CAM)</span>
+      <div class="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+        <a href="v1.html" class="px-2.5 sm:px-3.5 py-1.5 text-xs font-mono font-bold rounded-lg bg-orange-500/15 hover:bg-orange-500 text-orange-300 hover:text-white border border-orange-500/40 flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0">
+          <span class="w-2 h-2 rounded-full bg-orange-400 shrink-0"></span>
+          <span>V1<span class="hidden lg:inline"> (Teensy + ESP32-CAM)</span></span>
         </a>
-        <a href="v2.html" class="px-4 py-1.5 text-xs font-mono font-bold rounded-lg bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border border-cyan-500/40 flex items-center gap-1.5 transition-all">
-          <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
-          <span>V2 (Pi Zero 2 W + IMX219)</span>
+        <a href="v2.html" class="px-2.5 sm:px-3.5 py-1.5 text-xs font-mono font-bold rounded-lg bg-cyan-500/15 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border border-cyan-500/40 flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0"></span>
+          <span>V2<span class="hidden lg:inline"> (Pi Zero 2 W + IMX219)</span></span>
         </a>
-        <button class="btn-open-poster hidden sm:flex px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 items-center gap-1.5 transition-all">
+        <button type="button" class="btn-open-poster px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0" aria-label="View 4K Master Poster">
           <i data-lucide="file-image" class="w-3.5 h-3.5 text-orange-400 shrink-0"></i>
-          <span>Poster</span>
+          <span class="hidden sm:inline">Poster</span>
         </button>
       </div>
 
@@ -87,52 +87,83 @@
   <!-- ==========================================
        MAIN VERSION SELECTOR GATEWAY
        ========================================== -->
-  <main class="flex-1 relative py-12 sm:py-16 overflow-hidden">
+  <main class="flex-1 relative py-8 sm:py-12 overflow-x-clip">
     <!-- Ambient Glow Effects -->
-    <div class="absolute top-24 left-1/4 -translate-x-1/2 w-[500px] h-[300px] bg-orange-500/10 blur-[130px] rounded-full pointer-events-none"></div>
-    <div class="absolute top-24 right-1/4 translate-x-1/2 w-[500px] h-[300px] bg-cyan-500/10 blur-[130px] rounded-full pointer-events-none"></div>
+    <div class="absolute top-20 left-1/4 -translate-x-1/2 w-[500px] h-[280px] bg-orange-500/10 blur-[130px] rounded-full pointer-events-none"></div>
+    <div class="absolute top-20 right-1/4 translate-x-1/2 w-[500px] h-[280px] bg-cyan-500/10 blur-[130px] rounded-full pointer-events-none"></div>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
       <!-- Portal Header -->
-      <div class="text-center max-w-3xl mx-auto mb-12">
+      <div class="text-center max-w-4xl mx-auto mb-10 sm:mb-12">
         <!-- Official CapSorter Logo Showcase -->
-        <div class="flex justify-center mb-6">
-          <img src="assets/logo.png" alt="CapSorter Master Logo" class="h-20 sm:h-24 md:h-28 w-auto object-contain filter drop-shadow-[0_0_35px_rgba(255,107,0,0.35)]">
+        <div class="flex justify-center mb-5">
+          <img src="assets/logo.png?v=3" alt="CapSorter Master Logo" class="h-16 sm:h-20 md:h-24 w-auto object-contain filter drop-shadow-[0_0_28px_rgba(255,107,0,0.22)]">
         </div>
 
-        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/90 border border-slate-700 text-slate-300 text-xs font-mono uppercase tracking-wider mb-4">
-          <i data-lucide="layers" class="w-3.5 h-3.5 text-emerald-400"></i>
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-2xl sm:rounded-full bg-slate-800/85 border border-white/10 text-slate-300 text-[11px] sm:text-xs font-mono uppercase tracking-wider mb-4">
+          <i data-lucide="layers" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
           <span>500×500×500 mm Offline Vision-Guided Cartesian Robot</span>
         </div>
 
-        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.1] mb-4">
-          Autonomous Bottle-Cap <br>
+        <h1 class="text-3xl sm:text-5xl lg:text-[3.5rem] font-extrabold tracking-tight text-white leading-[1.12] mb-4">
+          Autonomous <span class="whitespace-nowrap">Bottle-Cap</span> <br>
           <span class="bg-gradient-to-r from-orange-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent">
             Sorting Machine
           </span>
         </h1>
 
-        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-orange-500/20 via-slate-800 to-cyan-500/20 border border-white/15 text-slate-200 font-mono text-xs sm:text-sm font-bold mb-5">
-          <i data-lucide="user-check" class="w-4 h-4 text-orange-400"></i>
-          <span>Made by Neil Shettigar • Team: Neil, Kahan and Shourya</span>
+        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-2xl sm:rounded-full bg-slate-900/90 border border-white/10 text-slate-200 font-mono text-xs sm:text-sm font-semibold mb-4">
+          <i data-lucide="user-check" class="w-4 h-4 text-orange-400 shrink-0"></i>
+          <span>Made by Neil Shettigar &bull; Team: Neil, Kahan and Shourya</span>
         </div>
 
-        <p class="text-sm sm:text-base text-slate-300 leading-relaxed mb-8">
-          Select a hardware architecture version below to explore its complete system blueprint, interactive 2D pick-and-place gantry simulator, pinout matrix, bill of materials, and production firmware vault.
+        <p class="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto mb-8">
+          Choose a hardware architecture below to explore the interactive 2D gantry simulator, system blueprint, pinout matrix, bill of materials, and pre-validation firmware vault.
         </p>
 
-        <!-- Primary Big V1 and V2 Entry Buttons -->
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <a href="v1.html" class="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-extrabold text-base flex items-center justify-center gap-3 shadow-xl shadow-orange-500/25 border border-orange-400/40 transition-all transform hover:-translate-y-0.5">
-            <span class="px-2 py-0.5 rounded bg-black/30 font-mono text-xs">V1</span>
-            <span>Enter Version 1 (Teensy 4.1 + ESP32-CAM)</span>
-            <i data-lucide="arrow-right" class="w-5 h-5"></i>
+        <!-- Sleek Precision Dark-Glass V1 & V2 Architecture Selector Tiles -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+          <a href="v1.html" class="version-tile version-tile-v1 group">
+            <div class="relative z-10 min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-orange-500/15 border border-orange-500/35 text-[10px] font-mono font-bold uppercase tracking-wider text-orange-300 whitespace-nowrap">
+                  <span class="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0"></span>
+                  V1.0 &bull; Baseline
+                </span>
+                <span class="text-[11px] font-mono text-slate-400 whitespace-nowrap">3 Boards</span>
+              </div>
+              <div class="text-base sm:text-lg font-extrabold text-white tracking-tight group-hover:text-orange-100 transition-colors">
+                Teensy 4.1 + ESP32-CAM
+              </div>
+              <div class="text-xs font-mono text-slate-400 mt-1 leading-snug">
+                600 MHz Cortex-M7 &bull; Bare-Metal C++ Vision
+              </div>
+            </div>
+            <span class="relative z-10 w-10 h-10 rounded-xl bg-orange-500/15 border border-orange-500/35 text-orange-400 group-hover:bg-orange-500 group-hover:text-white group-hover:border-orange-400 flex items-center justify-center shrink-0 transition-all duration-300">
+              <i data-lucide="arrow-right" class="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform"></i>
+            </span>
           </a>
-          <a href="v2.html" class="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-extrabold text-base flex items-center justify-center gap-3 shadow-xl shadow-cyan-500/25 border border-cyan-300/50 transition-all transform hover:-translate-y-0.5">
-            <span class="px-2 py-0.5 rounded bg-slate-950/20 font-mono text-xs font-bold">V2</span>
-            <span>Enter Version 2 (Raspberry Pi Zero 2 W)</span>
-            <i data-lucide="arrow-right" class="w-5 h-5"></i>
+
+          <a href="v2.html" class="version-tile version-tile-v2 group">
+            <div class="relative z-10 min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-500/35 text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-300 whitespace-nowrap">
+                  <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0"></span>
+                  V2.0 &bull; Recommended
+                </span>
+                <span class="text-[11px] font-mono text-emerald-400 font-semibold whitespace-nowrap">35× Faster</span>
+              </div>
+              <div class="text-base sm:text-lg font-extrabold text-white tracking-tight group-hover:text-cyan-100 transition-colors">
+                Raspberry Pi Zero 2 W
+              </div>
+              <div class="text-xs font-mono text-slate-400 mt-1 leading-snug">
+                8MP IMX219 160° CSI &bull; Python 3 + OpenCV
+              </div>
+            </div>
+            <span class="relative z-10 w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/35 text-cyan-300 group-hover:bg-cyan-400 group-hover:text-slate-950 group-hover:border-cyan-300 flex items-center justify-center shrink-0 transition-all duration-300">
+              <i data-lucide="arrow-right" class="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform"></i>
+            </span>
           </a>
         </div>
       </div>
@@ -140,102 +171,102 @@
       <!-- ==========================================
            SIDE-BY-SIDE V1 vs V2 ARCHITECTURE CARDS
            ========================================== -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mb-14">
 
         <!-- VERSION 1 CARD -->
-        <div class="tech-card p-6 sm:p-8 border-orange-500/30 flex flex-col justify-between relative">
+        <div class="tech-card p-6 sm:p-7 border-orange-500/30 flex flex-col justify-between relative">
           <div>
-            <div class="flex items-center justify-between gap-2 mb-4">
-              <span class="badge-pill badge-orange text-xs font-mono">Version 1.0 • Original Baseline</span>
-              <span class="text-xs font-mono text-slate-400">3 Programmable Boards</span>
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <span class="badge-pill badge-orange font-mono">Version 1.0 • Original Baseline</span>
+              <span class="text-xs font-mono text-slate-400 whitespace-nowrap">3 Programmable Boards</span>
             </div>
 
-            <h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-2">
+            <h2 class="text-xl sm:text-2xl font-extrabold text-white mb-2.5 leading-snug">
               V1: Teensy 4.1 + ESP32-CAM + Arduino Mega 2560
             </h2>
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-6">
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-5">
               Bare-metal microcontroller vision architecture. The <strong>ESP32-CAM (OV2640)</strong> captures QVGA 320×240 RGB565 frames and streams them over 921,600 baud UART to the <strong>Teensy 4.1 (600 MHz Cortex-M7, 1 MB RAM)</strong> for fixed-point HSV segmentation and homography, which then dispatches plan packets to the <strong>Arduino Mega 2560</strong>.
             </p>
 
             <!-- V1 Flow Summary -->
             <div class="p-4 rounded-xl bg-slate-900/90 border border-white/5 mb-6 space-y-2.5 text-xs font-mono">
-              <div class="flex items-center justify-between text-orange-300">
-                <span>1. Camera Module:</span>
-                <span class="text-white">ESP32-CAM (OV2640 • 320×240 RGB565)</span>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
+                <span class="text-orange-300 shrink-0">1. Camera Module:</span>
+                <span class="text-white sm:text-right">ESP32-CAM (OV2640 • 320×240 RGB565)</span>
               </div>
-              <div class="flex items-center justify-between text-cyan-300">
-                <span>2. Vision Processor:</span>
-                <span class="text-white">Teensy 4.1 (600 MHz M7 • 1 MB SRAM)</span>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
+                <span class="text-cyan-300 shrink-0">2. Vision Processor:</span>
+                <span class="text-white sm:text-right">Teensy 4.1 (600 MHz M7 • 1 MB SRAM)</span>
               </div>
-              <div class="flex items-center justify-between text-emerald-300">
-                <span>3. Motion Controller:</span>
-                <span class="text-white">Arduino Mega 2560 + PCA9685 + 2× TMC2208</span>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
+                <span class="text-emerald-300 shrink-0">3. Motion Controller:</span>
+                <span class="text-white sm:text-right">Arduino Mega 2560 + PCA9685 + 2× TMC2208</span>
               </div>
-              <div class="flex items-center justify-between text-amber-300">
-                <span>4. Frame Transfer + Vision:</span>
-                <span class="text-white">~1.67s UART Transfer + ~40ms C++ Vision</span>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
+                <span class="text-amber-300 shrink-0">4. Transfer + Vision:</span>
+                <span class="text-white sm:text-right">~1.67s UART + ~40ms C++ Vision</span>
               </div>
             </div>
           </div>
 
-          <div class="space-y-3">
-            <a href="v1.html" class="w-full py-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 transition-all">
-              <span>Launch V1 Engineering Specification &amp; Simulator</span>
-              <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+          <div class="space-y-2.5">
+            <a href="v1.html" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 transition-all hover:-translate-y-0.5">
+              <span>Launch V1 Engineering Spec &amp; Simulator</span>
+              <i data-lucide="arrow-up-right" class="w-4 h-4 shrink-0"></i>
             </a>
-            <div class="grid grid-cols-3 gap-2 text-center font-mono text-xs">
-              <a href="v1.html#simulator" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/5 transition-all">V1 Simulator</a>
-              <a href="v1.html#code" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/5 transition-all">V1 C++ Code</a>
-              <a href="Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf" download class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-orange-300 border border-orange-500/20 transition-all">V1 PDF Report</a>
+            <div class="grid grid-cols-3 gap-2 text-center font-mono text-[11px] sm:text-xs">
+              <a href="v1.html#simulator" class="py-2 px-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/5 transition-all">V1 Simulator</a>
+              <a href="v1.html#code" class="py-2 px-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/5 transition-all">V1 C++ Code</a>
+              <a href="Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf" download class="py-2 px-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-orange-300 hover:text-orange-200 border border-orange-500/20 transition-all">V1 PDF Report</a>
             </div>
           </div>
         </div>
 
         <!-- VERSION 2 CARD -->
-        <div class="tech-card tech-card-cyan p-6 sm:p-8 border-cyan-500/40 flex flex-col justify-between relative">
+        <div class="tech-card tech-card-cyan p-6 sm:p-7 border-cyan-500/40 flex flex-col justify-between relative">
           <div>
-            <div class="flex items-center justify-between gap-2 mb-4">
-              <span class="badge-pill badge-cyan text-xs font-mono">Version 2.0 • Consolidated OpenCV SBC</span>
-              <span class="text-xs font-mono text-emerald-400">2 Programmable Boards (35× Faster Capture)</span>
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <span class="badge-pill badge-cyan font-mono">Version 2.0 • OpenCV SBC</span>
+              <span class="text-xs font-mono text-emerald-400 whitespace-nowrap">2 Boards • 35× Faster Capture</span>
             </div>
 
-            <h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-2">
+            <h2 class="text-xl sm:text-2xl font-extrabold text-white mb-2.5 leading-snug">
               V2: Raspberry Pi Zero 2 W + 8MP IMX219 + Arduino Mega
             </h2>
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-6">
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-5">
               Replaces both the Teensy 4.1 and ESP32-CAM with a single <strong>Raspberry Pi Zero 2 W (Quad-Core 1 GHz, 512 MB RAM, 16 GB microSD)</strong> connected to an <strong>8MP IMX219 160° Wide-Angle CSI Camera</strong> (or USB Webcam). Runs full offline <strong>Python 3 + OpenCV</strong> fisheye undistortion, HSV segmentation, and homography in ~45 ms before sending coordinates to the <strong>Arduino Mega 2560</strong>.
             </p>
 
             <!-- V2 Flow Summary -->
             <div class="p-4 rounded-xl bg-slate-900/90 border border-cyan-500/20 mb-6 space-y-2.5 text-xs font-mono">
-              <div class="flex items-center justify-between text-orange-300">
-                <span>1. Camera Sensor:</span>
-                <span class="text-white">8MP IMX219 160° FOV (22-Pin CSI / Webcam)</span>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
+                <span class="text-orange-300 shrink-0">1. Camera Sensor:</span>
+                <span class="text-white sm:text-right">8MP IMX219 160° FOV (22-Pin CSI / USB)</span>
               </div>
-              <div class="flex items-center justify-between text-cyan-300">
-                <span>2. Vision &amp; Capture SBC:</span>
-                <span class="text-white">Pi Zero 2 W (4× 1 GHz • 512 MB RAM • 16 GB SD)</span>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
+                <span class="text-cyan-300 shrink-0">2. Vision &amp; Capture SBC:</span>
+                <span class="text-white sm:text-right">Pi Zero 2 W (4× 1 GHz • 512 MB • 16 GB)</span>
               </div>
-              <div class="flex items-center justify-between text-emerald-300">
-                <span>3. Motion Controller:</span>
-                <span class="text-white">Arduino Mega 2560 + PCA9685 + 2× TMC2208</span>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
+                <span class="text-emerald-300 shrink-0">3. Motion Controller:</span>
+                <span class="text-white sm:text-right">Arduino Mega 2560 + PCA9685 + 2× TMC2208</span>
               </div>
-              <div class="flex items-center justify-between text-amber-300">
-                <span>4. Frame Capture + OpenCV:</span>
-                <span class="text-emerald-400 font-bold">~20ms CSI DMA + ~25ms OpenCV (~45ms Total!)</span>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
+                <span class="text-amber-300 shrink-0">4. Capture + OpenCV:</span>
+                <span class="text-emerald-400 font-bold sm:text-right">~20ms CSI DMA + ~25ms OpenCV (~45ms)</span>
               </div>
             </div>
           </div>
 
-          <div class="space-y-3">
-            <a href="v2.html" class="w-full py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 transition-all">
-              <span>Launch V2 Engineering Specification &amp; Simulator</span>
-              <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+          <div class="space-y-2.5">
+            <a href="v2.html" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all hover:-translate-y-0.5">
+              <span>Launch V2 Engineering Spec &amp; Simulator</span>
+              <i data-lucide="arrow-up-right" class="w-4 h-4 shrink-0"></i>
             </a>
-            <div class="grid grid-cols-3 gap-2 text-center font-mono text-xs">
-              <a href="v2.html#simulator" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/5 transition-all">V2 Simulator</a>
-              <a href="v2.html#code" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/5 transition-all">V2 Python Code</a>
-              <a href="pdf_dossier_v2.html" target="_blank" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/20 transition-all">V2 Dossier</a>
+            <div class="grid grid-cols-3 gap-2 text-center font-mono text-[11px] sm:text-xs">
+              <a href="v2.html#simulator" class="py-2 px-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/5 transition-all">V2 Simulator</a>
+              <a href="v2.html#code" class="py-2 px-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/5 transition-all">V2 Python Code</a>
+              <a href="pdf_dossier_v2.html" target="_blank" class="py-2 px-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-cyan-300 hover:text-cyan-200 border border-cyan-500/20 transition-all">V2 Dossier</a>
             </div>
           </div>
         </div>
@@ -245,7 +276,7 @@
       <!-- ==========================================
            HEAD-TO-HEAD ARCHITECTURAL COMPARISON TABLE
            ========================================== -->
-      <div class="tech-card overflow-hidden">
+      <div class="tech-panel overflow-hidden">
         <div class="p-5 bg-slate-900/70 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <span class="text-xs font-mono text-emerald-400 uppercase tracking-wider block">Head-to-Head Engineering Analysis</span>
@@ -325,22 +356,29 @@
        FOOTER
        ========================================== -->
   <footer class="border-t border-white/10 bg-[#06080d] py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-bold">
-          <i data-lucide="bot" class="w-4 h-4"></i>
-        </div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-5">
+      <div class="flex items-center gap-3.5">
+        <a href="index.html" class="w-11 h-11 rounded-xl bg-slate-900/95 border border-orange-500/30 flex items-center justify-center p-1.5 shadow-lg shadow-orange-500/10 hover:border-orange-400/60 transition-colors shrink-0" aria-label="CapSorter Home">
+          <img src="assets/logo_mark.png?v=3" alt="CapSorter Emblem" class="w-full h-full object-contain">
+        </a>
         <div>
-          <span class="font-bold text-white text-sm">Autonomous Bottle-Cap Sorting Machine (V1 &amp; V2 Portal)</span>
-          <p class="text-xs text-orange-400 font-mono font-semibold">Made by Neil Shettigar • Team: Neil, Kahan and Shourya</p>
+          <span class="font-bold text-white text-sm tracking-tight block">Autonomous Bottle-Cap Sorting Machine</span>
+          <p class="text-xs text-slate-400 font-mono mt-0.5">Made by <span class="text-orange-400 font-semibold">Neil Shettigar</span> &bull; Team: Neil, Kahan and Shourya</p>
         </div>
       </div>
-      <div class="flex items-center gap-4 text-xs font-mono text-slate-400">
-        <a href="v1.html" class="text-orange-400 hover:underline">Open V1 (Teensy 4.1)</a>
-        <span>•</span>
-        <a href="v2.html" class="text-cyan-400 hover:underline">Open V2 (Pi Zero 2 W)</a>
-        <span>•</span>
-        <button class="btn-open-poster text-slate-300 hover:underline">View Master Poster</button>
+      <div class="flex flex-wrap items-center justify-center gap-2 shrink-0">
+        <a href="v1.html" class="footer-link-pill text-orange-300 hover:text-orange-200 hover:border-orange-500/40">
+          <span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+          <span>Open V1</span>
+        </a>
+        <a href="v2.html" class="footer-link-pill text-cyan-300 hover:text-cyan-200 hover:border-cyan-500/40">
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+          <span>Open V2</span>
+        </a>
+        <button type="button" class="btn-open-poster footer-link-pill text-slate-300 hover:text-white">
+          <i data-lucide="file-image" class="w-3.5 h-3.5 text-orange-400"></i>
+          <span>4K Master Poster</span>
+        </button>
       </div>
     </div>
   </footer>
@@ -349,36 +387,40 @@
        MODAL: FULL HIGH-RES POSTER VIEWER
        ========================================== -->
   <div id="poster-modal" class="poster-modal">
-    <div class="h-14 px-6 bg-slate-900/95 border-b border-white/10 flex items-center justify-between z-10 shrink-0">
-      <div class="flex items-center gap-3">
-        <i data-lucide="file-image" class="w-5 h-5 text-orange-400"></i>
-        <span class="font-bold text-sm text-white">System Architecture &amp; Engineering Poster</span>
-        <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">4K UHD</span>
+    <div class="min-h-14 py-2 px-3 sm:px-6 bg-slate-900/95 border-b border-white/10 flex items-center justify-between gap-2 z-10 shrink-0">
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+        <i data-lucide="file-image" class="w-5 h-5 text-orange-400 shrink-0 hidden sm:block"></i>
+        <span class="font-bold text-xs sm:text-sm text-white truncate hidden md:inline">System Architecture &amp; Engineering Poster</span>
+        <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-orange-500/20 text-orange-300 border border-orange-500/30 hidden lg:inline-block shrink-0">4K UHD</span>
         
-        <!-- Quick Version Toggles -->
-        <div class="hidden sm:flex items-center gap-1.5 ml-3 pl-3 border-l border-white/10">
-          <button id="btn-poster-v1" class="px-2.5 py-1 text-xs rounded bg-orange-600 text-white font-semibold transition-all shadow-sm">V1 (Teensy 4.1)</button>
-          <button id="btn-poster-v2" class="px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all">V2 (Pi Zero 2 W)</button>
+        <!-- Quick Version Toggles (Visible on Mobile & Desktop) -->
+        <div class="flex items-center gap-1.5 sm:ml-2 sm:pl-3 sm:border-l border-white/10 shrink-0">
+          <button type="button" id="btn-poster-v1" class="px-2.5 py-1 text-xs rounded-md bg-orange-500 text-white font-bold transition-all shadow-sm">V1<span class="hidden sm:inline"> (Teensy 4.1)</span></button>
+          <button type="button" id="btn-poster-v2" class="px-2.5 py-1 text-xs rounded-md bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all">V2<span class="hidden sm:inline"> (Pi Zero 2 W)</span></button>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="btn-zoom-in" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <span id="poster-zoom-level" class="hidden sm:inline-block px-2 py-1 text-[11px] font-mono text-slate-400 bg-slate-800/70 rounded border border-white/5 min-w-[48px] text-center">100%</span>
+        <button type="button" id="btn-zoom-in" aria-label="Zoom in" title="Zoom in (+)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs transition-colors">
           <i data-lucide="zoom-in" class="w-4 h-4"></i>
         </button>
-        <button id="btn-zoom-out" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
+        <button type="button" id="btn-zoom-out" aria-label="Zoom out" title="Zoom out (-)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs transition-colors">
           <i data-lucide="zoom-out" class="w-4 h-4"></i>
         </button>
-        <button id="btn-zoom-reset" class="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono">
+        <button type="button" id="btn-zoom-reset" aria-label="Reset zoom" title="Reset view (0)" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono transition-colors">
           Reset
         </button>
-        <button id="btn-close-poster" class="p-2 rounded bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs ml-2">
+        <a id="btn-download-poster" href="assets/system_poster.jpg" download aria-label="Download poster image" title="Download 4K Poster" class="hidden sm:flex p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-xs transition-colors">
+          <i data-lucide="download" class="w-4 h-4"></i>
+        </a>
+        <button type="button" id="btn-close-poster" aria-label="Close poster viewer" title="Close (Esc)" class="p-2 rounded-lg bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs ml-1 transition-colors">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
     </div>
 
     <div class="poster-viewport">
-      <img id="modal-poster-img" src="assets/system_poster.jpg" alt="Master System Poster Diagram">
+      <img id="modal-poster-img" data-src="assets/system_poster.jpg" alt="Master System Poster Diagram" draggable="false">
     </div>
   </div>
 

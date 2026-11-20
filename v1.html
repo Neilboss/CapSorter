@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Autonomous Bottle-Cap Sorting Machine by Neil, Kahan and Shourya</title>
-  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="icon" type="image/png" href="assets/favicon.png?v=3">
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -48,14 +48,14 @@
   <!-- ==========================================
        NAVIGATION BAR
        ========================================== -->
-  <header class="sticky top-0 z-40 bg-[#0a0d14]/90 backdrop-blur-md border-b border-white/10">
-    <div class="w-full max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 h-16 flex items-center justify-between gap-2 lg:gap-3">
+  <header class="sticky top-0 z-40 bg-[#0a0d14]/88 backdrop-blur-md border-b border-white/10">
+    <div class="w-full max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 h-16 flex items-center justify-between gap-2">
       
       <!-- Brand & Version Switcher -->
-      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+      <div class="flex items-center gap-2 sm:gap-2.5 shrink-0 min-w-0">
         <a href="index.html" class="flex items-center gap-2 shrink-0 group">
-          <img src="assets/logo.png" alt="CapSorter Logo" class="h-8 sm:h-9 w-auto object-contain transform group-hover:scale-105 transition-transform shrink-0">
-          <div class="leading-tight whitespace-nowrap hidden md:block border-l border-white/10 pl-2">
+          <img src="assets/logo.png?v=3" alt="CapSorter Logo" class="h-7 sm:h-8 w-auto object-contain transform group-hover:scale-[1.03] transition-transform shrink-0">
+          <div class="leading-tight whitespace-nowrap hidden xl:block border-l border-white/10 pl-2.5">
             <div class="flex items-center gap-1.5">
               <span class="text-[10px] font-mono uppercase text-orange-400 px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/25 font-bold">V1 • Teensy 4.1</span>
             </div>
@@ -68,90 +68,129 @@
 
         <!-- V1 / V2 Version Switcher Pill -->
         <div class="flex items-center p-0.5 rounded-lg bg-slate-900 border border-white/10 text-[10.5px] font-mono shrink-0">
-          <a href="index.html" class="hidden xl:inline-block px-1.5 py-0.5 rounded text-slate-400 hover:text-white transition-colors" title="Back to Version Selection Portal">Portal</a>
-          <a href="v1.html" class="px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/40 font-bold">V1</a>
+          <a href="index.html" class="hidden 2xl:inline-block px-1.5 py-0.5 rounded text-slate-400 hover:text-white transition-colors" title="Back to Version Selection Portal">Portal</a>
+          <a href="v1.html" class="px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/40 font-bold" aria-current="page">V1</a>
           <a href="v2.html" class="px-2 py-0.5 rounded text-slate-400 hover:text-cyan-300 transition-colors">V2</a>
         </div>
       </div>
 
       <!-- Nav Links Pill (with Dynamic Scroll-Spy Selection Indicator) -->
-      <nav id="top-nav-pill" class="hidden lg:flex relative items-center gap-0.5 px-1 py-1 rounded-full bg-slate-900/90 border border-white/10 text-[11px] xl:text-[11.5px] font-medium text-slate-300 whitespace-nowrap shrink-0">
+      <nav id="top-nav-pill" aria-label="Primary sections" class="hidden lg:flex relative items-center gap-0.5 px-1 py-1 rounded-full bg-slate-900/90 border border-white/10 text-[11px] xl:text-[11.5px] font-medium text-slate-300 whitespace-nowrap shrink-0">
         <div id="nav-selection-pill"></div>
-        <a href="#overview" data-section="overview" class="nav-pill-link active px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">Overview</a>
-        <a href="#simulator" data-section="simulator" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all flex items-center gap-1">
+        <a href="#overview" data-section="overview" class="nav-pill-link active px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-colors">Overview</a>
+        <a href="#simulator" data-section="simulator" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-colors flex items-center gap-1">
           <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
           <span>Simulator</span>
         </a>
-        <a href="#architecture" data-section="architecture" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">Architecture</a>
-        <a href="#mechanical" data-section="mechanical" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">Mechanics</a>
-        <a href="#bom" data-section="bom" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">BOM</a>
-        <a href="#roadmap" data-section="roadmap" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-all">Roadmap</a>
-        <a href="#engineering" data-section="engineering" id="nav-btn-engineering" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full text-orange-300 hover:text-orange-200 transition-all flex items-center gap-1">
+        <a href="#architecture" data-section="architecture" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-colors">Architecture</a>
+        <a href="#mechanical" data-section="mechanical" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-colors">Mechanics</a>
+        <a href="#bom" data-section="bom" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-colors">BOM</a>
+        <a href="#roadmap" data-section="roadmap" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full hover:text-white transition-colors">Roadmap</a>
+        <a href="#engineering" data-section="engineering" id="nav-btn-engineering" class="nav-pill-link px-2 xl:px-2.5 py-1 rounded-full text-orange-300 hover:text-orange-200 transition-colors flex items-center gap-1">
           <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
           <span>Engineering</span>
         </a>
       </nav>
 
-      <!-- CTA Buttons -->
-      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ml-auto lg:ml-0">
-        <a href="Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf" download class="hidden sm:flex px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 items-center gap-1.5 transition-all whitespace-nowrap">
+      <!-- CTA Buttons + Mobile Menu Toggle -->
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap">
+        <a href="Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf" download class="hidden md:flex px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 items-center gap-1.5 transition-all whitespace-nowrap">
           <i data-lucide="file-text" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
           <span>PDF<span class="hidden xl:inline"> Report</span></span>
         </a>
-        <button class="btn-open-poster px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-all whitespace-nowrap">
+        <button type="button" class="btn-open-poster hidden sm:flex px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 items-center gap-1.5 transition-all whitespace-nowrap">
           <i data-lucide="file-image" class="w-3.5 h-3.5 text-orange-400 shrink-0"></i>
           <span>Poster</span>
         </button>
         <a href="#simulator" class="px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white shadow-md shadow-orange-500/25 flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0">
           <i data-lucide="play" class="w-3.5 h-3.5 fill-current shrink-0"></i>
-          <span>Simulation</span>
+          <span>Sim<span class="hidden xl:inline">ulation</span></span>
         </a>
+        <button type="button" id="btn-mobile-menu" class="lg:hidden p-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center justify-center transition-colors shrink-0" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-nav-drawer">
+          <i data-lucide="menu" class="w-4 h-4"></i>
+        </button>
       </div>
     </div>
   </header>
 
+  <!-- Mobile Slide-Over Navigation Drawer -->
+  <div id="mobile-nav-backdrop" class="mobile-nav-backdrop lg:hidden"></div>
+  <aside id="mobile-nav-drawer" class="mobile-nav-drawer lg:hidden" aria-hidden="true" aria-label="Mobile navigation">
+    <div class="p-4 border-b border-white/10 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-mono uppercase text-orange-400 px-2 py-0.5 rounded bg-orange-500/15 border border-orange-500/30 font-bold">V1 • Teensy 4.1</span>
+      </div>
+      <button type="button" id="btn-mobile-menu-close" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10" aria-label="Close navigation menu">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <nav class="p-4 flex flex-col gap-1.5 text-sm font-medium text-slate-200">
+      <a href="#overview" class="px-3.5 py-2.5 rounded-xl hover:bg-white/5 flex items-center justify-between transition-colors"><span>01. System Overview</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i></a>
+      <a href="#simulator" class="px-3.5 py-2.5 rounded-xl hover:bg-white/5 flex items-center justify-between transition-colors"><span>02. Live 2D Simulator</span><i data-lucide="play-circle" class="w-4 h-4 text-orange-400"></i></a>
+      <a href="#architecture" class="px-3.5 py-2.5 rounded-xl hover:bg-white/5 flex items-center justify-between transition-colors"><span>03. System Architecture</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i></a>
+      <a href="#mechanical" class="px-3.5 py-2.5 rounded-xl hover:bg-white/5 flex items-center justify-between transition-colors"><span>04. Mechanical Design</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i></a>
+      <a href="#bom" class="px-3.5 py-2.5 rounded-xl hover:bg-white/5 flex items-center justify-between transition-colors"><span>05. Bill of Materials</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i></a>
+      <a href="#roadmap" class="px-3.5 py-2.5 rounded-xl hover:bg-white/5 flex items-center justify-between transition-colors"><span>06. 6-Stage Roadmap</span><i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i></a>
+      <a href="#engineering" class="px-3.5 py-2.5 rounded-xl bg-orange-500/10 border border-orange-500/25 text-orange-300 flex items-center justify-between transition-colors"><span>07. Engineering Deep-Dive</span><i data-lucide="cpu" class="w-4 h-4 text-orange-400"></i></a>
+    </nav>
+    <div class="mt-auto p-4 border-t border-white/10 space-y-2.5">
+      <button type="button" class="btn-open-poster mobile-nav-action w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 text-xs font-semibold flex items-center justify-center gap-2">
+        <i data-lucide="file-image" class="w-4 h-4 text-orange-400"></i>
+        <span>Inspect 4K System Poster</span>
+      </button>
+      <a href="Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf" download class="w-full py-2.5 px-3 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 text-xs font-semibold flex items-center justify-center gap-2">
+        <i data-lucide="file-text" class="w-4 h-4 text-cyan-400"></i>
+        <span>Download 12-Page PDF Report</span>
+      </a>
+      <div class="grid grid-cols-2 gap-2 pt-1 font-mono text-xs text-center">
+        <a href="index.html" class="py-2 rounded-lg bg-slate-900 text-slate-300 border border-white/10">Portal Home</a>
+        <a href="v2.html" class="py-2 rounded-lg bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold">Switch to V2</a>
+      </div>
+    </div>
+  </aside>
+
   <!-- ==========================================
        HERO SECTION
        ========================================== -->
-  <section class="relative pt-12 pb-16 overflow-hidden">
+  <section class="relative pt-8 pb-12 sm:pt-10 sm:pb-14 overflow-x-clip">
     <!-- Ambient Glow effects -->
-    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-orange-500/10 blur-[120px] rounded-full pointer-events-none"></div>
-    <div class="absolute top-1/3 right-10 w-[400px] h-[300px] bg-cyan-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[320px] bg-orange-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+    <div class="absolute top-1/3 right-10 w-[400px] h-[280px] bg-cyan-500/10 blur-[100px] rounded-full pointer-events-none"></div>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
       
-      <div class="flex flex-col lg:flex-row items-center gap-12">
+      <div class="flex flex-col lg:flex-row items-center gap-10 lg:gap-12">
         <!-- Hero Left Text -->
         <div class="flex-1 text-center lg:text-left">
-          <div class="flex flex-wrap items-center justify-center lg:justify-start gap-2.5 mb-4">
-            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-xs font-mono uppercase tracking-wider">
-              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400"></i>
+          <div class="flex flex-wrap items-center justify-center lg:justify-start gap-2 mb-4">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-slate-300 text-[11px] font-mono uppercase tracking-wider">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
               <span>Embedded Robotics Engineering Spec</span>
             </div>
-            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono uppercase tracking-wider">
-              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-mono uppercase tracking-wider">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
               <span>Air-Gapped • Fail-Safe</span>
             </div>
           </div>
           
           <!-- Official CapSorter Logo Showcase -->
-          <div class="mb-5 flex justify-start">
-            <img src="assets/logo.png" alt="CapSorter Master Logo" class="h-14 sm:h-18 w-auto object-contain filter drop-shadow-[0_0_25px_rgba(255,107,0,0.3)]">
+          <div class="mb-4 flex justify-center lg:justify-start">
+            <img src="assets/logo.png?v=3" alt="CapSorter Master Logo" class="h-12 sm:h-16 w-auto object-contain filter drop-shadow-[0_0_24px_rgba(255,107,0,0.22)]">
           </div>
 
-          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.1] mb-4">
-            Autonomous Bottle-Cap <br>
+          <h1 class="text-3xl sm:text-5xl xl:text-[3.35rem] font-extrabold tracking-tight text-white leading-[1.12] mb-3.5">
+            Autonomous <span class="whitespace-nowrap">Bottle-Cap</span> <br>
             <span class="bg-gradient-to-r from-orange-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent">
               Sorting Machine
             </span>
           </h1>
 
-          <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-orange-500/20 via-orange-500/15 to-amber-500/20 border border-orange-500/40 text-orange-300 font-mono text-sm font-bold mb-6 shadow-md shadow-orange-500/10">
-            <i data-lucide="user-check" class="w-4 h-4 text-orange-400"></i>
+          <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gradient-to-r from-orange-500/20 via-orange-500/15 to-amber-500/20 border border-orange-500/40 text-orange-300 font-mono text-xs sm:text-sm font-bold mb-5 shadow-md shadow-orange-500/10">
+            <i data-lucide="user-check" class="w-4 h-4 text-orange-400 shrink-0"></i>
             <span>Made by Neil Shettigar</span>
           </div>
 
-          <p class="text-base sm:text-lg text-slate-300 max-w-2xl mb-8 leading-relaxed">
+          <p class="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto lg:mx-0 mb-6 leading-relaxed">
             A vision-guided Cartesian pick-and-place robot featuring a dual-controller architecture: 
             <strong class="text-cyan-300">Teensy 4.1</strong> edge computer vision, 
             <strong class="text-emerald-300">Arduino Mega 2560</strong> real-time motion control, 
@@ -159,61 +198,59 @@
           </p>
 
           <!-- Key Metrics Grid -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
-              <span class="block text-xs font-mono text-slate-400">ENVELOPE</span>
-              <span class="text-lg font-bold text-white font-mono">500×500 mm</span>
-              <span class="text-[11px] text-orange-400 block">Height: 350-500mm</span>
+          <div class="grid grid-cols-2 xl:grid-cols-4 gap-2.5 mb-6 text-left">
+            <div class="p-3 rounded-xl bg-slate-900/85 border border-white/8">
+              <span class="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Envelope</span>
+              <span class="text-base xl:text-[15px] font-bold text-white font-mono whitespace-nowrap">500×500 mm</span>
+              <span class="text-[11px] text-orange-400 block mt-0.5">Height: 350–500mm</span>
             </div>
-            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
-              <span class="block text-xs font-mono text-slate-400">GRID WORKSPACE</span>
-              <span class="text-lg font-bold text-white font-mono">300×300 mm</span>
-              <span class="text-[11px] text-cyan-400 block">10×10 (30mm cells)</span>
+            <div class="p-3 rounded-xl bg-slate-900/85 border border-white/8">
+              <span class="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Grid Space</span>
+              <span class="text-base xl:text-[15px] font-bold text-white font-mono whitespace-nowrap">300×300 mm</span>
+              <span class="text-[11px] text-cyan-400 block mt-0.5">10×10 (30mm cells)</span>
             </div>
-            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
-              <span class="block text-xs font-mono text-slate-400">CYCLE TIME</span>
-              <span class="text-lg font-bold text-white font-mono">~4–6s / cap</span>
-              <span class="text-[11px] text-emerald-400 block">4 Color Sorting</span>
+            <div class="p-3 rounded-xl bg-slate-900/85 border border-white/8">
+              <span class="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Cycle Time</span>
+              <span class="text-base xl:text-[15px] font-bold text-white font-mono whitespace-nowrap">~5–13 s</span>
+              <span class="text-[11px] text-emerald-400 block mt-0.5">Per cap (bench est.)</span>
             </div>
-            <div class="p-3 rounded-lg bg-slate-900/80 border border-white/5">
-              <span class="block text-xs font-mono text-slate-400">CONNECTIVITY</span>
-              <span class="text-lg font-bold text-white font-mono">0% Cloud</span>
-              <span class="text-[11px] text-amber-400 block">Air-gapped Edge</span>
+            <div class="p-3 rounded-xl bg-slate-900/85 border border-white/8">
+              <span class="block text-[10px] font-mono text-slate-400 uppercase tracking-wider">Connectivity</span>
+              <span class="text-base xl:text-[15px] font-bold text-white font-mono whitespace-nowrap">0% Cloud</span>
+              <span class="text-[11px] text-amber-400 block mt-0.5">Air-Gapped Edge</span>
             </div>
           </div>
 
           <!-- Action Buttons -->
-          <div class="flex flex-wrap items-center justify-center lg:justify-start gap-4">
-            <a href="Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf" download class="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold flex items-center gap-2 shadow-lg shadow-cyan-500/25 transition-all border border-cyan-400/30">
-              <i data-lucide="file-text" class="w-4 h-4 text-cyan-200"></i>
-              <span>Download 12-Page PDF Report</span>
+          <div class="flex flex-wrap items-center justify-center lg:justify-start gap-3">
+            <a href="#simulator" class="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-orange-500/25 transition-all hover:-translate-y-0.5">
+              <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+              <span>Launch 2D Simulator</span>
             </a>
-            <a href="#simulator" class="px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold flex items-center gap-2 shadow-lg shadow-orange-500/30 transition-all">
-              <i data-lucide="play" class="w-4 h-4"></i>
-              <span>Launch 2D Gantry Simulator</span>
+            <a href="Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf" download class="px-5 py-3 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 font-semibold text-sm flex items-center gap-2 border border-cyan-500/35 transition-all hover:-translate-y-0.5">
+              <i data-lucide="file-text" class="w-4 h-4 text-cyan-400"></i>
+              <span>Download PDF Report</span>
             </a>
-            <button class="btn-open-poster px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold border border-white/10 flex items-center gap-2 transition-all">
+            <button type="button" class="btn-open-poster px-4 py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 font-semibold text-sm border border-white/10 flex items-center gap-2 transition-all hover:-translate-y-0.5">
               <i data-lucide="maximize-2" class="w-4 h-4 text-orange-400"></i>
-              <span>Open Master Infographic</span>
+              <span>4K Poster</span>
             </button>
           </div>
         </div>
 
         <!-- Hero Right: Interactive 3D Model Poster Preview -->
         <div class="flex-1 w-full max-w-lg lg:max-w-none">
-          <div class="tech-card p-2 relative group cursor-pointer btn-open-poster">
-            <div class="relative overflow-hidden rounded-lg">
+          <div class="tech-card p-2 relative group cursor-pointer btn-open-poster" role="button" tabindex="0" aria-label="Open high-resolution architecture poster">
+            <div class="relative overflow-hidden rounded-xl">
               <img src="assets/system_poster.jpg" alt="Autonomous Bottle-Cap Sorting Machine Schematic" class="w-full h-auto object-cover transform group-hover:scale-[1.02] transition-transform duration-500">
-              <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-4">
-                <div class="flex items-center justify-between w-full">
-                  <div>
-                    <span class="text-xs font-mono text-orange-400 uppercase tracking-wider block">Full Architecture Poster</span>
-                    <span class="text-sm font-bold text-white">Click to inspect high-resolution diagram</span>
-                  </div>
-                  <span class="p-2 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/40">
-                    <i data-lucide="zoom-in" class="w-4 h-4"></i>
-                  </span>
+              <div class="bg-[#0a0d14]/92 backdrop-blur-md border-t border-white/10 px-4 py-3 flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <span class="text-[11px] font-mono text-orange-400 uppercase tracking-wider block">Full 4K Architecture Poster</span>
+                  <span class="text-xs sm:text-sm font-bold text-white truncate block">Click to zoom &amp; pan high-resolution diagram</span>
                 </div>
+                <span class="p-2 rounded-lg bg-orange-500/15 text-orange-400 border border-orange-500/35 group-hover:bg-orange-500 group-hover:text-white transition-colors shrink-0">
+                  <i data-lucide="zoom-in" class="w-4 h-4"></i>
+                </span>
               </div>
             </div>
           </div>
@@ -342,7 +379,7 @@
       </div>
 
       <!-- Simulator Container -->
-      <div class="tech-card p-6">
+      <div class="tech-panel p-4 sm:p-6">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
           <!-- Canvas Viewport -->
@@ -470,12 +507,12 @@
         <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">03 / Controller Separation</span>
         <h2 class="text-3xl sm:text-4xl font-bold text-white">System Architecture & Responsibilities</h2>
         <p class="text-slate-400 text-sm max-w-2xl mt-2">
-          By segregating image processing from hard-real-time motor step generation, the system guarantees jitter-free stepper pulse timing and instant emergency-stop reaction.
+          By segregating image processing from real-time motor step generation, the system keeps stepper pulse timing free of vision stalls while relying on a hardwired actuator E-stop for primary safety cutoff.
         </p>
       </div>
 
       <!-- Responsibilities Table -->
-      <div class="tech-card mb-10 overflow-hidden">
+      <div class="tech-panel mb-10 overflow-hidden">
         <div class="p-4 bg-slate-900/60 border-b border-white/5 flex items-center justify-between">
           <span class="font-bold text-sm text-slate-200 flex items-center gap-2">
             <i data-lucide="sliders" class="w-4 h-4 text-orange-400"></i>
@@ -512,7 +549,7 @@
               <tr>
                 <td class="font-bold text-emerald-400">Arduino Mega 2560</td>
                 <td class="font-mono text-xs">ATmega2560 @ 16 MHz</td>
-                <td>Deterministic motion control, step pulse generation, homing routines, limit switch ISR, servo sequencing, and safety watchdog.</td>
+                <td>Deterministic motion control, step pulse generation, homing routines, polled X/Y/Z NC limit &amp; E-stop sensing, servo sequencing, and safety watchdog.</td>
                 <td class="font-mono text-xs text-emerald-300">UART1 & I2C</td>
                 <td><span class="badge-pill bg-amber-500/10 text-amber-300 border border-amber-500/30">5V Logic</span></td>
               </tr>
@@ -536,13 +573,13 @@
       </div>
 
       <!-- Overall Communication Visual Flow (matching Ref3 style) -->
-      <div class="tech-card p-6 relative">
+      <div class="tech-panel p-6 relative">
         <h3 class="text-sm font-mono text-orange-400 uppercase tracking-wider mb-6 flex items-center gap-2">
           <i data-lucide="git-commit" class="w-4 h-4"></i>
           Inter-Controller Communication Architecture
         </h3>
 
-        <div class="flex flex-col items-center gap-4 max-w-2xl mx-auto">
+        <div class="flex flex-col items-center gap-4 max-w-3xl mx-auto">
           
           <!-- Node 1: ESP32-CAM -->
           <div class="w-full p-4 rounded-xl bg-slate-900 border border-slate-700/60 flex items-center gap-4">
@@ -550,7 +587,7 @@
               <i data-lucide="camera" class="w-6 h-6"></i>
             </div>
             <div class="flex-1">
-              <div class="flex items-center justify-between">
+              <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="font-bold text-white text-base">ESP32-CAM (OV2640)</span>
                 <span class="badge-pill badge-orange text-[10px]">Image Acquisition</span>
               </div>
@@ -570,7 +607,7 @@
               <i data-lucide="cpu" class="w-6 h-6"></i>
             </div>
             <div class="flex-1">
-              <div class="flex items-center justify-between">
+              <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="font-bold text-white text-base">Teensy 4.1 (600 MHz Cortex-M7)</span>
                 <span class="badge-pill badge-green text-[10px]">Vision & Planning</span>
               </div>
@@ -588,10 +625,10 @@
           <!-- Node 3: Arduino Mega 2560 -->
           <div class="w-full p-4 rounded-xl bg-slate-900 border border-slate-700/60 flex items-center gap-4">
             <div class="w-12 h-12 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
-              <i data-lucide="bot" class="w-6 h-6"></i>
+              <i data-lucide="circuit-board" class="w-6 h-6"></i>
             </div>
             <div class="flex-1">
-              <div class="flex items-center justify-between">
+              <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="font-bold text-white text-base">Arduino Mega 2560</span>
                 <span class="badge-pill badge-cyan text-[10px]">Motion & Safety</span>
               </div>
@@ -652,7 +689,7 @@
         <!-- CAD Render Image -->
         <div class="lg:col-span-7 tech-card p-3">
           <div class="relative rounded-lg overflow-hidden border border-white/5 bg-black/40">
-            <img src="assets/images/gantry_3axis_cad.png" alt="Cartesian 3-Axis Robot CAD Design" class="w-full h-[380px] object-cover">
+            <img src="assets/images/gantry_3axis_cad.png" loading="lazy" decoding="async" alt="Cartesian 3-Axis Robot CAD Design" class="w-full h-[380px] object-cover">
             <div class="absolute bottom-2 left-2 px-2.5 py-1 rounded bg-black/70 backdrop-blur-sm text-[11px] font-mono text-slate-300 border border-white/10">
               Moving-Bridge Cartesian Structure (500×500 mm Base)
             </div>
@@ -710,7 +747,7 @@
         <!-- X Axis Card -->
         <div class="tech-card p-4 flex flex-col">
           <div class="h-40 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3">
-            <img src="assets/images/axis_x_vslot.png" alt="X-Axis V-Slot Actuator" class="w-full h-full object-cover">
+            <img src="assets/images/axis_x_vslot.png" loading="lazy" decoding="async" alt="X-Axis V-Slot Actuator" class="w-full h-full object-cover">
           </div>
           <div class="flex items-center justify-between mb-2">
             <h4 class="font-bold text-white text-base">X-Axis Linear Drive</h4>
@@ -728,7 +765,7 @@
         <!-- Y Axis Card -->
         <div class="tech-card p-4 flex flex-col">
           <div class="h-40 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3">
-            <img src="assets/images/axis_y_gantry.png" alt="Y-Axis Moving Bridge" class="w-full h-full object-cover">
+            <img src="assets/images/axis_y_gantry.png" loading="lazy" decoding="async" alt="Y-Axis Moving Bridge" class="w-full h-full object-cover">
           </div>
           <div class="flex items-center justify-between mb-2">
             <h4 class="font-bold text-white text-base">Y-Axis Moving Bridge</h4>
@@ -746,7 +783,7 @@
         <!-- Z Axis Card -->
         <div class="tech-card p-4 flex flex-col">
           <div class="h-40 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3">
-            <img src="assets/images/axis_z_slider.png" alt="Z-Axis Vertical Slider" class="w-full h-full object-cover">
+            <img src="assets/images/axis_z_slider.png" loading="lazy" decoding="async" alt="Z-Axis Vertical Slider" class="w-full h-full object-cover">
           </div>
           <div class="flex items-center justify-between mb-2">
             <h4 class="font-bold text-white text-base">Z-Axis Linkage</h4>
@@ -764,7 +801,7 @@
         <!-- Gripper Card -->
         <div class="tech-card p-4 flex flex-col">
           <div class="h-40 rounded-lg overflow-hidden bg-black/30 border border-white/5 mb-3">
-            <img src="assets/images/gripper_servo_stage3.png" alt="Servo Parallel Gripper" class="w-full h-full object-cover">
+            <img src="assets/images/gripper_servo_stage3.png" loading="lazy" decoding="async" alt="Servo Parallel Gripper" class="w-full h-full object-cover">
           </div>
           <div class="flex items-center justify-between mb-2">
             <h4 class="font-bold text-white text-base">Parallel Gripper</h4>
@@ -784,7 +821,7 @@
       <!-- Sorting Board & Caps Overview Banner -->
       <div class="tech-card p-6 flex flex-col md:flex-row items-center gap-6">
         <div class="w-full md:w-1/3 rounded-lg overflow-hidden border border-white/5">
-          <img src="assets/images/sorting_bins_caps.png" alt="Bottle Caps in Sorting Bins" class="w-full h-44 object-cover">
+          <img src="assets/images/sorting_bins_caps.png" loading="lazy" decoding="async" alt="Bottle Caps in Sorting Bins" class="w-full h-44 object-cover">
         </div>
         <div class="w-full md:w-2/3">
           <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
@@ -820,11 +857,11 @@
       </div>
 
       <!-- Filterable BOM Table -->
-      <div class="tech-card overflow-hidden">
+      <div class="tech-panel overflow-hidden">
         <div class="p-4 bg-slate-900/60 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 flex-wrap">
             <span class="font-bold text-sm text-white">Component List</span>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <button data-filter="all" class="bom-filter-btn active px-3 py-1 rounded-lg text-xs font-mono font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/40">
                 All (16 Items)
               </button>
@@ -837,7 +874,7 @@
             </div>
           </div>
           <div class="relative">
-            <input id="bom-search" type="text" placeholder="Search components..." class="px-3 py-1.5 pl-8 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-orange-500 w-52">
+            <input id="bom-search" type="text" placeholder="Search components..." class="px-3 py-1.5 pl-8 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-orange-500 w-full sm:w-52">
             <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
           </div>
         </div>
@@ -954,17 +991,17 @@
               <tr data-status="purchase">
                 <td class="font-mono text-slate-400">13</td>
                 <td class="font-bold text-purple-400">5V 5A Buck Converter</td>
-                <td class="font-mono text-xs">High-efficiency step-down (12V ⟶ 5V)</td>
+                <td class="font-mono text-xs">High-efficiency step-down (12V ⟶ 5V; verify exact IC &amp; servo voltage rating)</td>
                 <td class="font-mono">1</td>
-                <td>Isolated high-current power for servos</td>
+                <td>Separate regulated high-current branch for servos (common star GND)</td>
                 <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
               </tr>
               <tr data-status="purchase">
                 <td class="font-mono text-slate-400">14</td>
                 <td class="font-bold text-cyan-400">5V 3A Logic Buck</td>
-                <td class="font-mono text-xs">Regulated step-down for microcontrollers</td>
+                <td class="font-mono text-xs">Regulated step-down for microcontrollers (verify exact SKU)</td>
                 <td class="font-mono">1</td>
-                <td>Stable 5V rail for Mega, Teensy, ESP32</td>
+                <td>Separate regulated 5V branch for Mega 5V pin, Teensy VIN, ESP32-CAM</td>
                 <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
               </tr>
               <tr data-status="purchase">
@@ -972,15 +1009,15 @@
                 <td class="font-bold text-red-400">Logic Level Shifter</td>
                 <td class="font-mono text-xs">4-channel bidirectional (5V ⇄ 3.3V)</td>
                 <td class="font-mono">1</td>
-                <td>Protects Teensy 3.3V RX from Mega 5V TX</td>
+                <td>Shifts BOTH TX1 &amp; RX1 (Teensy 4.1 has no 5V-tolerant pins)</td>
                 <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
               </tr>
               <tr data-status="purchase">
                 <td class="font-mono text-slate-400">16</td>
-                <td class="font-bold text-white">NC Limit Switches & E-Stop</td>
-                <td class="font-mono text-xs">Microswitches with roller levers + E-Stop button</td>
+                <td class="font-bold text-white">NC Limit Switches &amp; Dual-Pole E-Stop</td>
+                <td class="font-mono text-xs">Roller-lever NC microswitches + dual-pole latching NC E-Stop (rated &ge;10A DC)</td>
                 <td class="font-mono">3 switches + 1</td>
-                <td>Homing calibration & physical emergency cutoff</td>
+                <td>X/Y/Z NC limits, hardwired 12V actuator cutoff &amp; Pin 25 sense</td>
                 <td><span class="badge-pill bg-amber-500/10 text-amber-400 border border-amber-500/30">To Purchase</span></td>
               </tr>
             </tbody>
@@ -1011,7 +1048,7 @@
         <div class="tech-card p-5 flex flex-col justify-between">
           <div>
             <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
-              <img src="assets/images/vision_detection_stage1.png" alt="Stage 1 Vision Prototype" class="w-full h-full object-cover">
+              <img src="assets/images/vision_detection_stage1.png" loading="lazy" decoding="async" alt="Stage 1 Vision Prototype" class="w-full h-full object-cover">
             </div>
             <div class="flex items-center justify-between mb-2">
               <span class="font-mono text-xs text-orange-400 font-bold">STAGE 01</span>
@@ -1034,7 +1071,7 @@
         <div class="tech-card p-5 flex flex-col justify-between">
           <div>
             <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
-              <img src="assets/images/gantry_belt_stage2.png" alt="Stage 2 X/Y Gantry Motion" class="w-full h-full object-cover">
+              <img src="assets/images/gantry_belt_stage2.png" loading="lazy" decoding="async" alt="Stage 2 X/Y Gantry Motion" class="w-full h-full object-cover">
             </div>
             <div class="flex items-center justify-between mb-2">
               <span class="font-mono text-xs text-cyan-400 font-bold">STAGE 02</span>
@@ -1057,7 +1094,7 @@
         <div class="tech-card p-5 flex flex-col justify-between">
           <div>
             <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
-              <img src="assets/images/gripper_servo_stage3.png" alt="Stage 3 Z-Axis & Gripper" class="w-full h-full object-cover">
+              <img src="assets/images/gripper_servo_stage3.png" loading="lazy" decoding="async" alt="Stage 3 Z-Axis & Gripper" class="w-full h-full object-cover">
             </div>
             <div class="flex items-center justify-between mb-2">
               <span class="font-mono text-xs text-purple-400 font-bold">STAGE 03</span>
@@ -1079,8 +1116,11 @@
         <!-- Stage 4 -->
         <div class="tech-card p-5 flex flex-col justify-between">
           <div>
-            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4 flex items-center justify-center p-4">
-              <i data-lucide="network" class="w-16 h-16 text-orange-400/80"></i>
+            <div class="h-40 rounded-lg overflow-hidden schematic-stage-bg border border-orange-500/20 mb-4 flex flex-col items-center justify-center gap-2 p-4 relative">
+              <div class="w-14 h-14 rounded-2xl bg-orange-500/15 border border-orange-500/35 flex items-center justify-center shadow-lg shadow-orange-500/15">
+                <i data-lucide="network" class="w-7 h-7 text-orange-400"></i>
+              </div>
+              <span class="text-[10px] font-mono uppercase tracking-wider text-orange-300/80">115.2k UART • CRC16-CCITT</span>
             </div>
             <div class="flex items-center justify-between mb-2">
               <span class="font-mono text-xs text-amber-400 font-bold">STAGE 04</span>
@@ -1103,7 +1143,7 @@
         <div class="tech-card p-5 flex flex-col justify-between">
           <div>
             <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4">
-              <img src="assets/images/portal_robot_system.png" alt="Stage 5 Full Integration" class="w-full h-full object-cover">
+              <img src="assets/images/portal_robot_system.png" loading="lazy" decoding="async" alt="Stage 5 Full Integration" class="w-full h-full object-cover">
             </div>
             <div class="flex items-center justify-between mb-2">
               <span class="font-mono text-xs text-emerald-400 font-bold">STAGE 05</span>
@@ -1125,8 +1165,11 @@
         <!-- Stage 6 -->
         <div class="tech-card p-5 flex flex-col justify-between">
           <div>
-            <div class="h-40 rounded-lg overflow-hidden bg-black/40 border border-white/5 mb-4 flex items-center justify-center p-4">
-              <i data-lucide="shield-check" class="w-16 h-16 text-emerald-400/80"></i>
+            <div class="h-40 rounded-lg overflow-hidden schematic-stage-bg-emerald border border-emerald-500/20 mb-4 flex flex-col items-center justify-center gap-2 p-4 relative">
+              <div class="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center shadow-lg shadow-emerald-500/15">
+                <i data-lucide="shield-check" class="w-7 h-7 text-emerald-400"></i>
+              </div>
+              <span class="text-[10px] font-mono uppercase tracking-wider text-emerald-300/80">100-Cycle Endurance • E-Stop</span>
             </div>
             <div class="flex items-center justify-between mb-2">
               <span class="font-mono text-xs text-red-400 font-bold">STAGE 06</span>
@@ -1157,7 +1200,7 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
       <!-- Engineering Launcher Gate Card -->
-      <div class="tech-card p-6 sm:p-8 border-orange-500/30 bg-gradient-to-br from-[#121826] via-[#0e131f] to-[#131b2e]">
+      <div class="tech-panel p-6 sm:p-8 border-orange-500/30 bg-gradient-to-br from-[#121826] via-[#0e131f] to-[#131b2e]">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-white/10">
           <div>
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/15 border border-orange-500/30 text-orange-400 text-xs font-mono uppercase tracking-wider mb-3">
@@ -1225,7 +1268,7 @@
               <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform"></i>
             </div>
             <div class="font-bold text-white text-xs mb-1">Critical Considerations</div>
-            <p class="text-[11px] text-slate-400 leading-snug">TMC2208 Vref thermals, servo rail isolation &amp; calibration</p>
+            <p class="text-[11px] text-slate-400 leading-snug">TMC2208 Vref thermals, separate servo rail &amp; calibration</p>
           </button>
         </div>
       </div>
@@ -1306,7 +1349,7 @@
       </div>
 
       <!-- Interactive 4-Stage Pipeline Demonstrator (matching poster box 07) -->
-      <div class="tech-card p-6 mb-12">
+      <div class="tech-panel p-6 mb-12">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-white/5 gap-4">
           <div>
             <h3 class="font-bold text-lg text-white flex items-center gap-2">
@@ -1489,7 +1532,7 @@
       </div>
 
       <!-- Power Tree Diagram (matching prompt Section 5) -->
-      <div class="tech-card p-6 mb-12">
+      <div class="tech-panel p-6 mb-12">
         <h3 class="font-bold text-sm text-orange-400 font-mono uppercase tracking-wider mb-6 flex items-center gap-2">
           <i data-lucide="git-branch" class="w-4 h-4"></i>
           12V / 10A (120W) Power Distribution Breakdown
@@ -1539,12 +1582,12 @@
             </div>
             <h4 class="font-bold text-white text-base mb-2">Microcontrollers & Logic</h4>
             <p class="text-xs text-slate-300 leading-relaxed mb-4">
-              Clean, isolated 5V logic supply powering Arduino Mega, Teensy 4.1 VIN, ESP32-CAM, and PCA9685 VCC chip power.
+              Separate regulated 5V logic branch (common star ground — not galvanically isolated) powering Arduino Mega 5V pin, Teensy 4.1 VIN, ESP32-CAM 5V, and PCA9685 VCC. Combined 5V/5A + 5V/3A rails = 40W rated (~45–47W from 12V at ~85–90% buck efficiency); size wire gauges, fuses &amp; connectors to exact SKUs.
             </p>
             <ul class="text-xs text-slate-400 space-y-1 font-mono">
-              <li>• Arduino Mega 2560 5V/VIN</li>
-              <li>• Teensy 4.1 VIN (3.3V internal LDO)</li>
-              <li>• ESP32-CAM 5V pin</li>
+              <li>• Arduino Mega 2560 5V pin (NOT VIN; avoid USB backfeed)</li>
+              <li>• Teensy 4.1 VIN (3.3V internal regulator)</li>
+              <li>• ESP32-CAM 5V pin &amp; PCA9685 VCC</li>
             </ul>
           </div>
 
@@ -1565,7 +1608,7 @@
       </div>
 
       <!-- Searchable & Filterable Pinout Matrix -->
-      <div class="tech-card overflow-hidden">
+      <div class="tech-panel overflow-hidden">
         <div class="p-4 bg-slate-900/60 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 class="font-bold text-sm text-white flex items-center gap-2">
@@ -1578,7 +1621,7 @@
           <!-- Search & Filter Controls -->
           <div class="flex flex-wrap items-center gap-2">
             <div class="relative">
-              <input id="pinout-search" type="text" placeholder="Search pin, signal..." class="px-3 py-1.5 pl-8 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-orange-500 w-44">
+              <input id="pinout-search" type="text" placeholder="Search pin, signal..." class="px-3 py-1.5 pl-8 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-orange-500 w-full sm:w-44">
               <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
             </div>
             <button data-filter="all" class="pinout-filter-btn active px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/40">
@@ -1671,7 +1714,7 @@
                 <td class="font-mono text-xs">X Driver STEP Pin</td>
                 <td>X-Axis Step Pulse Train (40 steps/mm, 370mm range)</td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
-                <td>2400 steps/s max speed (60 mm/s on 16 MHz AVR)</td>
+                <td>2800 steps/s max speed (70 mm/s nominal on 16 MHz AVR; measure actual travel)</td>
               </tr>
               <tr data-controller="tmc2208">
                 <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (X)</td>
@@ -1687,7 +1730,7 @@
                 <td class="font-mono text-xs">Y Driver STEP Pin</td>
                 <td>Y-Axis Step Pulse Train (40 steps/mm, 300mm range)</td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V VIO</span></td>
-                <td>Moving bridge actuator (2400 steps/s = 60 mm/s)</td>
+                <td>Moving bridge actuator (2800 steps/s = 70 mm/s nominal)</td>
               </tr>
               <tr data-controller="tmc2208">
                 <td class="font-bold text-slate-200">Mega ⟶ TMC2208 (Y)</td>
@@ -1740,14 +1783,22 @@
                 <td>Ticks: 210 (36mm Open) ⟶ 385 (26mm Clamped)</td>
               </tr>
 
-              <!-- Limit Switches -->
+              <!-- Limit Switches & E-Stop Sense -->
               <tr data-controller="mega">
                 <td class="font-bold text-emerald-400">Limit Switches ⟶ Mega</td>
                 <td class="font-mono text-xs">NC Contacts (Common to GND)</td>
                 <td class="font-mono text-xs">Mega Pins 22 (X), 23 (Y), 24 (Z)</td>
-                <td>X-Home, Y-Home, Z-Home Endstop Inputs</td>
+                <td>X-Home, Y-Home, Z-Limit Endstop Inputs (Polled in loop)</td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">5V INPUT_PULLUP</span></td>
-                <td>Normally Closed to GND: reads LOW normal, HIGH when triggered/broken</td>
+                <td>NC to GND: LOW normal, HIGH triggered/wire break (Port A has no AVR ISR)</td>
+              </tr>
+              <tr data-controller="mega">
+                <td class="font-bold text-red-400">E-Stop Aux Pole ⟶ Mega</td>
+                <td class="font-mono text-xs">Latching E-Stop Pole 2 (NC to GND)</td>
+                <td class="font-mono text-xs">Mega Pin 25 (PIN_ESTOP)</td>
+                <td>Hardwired E-Stop State Sense (Pole 1 cuts 12V actuator power)</td>
+                <td><span class="badge-pill bg-red-500/20 text-red-300 border border-red-500/40">5V INPUT_PULLUP</span></td>
+                <td>Latches STATE_HARD_FAULT &amp; disables STEPPER_EN/SERVO_OE until explicit re-arm</td>
               </tr>
             </tbody>
           </table>
@@ -1771,7 +1822,7 @@
       </div>
 
       <!-- 8-Step Pick & Place Choreography Table -->
-      <div class="tech-card mb-12 overflow-hidden">
+      <div class="tech-panel mb-12 overflow-hidden">
         <div class="p-4 bg-slate-900/60 border-b border-white/5 flex items-center justify-between">
           <span class="font-bold text-sm text-slate-200 flex items-center gap-2">
             <i data-lucide="list-ordered" class="w-4 h-4 text-orange-400"></i>
@@ -1812,8 +1863,8 @@
                 <td class="font-bold font-mono text-orange-400">03</td>
                 <td class="font-semibold text-white">Grip Cap</td>
                 <td>Stationary</td>
-                <td>Lowered</td>
-                <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/30">Close (~26mm)</span></td>
+                <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/25">Lowered</span></td>
+                <td><span class="badge-pill bg-orange-500/15 text-orange-300 border border-orange-500/35">Close (~26mm)</span></td>
                 <td>Check servo current/torque limit</td>
               </tr>
               <tr>
@@ -1821,15 +1872,15 @@
                 <td class="font-semibold text-white">Vertical Lift</td>
                 <td>Stationary</td>
                 <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Raise (0mm)</span></td>
-                <td>Closed (Clamping)</td>
+                <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/25">Closed (Clamped)</span></td>
                 <td>Spring counterbalances gripper weight</td>
               </tr>
               <tr>
                 <td class="font-bold font-mono text-orange-400">05</td>
                 <td class="font-semibold text-white">Travel to Bin</td>
                 <td>Rapid traverse to designated bin slot</td>
-                <td>Raised (0mm)</td>
-                <td>Closed</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">Raised (0mm)</span></td>
+                <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/25">Closed</span></td>
                 <td>No Z travel while moving in XY</td>
               </tr>
               <tr>
@@ -1837,15 +1888,15 @@
                 <td class="font-semibold text-white">Lower into Bin</td>
                 <td>Stationary over bin opening</td>
                 <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">Lower (~25mm)</span></td>
-                <td>Closed</td>
+                <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/25">Closed</span></td>
                 <td>Prevents cap bounce/ejection</td>
               </tr>
               <tr>
                 <td class="font-bold font-mono text-orange-400">07</td>
                 <td class="font-semibold text-white">Release Cap</td>
                 <td>Stationary</td>
-                <td>Lowered</td>
-                <td><span class="badge-pill bg-slate-800 text-slate-300">Open (36mm)</span></td>
+                <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/25">Lowered</span></td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">Open (36mm)</span></td>
                 <td>Cap drops into designated bin</td>
               </tr>
               <tr>
@@ -1853,7 +1904,7 @@
                 <td class="font-semibold text-white">Retract & Advance</td>
                 <td>Stationary ⟶ Advance to next cap</td>
                 <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Raise (0mm)</span></td>
-                <td>Open (Ready)</td>
+                <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">Open (Ready)</span></td>
                 <td>Mega increments completed cap counter</td>
               </tr>
             </tbody>
@@ -1868,9 +1919,9 @@
           <div class="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400 mb-4">
             <i data-lucide="radio" class="w-5 h-5"></i>
           </div>
-          <h3 class="font-bold text-white text-base mb-2">Comms-Loss Safe Recovery</h3>
+          <h3 class="font-bold text-white text-base mb-2">Comms-Loss Fail-Safe Halt</h3>
           <p class="text-xs text-slate-300 leading-relaxed">
-            The Arduino Mega never relies on per-step instructions. It stores the full batch sorting plan locally. If communication drops while carrying a cap, it <strong>completes depositing that cap into its assigned bin</strong>, retracts Z, halts new pickups, and enters safe idle.
+            Without a physical grip-force or cap-presence sensor (<code class="text-orange-300">HAS_GRIP_SENSOR == 0</code>), the Mega <strong>never assumes a cap was picked</strong> on heartbeat loss (&gt;1.2 s). It stops XY immediately, retracts Z while preserving jaw state, disables steppers, and latches <code class="text-orange-300">STATE_FAILSAFE_HALT</code> until explicit operator re-arm (<code class="text-orange-300">CMD_REARM_HOME</code>) &amp; re-homing.
           </p>
         </div>
 
@@ -1878,9 +1929,9 @@
           <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4">
             <i data-lucide="compass" class="w-5 h-5"></i>
           </div>
-          <h3 class="font-bold text-white text-base mb-2">Sensorless Homing & Limits</h3>
+          <h3 class="font-bold text-white text-base mb-2">NC Limit Switches &amp; Homing</h3>
           <p class="text-xs text-slate-300 leading-relaxed">
-            Three normally closed (NC) mechanical limit switches protect X, Y, and Z axes. If any wire breaks or an overtravel occurs, the circuit immediately opens, triggering an emergency stop interrupt within 10 microseconds.
+            Three normally closed (NC) mechanical limit switches monitor X, Y, and Z (Pins 22–24, polled in <code class="text-cyan-300">loop()</code> with 3-sample debounce — Port A has no AVR ISR). Open-circuit or overtravel trips latch <code class="text-cyan-300">STATE_HARD_FAULT</code> and disable <code class="text-cyan-300">STEPPER_EN</code> and <code class="text-cyan-300">SERVO_OE</code>. Measure actual stopping distance on the machine.
           </p>
         </div>
 
@@ -1888,9 +1939,9 @@
           <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-4">
             <i data-lucide="power" class="w-5 h-5"></i>
           </div>
-          <h3 class="font-bold text-white text-base mb-2">Physical Emergency Stop</h3>
+          <h3 class="font-bold text-white text-base mb-2">Hardwired Dual-Pole E-Stop</h3>
           <p class="text-xs text-slate-300 leading-relaxed">
-            A latching red mushroom E-Stop button cuts the 12V supply to the TMC2208 stepper motor drivers and 5V servo buck converter. The controllers remain powered to log error states without hazardous mechanical motion.
+            Pole 1 of a latching red mushroom E-Stop directly cuts 12V actuator power feeding TMC2208 <code class="text-red-300">VMOT</code> and the Branch B 5V servo buck input independently of firmware, while Branch C keeps logic powered. Pole 2 signals Mega Pin 25 so reset never causes unexpected motion; use a mechanical Z counterbalance/stop for torque loss on power cut.
           </p>
         </div>
 
@@ -1905,7 +1956,7 @@
       <div class="flex flex-col md:flex-row md:items-end justify-between mb-8">
         <div>
           <span class="text-orange-400 font-mono text-xs uppercase tracking-wider block mb-2">07.4 / Embedded Firmware</span>
-          <h2 class="text-3xl sm:text-4xl font-bold text-white">Production Firmware Vault</h2>
+          <h2 class="text-3xl sm:text-4xl font-bold text-white">Firmware Vault (Pre-Validation)</h2>
         </div>
         <p class="text-slate-400 max-w-md text-sm mt-2 md:mt-0">
           Modular C++ source code templates for Teensy 4.1 vision, Arduino Mega motion sequencing, and packet protocol.
@@ -1913,7 +1964,7 @@
       </div>
 
       <!-- Code Viewer Card -->
-      <div class="tech-card overflow-hidden">
+      <div class="tech-panel overflow-hidden">
         
         <!-- Tab Navigation Header -->
         <div class="bg-slate-900/80 px-4 pt-3 border-b border-white/5 flex items-center justify-between overflow-x-auto">
@@ -1941,13 +1992,15 @@
         <div id="code-teensy" class="code-block p-5 bg-[#0b0e14] overflow-x-auto max-h-[480px]">
           <pre><code class="text-slate-200">// =========================================================================
 // Teensy 4.1 - Embedded Vision &amp; Plan Generator (V1)
-// Hardware: ARM Cortex-M7 @ 600 MHz | RAM: 1024 KB
+// Status: Pre-Validation Engineering Firmware (requires bench calibration)
+// Hardware: ARM Cortex-M7 @ 600 MHz | RAM: 1024 KB | 3.3V ONLY (NOT 5V tolerant)
 // Wiring:
 //   Serial2 (Pin 7 RX2, Pin 8 TX2) &lt;-&gt; ESP32-CAM UART2 (921,600 baud, 3.3V)
-//   Serial1 (Pin 0 RX1, Pin 1 TX1) &lt;-&gt; 3.3V/5V Shifter &lt;-&gt; Mega Serial1 (115,200)
+//   Serial1 (Pin 0 RX1, Pin 1 TX1) &lt;-&gt; Bidirectional 3.3V/5V Shifter &lt;-&gt; Mega Serial1 (115,200)
 // =========================================================================
 #include &lt;Arduino.h&gt;
 #include &lt;math.h&gt;
+#include &lt;string.h&gt;
 #include &quot;packet_protocol.h&quot;
 
 #define FRAME_WIDTH        320
@@ -1955,7 +2008,35 @@
 #define FRAME_PIXELS       (FRAME_WIDTH * FRAME_HEIGHT)
 #define FRAME_BYTES        (FRAME_PIXELS * 2) // 153,600 bytes RGB565
 #define BFS_QUEUE_SIZE     4096
-#define MIN_CAP_SEP_MM     24.0f              // Spatial NMS radius (caps are 28-32mm)
+#define MIN_CAP_SEP_MM     24.0f              // Spatial NMS radius (caps are 28-32 mm)
+
+// Supervision &amp; Handshake Timeouts
+#define READY_POLL_INTERVAL_MS   500UL
+#define HEARTBEAT_INTERVAL_MS    250UL
+#define MAX_SINGLE_CAP_MS      25000UL  // Per-cap stall watchdog (reset by CMD_CAP_PROGRESS)
+#define PER_CAP_BUDGET_MS      18000UL  // Worst-case cap cycle + margin for dynamic total ceiling
+#define BATCH_OVERHEAD_MS      30000UL  // Homing/parking &amp; handshake margin
+
+// FAIL-CLOSED CALIBRATION GUARD:
+// Measure the 4 board corner fiducials (Top-Left, Top-Right, Bottom-Right, Bottom-Left)
+// in pixels at the installed camera height, update BOARD_FIDUCIALS_PX below, verify mapped
+// test-grid accuracy across board edges, and ONLY THEN set V1_CALIBRATION_VERIFIED to 1.
+#define V1_CALIBRATION_VERIFIED  0
+
+const float BOARD_FIDUCIALS_MM[4][2] = {
+  {   0.0f,   0.0f },  // Top-Left (Origin)
+  { 300.0f,   0.0f },  // Top-Right
+  { 300.0f, 300.0f },  // Bottom-Right
+  {   0.0f, 300.0f }   // Bottom-Left
+};
+
+// Placeholder fiducial pixel coordinates — MUST be replaced with bench measurements
+const float BOARD_FIDUCIALS_PX[4][2] = {
+  {  16.0f,  16.0f },  // Top-Left fiducial (u, v)
+  { 304.0f,  16.0f },  // Top-Right fiducial (u, v)
+  { 304.0f, 224.0f },  // Bottom-Right fiducial (u, v)
+  {  16.0f, 224.0f }   // Bottom-Left fiducial (u, v)
+};
 
 // Allocate large buffers in Teensy 4.1 DMAMEM (512 KB RAM2)
 DMAMEM uint8_t  serial2RxBuf[16384]; // 16 KB DMA RX buffer prevents 921,600 baud drops
@@ -1964,21 +2045,75 @@ DMAMEM uint8_t  rawMask[FRAME_PIXELS];
 DMAMEM uint8_t  colorMask[FRAME_PIXELS];
 DMAMEM uint32_t bfsQueue[BFS_QUEUE_SIZE];
 
-CapTarget detectedCaps[100];
-uint32_t  detectedAreas[100];
-uint8_t   capCount = 0;
+CapTarget detectedCaps[MAX_BATCH_CAPS];
+uint32_t  detectedAreas[MAX_BATCH_CAPS];
+uint8_t   capCount       = 0;
 uint16_t  currentBatchId = 1;
-
-// Planar Homography 3x3 Calibration Matrix (Image px -&gt; Board mm)
-const float H[9] = {
-  0.9854f, -0.0120f, -12.45f,
-  0.0105f,  0.9782f, -14.10f,
-  0.00004f, 0.00003f, 1.0000f
-};
+float     H[9]           = {0};
+bool      homographyOk   = false;
+bool      megaFaulted    = false;
 
 // External Sorting Bin Coordinates (mm)
 const float BIN_X_MM[5] = { 0.0f, 355.0f, 355.0f, 355.0f, 355.0f };
 const float BIN_Y_MM[5] = { 0.0f,  55.0f, 130.0f, 205.0f, 280.0f };
+
+enum BatchExecResult : uint8_t {
+  EXEC_COMPLETE,
+  EXEC_FAULT_HALT,
+  EXEC_TIMEOUT
+};
+
+// Solve 3x3 planar homography H (h8 = 1) from 4 fiducial point pairs using
+// 8x8 Gaussian elimination with partial pivoting (returns false if singular).
+bool computeHomography4Pt(const float srcPx[4][2], const float dstMm[4][2], float outH[9]) {
+  double A[8][9];
+  for (int i = 0; i &lt; 4; i++) {
+    double u = srcPx[i][0], v = srcPx[i][1];
+    double x = dstMm[i][0], y = dstMm[i][1];
+
+    A[2 * i][0] = u;  A[2 * i][1] = v;  A[2 * i][2] = 1.0;
+    A[2 * i][3] = 0;  A[2 * i][4] = 0;  A[2 * i][5] = 0;
+    A[2 * i][6] = -u * x; A[2 * i][7] = -v * x; A[2 * i][8] = x;
+
+    A[2 * i + 1][0] = 0;  A[2 * i + 1][1] = 0;  A[2 * i + 1][2] = 0;
+    A[2 * i + 1][3] = u;  A[2 * i + 1][4] = v;  A[2 * i + 1][5] = 1.0;
+    A[2 * i + 1][6] = -u * y; A[2 * i + 1][7] = -v * y; A[2 * i + 1][8] = y;
+  }
+
+  for (int col = 0; col &lt; 8; col++) {
+    int pivot = col;
+    double maxVal = fabs(A[col][col]);
+    for (int row = col + 1; row &lt; 8; row++) {
+      double v = fabs(A[row][col]);
+      if (v &gt; maxVal) {
+        maxVal = v;
+        pivot = row;
+      }
+    }
+    if (maxVal &lt; 1e-10) return false;
+    if (pivot != col) {
+      for (int c = col; c &lt; 9; c++) {
+        double tmp = A[col][c];
+        A[col][c] = A[pivot][c];
+        A[pivot][c] = tmp;
+      }
+    }
+    double div = A[col][col];
+    for (int c = col; c &lt; 9; c++) A[col][c] /= div;
+    for (int row = 0; row &lt; 8; row++) {
+      if (row == col) continue;
+      double factor = A[row][col];
+      for (int c = col; c &lt; 9; c++) A[row][c] -= factor * A[col][c];
+    }
+  }
+
+  for (int i = 0; i &lt; 8; i++) {
+    if (!isfinite(A[i][8])) return false;
+    outH[i] = (float)A[i][8];
+  }
+  outH[8] = 1.0f;
+  return true;
+}
 
 bool readBytesWithTimeout(HardwareSerial &amp;port, uint8_t *dest, uint32_t len, uint32_t timeoutMs) {
   uint32_t startMs = millis();
@@ -1993,8 +2128,33 @@ bool readBytesWithTimeout(HardwareSerial &amp;port, uint8_t *dest, uint32_t len,
   return true;
 }
 
+bool waitForMegaReady(uint32_t timeoutMs) {
+  uint32_t startMs = millis();
+  uint32_t lastPollMs = 0;
+  while (timeoutMs == 0 || (millis() - startMs &lt; timeoutMs)) {
+    if (lastPollMs == 0 || (millis() - lastPollMs &gt;= READY_POLL_INTERVAL_MS)) {
+      Serial1.write(CMD_QUERY_STATUS);
+      Serial1.flush();
+      lastPollMs = millis();
+    }
+    while (Serial1.available() &gt; 0) {
+      uint8_t resp = (uint8_t)Serial1.read();
+      if (resp == CMD_STATUS_READY) {
+        megaFaulted = false;
+        return true;
+      }
+      if (resp == CMD_STATUS_FAULT || resp == CMD_HARD_FAULT || resp == CMD_RECOVERY_HALT) {
+        megaFaulted = true;
+        Serial.println(F(&quot;[TEENSY] Mega reports FAULT/HALT; motion inhibited until operator re-arm.&quot;));
+        return false;
+      }
+    }
+    delay(10);
+  }
+  return false;
+}
+
 bool receiveFrame(uint8_t *buf, uint32_t expectedBytes) {
-  // Wait for sync header [0x55, 0xAA]
   uint32_t startMs = millis();
   uint8_t prev = 0;
   bool synced = false;
@@ -2010,7 +2170,6 @@ bool receiveFrame(uint8_t *buf, uint32_t expectedBytes) {
   }
   if (!synced) return false;
 
-  // Read 4-byte uint32_t frame length
   uint8_t lenBytes[4];
   if (!readBytesWithTimeout(Serial2, lenBytes, 4, 500)) return false;
   uint32_t frameLen = ((uint32_t)lenBytes[0] &lt;&lt; 24) |
@@ -2019,10 +2178,9 @@ bool receiveFrame(uint8_t *buf, uint32_t expectedBytes) {
                       ((uint32_t)lenBytes[3]);
   if (frameLen != expectedBytes) return false;
 
-  // Read full RGB565 payload (153,600 bytes @ 921,600 baud ~ 1.67s)
+  // Read full RGB565 payload (153,600 bytes @ 921,600 baud ~ 1.67 s)
   if (!readBytesWithTimeout(Serial2, buf, expectedBytes, 3000)) return false;
 
-  // Read 2-byte CRC16-CCITT and verify
   uint8_t crcBytes[2];
   if (!readBytesWithTimeout(Serial2, crcBytes, 2, 500)) return false;
   uint16_t rxCrc = ((uint16_t)crcBytes[0] &lt;&lt; 8) | crcBytes[1];
@@ -2061,7 +2219,6 @@ uint8_t classifyRgb565Pixel(uint16_t pixel) {
 }
 
 void cleanColorMask3x3() {
-  // 3x3 morphological majority filter: removes speckle noise &amp; fills specular glare pinholes
   memset(colorMask, COLOR_NONE, FRAME_PIXELS);
   for (uint16_t y = 1; y &lt; FRAME_HEIGHT - 1; y++) {
     for (uint16_t x = 1; x &lt; FRAME_WIDTH - 1; x++) {
@@ -2077,7 +2234,6 @@ void cleanColorMask3x3() {
       if (center != COLOR_NONE &amp;&amp; counts[center] &gt;= 5) {
         colorMask[idx] = center;
       } else if (center == COLOR_NONE) {
-        // Fill internal specular highlight pinhole if &gt;= 6 of 8 neighbors share a cap color
         for (uint8_t col = 1; col &lt;= 4; col++) {
           if (counts[col] &gt;= 6) {
             colorMask[idx] = col;
@@ -2089,52 +2245,69 @@ void cleanColorMask3x3() {
   }
 }
 
-void transformToMillimeters(CapTarget *cap) {
+bool transformToMillimeters(CapTarget *cap) {
   float u = (float)cap-&gt;pixelX;
   float v = (float)cap-&gt;pixelY;
   float w = H[6] * u + H[7] * v + H[8];
+  if (fabsf(w) &lt; 1e-6f) return false;
   cap-&gt;boardX_mm = (H[0] * u + H[1] * v + H[2]) / w;
   cap-&gt;boardY_mm = (H[3] * u + H[4] * v + H[5]) / w;
+  return isfinite(cap-&gt;boardX_mm) &amp;&amp; isfinite(cap-&gt;boardY_mm);
 }
 
-void deduplicateTargetsNMS(CapTarget *caps, const uint32_t *areas, uint8_t *count) {
+// Greedy spatial NMS sorted strictly by descending contour area so metadata &amp; areas
+// stay synchronized and a smaller overlapping blob can never overwrite a larger one.
+void deduplicateTargetsNMS(CapTarget *caps, uint32_t *areas, uint8_t *count) {
   uint8_t n = *count;
   if (n &lt;= 1) return;
-  bool suppressed[100] = {false};
-  uint8_t kept = 0;
 
+  // 1. Insertion-sort caps[] and areas[] together by area descending
+  for (uint8_t i = 1; i &lt; n; i++) {
+    CapTarget keyCap  = caps[i];
+    uint32_t  keyArea = areas[i];
+    int16_t j = (int16_t)i - 1;
+    while (j &gt;= 0 &amp;&amp; areas[j] &lt; keyArea) {
+      caps[j + 1]  = caps[j];
+      areas[j + 1] = areas[j];
+      j--;
+    }
+    caps[j + 1]  = keyCap;
+    areas[j + 1] = keyArea;
+  }
+
+  // 2. Greedily retain highest-area candidates separated by &gt;= MIN_CAP_SEP_MM
+  uint8_t kept = 0;
   for (uint8_t i = 0; i &lt; n; i++) {
-    if (suppressed[i]) continue;
-    for (uint8_t j = i + 1; j &lt; n; j++) {
-      if (suppressed[j]) continue;
-      float dist = hypotf(caps[i].boardX_mm - caps[j].boardX_mm,
-                          caps[i].boardY_mm - caps[j].boardY_mm);
+    bool overlap = false;
+    for (uint8_t k = 0; k &lt; kept; k++) {
+      float dist = hypotf(caps[i].boardX_mm - caps[k].boardX_mm,
+                          caps[i].boardY_mm - caps[k].boardY_mm);
       if (dist &lt; MIN_CAP_SEP_MM) {
-        if (areas[j] &gt; areas[i]) {
-          caps[i] = caps[j];
-        }
-        suppressed[j] = true;
+        overlap = true;
+        break;
       }
     }
-    caps[kept] = caps[i];
-    caps[kept].capId = kept + 1;
-    kept++;
+    if (!overlap) {
+      caps[kept]       = caps[i];
+      areas[kept]      = areas[i];
+      caps[kept].capId = kept + 1;
+      kept++;
+    }
   }
   *count = kept;
 }
 
 void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCount) {
   *outCount = 0;
-  // 1. Classify every pixel into rawMask
+  if (!homographyOk) return;
+
   for (uint32_t i = 0; i &lt; FRAME_PIXELS; i++) {
     uint16_t px = ((uint16_t)frameBuf[i * 2] &lt;&lt; 8) | frameBuf[i * 2 + 1];
     rawMask[i] = classifyRgb565Pixel(px);
   }
 
-  // 2. Apply 3x3 morphological noise &amp; specular pinhole filter
   cleanColorMask3x3();
 
-  // 3. Iterative Connected-Components BFS with Circularity Gating
   const int8_t dx[4] = { 1, -1, 0, 0 };
   const int8_t dy[4] = { 0, 0, 1, -1 };
 
@@ -2147,7 +2320,7 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
       uint32_t area = 0, perimeter = 0, sumX = 0, sumY = 0;
       uint16_t qHead = 0, qTail = 0;
 
-      colorMask[seedIdx] |= 0x80; // Mark visited
+      colorMask[seedIdx] |= 0x80;
       bfsQueue[qTail++] = seedIdx;
 
       while (qHead != qTail) {
@@ -2184,7 +2357,7 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
         if (isBoundary) perimeter++;
       }
 
-      if (area &gt;= 220 &amp;&amp; area &lt;= 1800 &amp;&amp; perimeter &gt; 0 &amp;&amp; *outCount &lt; 100) {
+      if (area &gt;= 220 &amp;&amp; area &lt;= 1800 &amp;&amp; perimeter &gt; 0 &amp;&amp; *outCount &lt; MAX_BATCH_CAPS) {
         float circularity = (4.0f * 3.1415926f * (float)area) / ((float)perimeter * (float)perimeter);
         if (circularity &gt;= 0.72f) {
           CapTarget &amp;cap = outCaps[*outCount];
@@ -2193,9 +2366,9 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
           cap.pixelX      = (uint16_t)(sumX / area);
           cap.pixelY      = (uint16_t)(sumY / area);
           cap.targetBinId = targetColor;
-          transformToMillimeters(&amp;cap);
 
-          if (cap.boardX_mm &gt;= 0.0f &amp;&amp; cap.boardX_mm &lt;= 300.0f &amp;&amp;
+          if (transformToMillimeters(&amp;cap) &amp;&amp;
+              cap.boardX_mm &gt;= 0.0f &amp;&amp; cap.boardX_mm &lt;= 300.0f &amp;&amp;
               cap.boardY_mm &gt;= 0.0f &amp;&amp; cap.boardY_mm &lt;= 300.0f) {
             detectedAreas[*outCount] = area;
             (*outCount)++;
@@ -2205,7 +2378,6 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
     }
   }
 
-  // 4. Spatial NMS deduplication (merges split blobs closer than 24 mm)
   deduplicateTargetsNMS(outCaps, detectedAreas, outCount);
 }
 
@@ -2234,7 +2406,7 @@ void optimizeSortingPath(CapTarget *caps, uint8_t count) {
 }
 
 void writePacedSerial1(const uint8_t *data, uint32_t len) {
-  // Pace transmissions in 32-byte chunks with 2ms pause so Mega&#x27;s 64B RX FIFO never overflows
+  // Pace transmissions in 32-byte chunks with 2 ms pause so Mega&#x27;s 64B RX FIFO never overflows
   uint32_t offset = 0;
   while (offset &lt; len) {
     uint32_t chunk = min((uint32_t)32, len - offset);
@@ -2246,7 +2418,7 @@ void writePacedSerial1(const uint8_t *data, uint32_t len) {
 }
 
 bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
-  if (count == 0) return false;
+  if (count == 0 || count &gt; MAX_BATCH_CAPS) return false;
   uint32_t payloadBytes = (uint32_t)count * sizeof(CapTarget);
 
   BatchHeader hdr;
@@ -2262,13 +2434,16 @@ bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
     delay(2);
     writePacedSerial1((const uint8_t*)caps, payloadBytes);
 
-    // Wait for CMD_BATCH_ACK from Mega
     uint32_t waitStart = millis();
     while (millis() - waitStart &lt; 1000) {
       if (Serial1.available() &gt; 0) {
         uint8_t resp = (uint8_t)Serial1.read();
         if (resp == CMD_BATCH_ACK) return true;
-        if (resp == CMD_BATCH_NACK) break; // Retry on NACK
+        if (resp == CMD_BATCH_NACK) break;
+        if (resp == CMD_HARD_FAULT || resp == CMD_RECOVERY_HALT || resp == CMD_STATUS_FAULT) {
+          megaFaulted = true;
+          return false;
+        }
       }
     }
     delay(50);
@@ -2276,39 +2451,86 @@ bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
   return false;
 }
 
-void superviseMegaExecutionWithHeartbeat() {
-  // Send 250ms keep-alive heartbeat while Mega moves gantry across workspace
-  uint32_t lastPingMs = millis();
-  uint32_t batchStartMs = millis();
-  while (millis() - batchStartMs &lt; 180000UL) {
-    if (millis() - lastPingMs &gt;= 250) {
+BatchExecResult superviseMegaExecutionWithHeartbeat(uint8_t count) {
+  // Maintain 250 ms heartbeat for the full batch duration, bounded by per-cap progress
+  // and dynamic worst-case total duration (never a fixed 180 s cutoff).
+  uint32_t batchStartMs   = millis();
+  uint32_t lastPingMs     = batchStartMs;
+  uint32_t lastProgressMs = batchStartMs;
+  uint32_t maxTotalMs     = (uint32_t)count * PER_CAP_BUDGET_MS + BATCH_OVERHEAD_MS;
+
+  while (true) {
+    uint32_t now = millis();
+    if (now - lastPingMs &gt;= HEARTBEAT_INTERVAL_MS) {
       Serial1.write(CMD_HEARTBEAT_PING);
-      lastPingMs = millis();
+      lastPingMs = now;
     }
-    if (Serial1.available() &gt; 0) {
+
+    while (Serial1.available() &gt; 0) {
       uint8_t status = (uint8_t)Serial1.read();
-      if (status == CMD_BATCH_COMPLETE || status == CMD_RECOVERY_HALT) {
-        return; // Gantry parked at (0,0) clear of camera FOV!
+      if (status == CMD_CAP_PROGRESS) {
+        lastProgressMs = millis();
+      } else if (status == CMD_BATCH_COMPLETE) {
+        return EXEC_COMPLETE;
+      } else if (status == CMD_RECOVERY_HALT || status == CMD_HARD_FAULT || status == CMD_STATUS_FAULT) {
+        megaFaulted = true;
+        return EXEC_FAULT_HALT;
       }
     }
+
+    if ((now - lastProgressMs &gt; MAX_SINGLE_CAP_MS) || (now - batchStartMs &gt; maxTotalMs)) {
+      Serial.println(F(&quot;[TEENSY] Batch supervision stall/timeout detected.&quot;));
+      megaFaulted = true;
+      return EXEC_TIMEOUT;
+    }
+    delay(5);
   }
 }
 
 void setup() {
   Serial.begin(115200);   // USB Debug
-  Serial1.begin(115200);  // Arduino Mega Link (3.3V &lt;-&gt; 5V Level Shifter)
+  Serial1.begin(115200);  // Arduino Mega Link (Bidirectional 3.3V &lt;-&gt; 5V Level Shifter)
   Serial2.addMemoryForRead(serial2RxBuf, sizeof(serial2RxBuf));
   Serial2.begin(921600);  // ESP32-CAM High-Speed Wired Link
   pinMode(LED_BUILTIN, OUTPUT);
-  delay(1500);            // Allow Mega to complete initial homing
+
+  homographyOk = computeHomography4Pt(BOARD_FIDUCIALS_PX, BOARD_FIDUCIALS_MM, H);
+  if (!homographyOk) {
+    Serial.println(F(&quot;[TEENSY ERROR] Fiducial homography matrix is singular; motion inhibited.&quot;));
+  }
+#if !V1_CALIBRATION_VERIFIED
+  Serial.println(F(&quot;[TEENSY FAIL-CLOSED] V1_CALIBRATION_VERIFIED == 0.&quot;));
+  Serial.println(F(&quot;Measure 4 board fiducial corners, update BOARD_FIDUCIALS_PX, and set V1_CALIBRATION_VERIFIED 1.&quot;));
+#endif
+
+  Serial.println(F(&quot;[TEENSY] Waiting for Mega CMD_STATUS_READY handshake...&quot;));
+  waitForMegaReady(0); // Wait indefinitely for Mega homing completion or fault report
 }
 
 void loop() {
-  // 1. Trigger ESP32-CAM capture only when gantry is parked at (0,0)
+#if !V1_CALIBRATION_VERIFIED
+  delay(1000);
+  return;
+#endif
+
+  if (!homographyOk || megaFaulted) {
+    // Poll Mega status passively; operator must explicitly re-arm Mega before resuming
+    if (waitForMegaReady(1000)) {
+      Serial.println(F(&quot;[TEENSY] Mega re-armed and READY.&quot;));
+    }
+    delay(500);
+    return;
+  }
+
+  // Confirm Mega is READY &amp; parked at (0,0) before triggering camera capture
+  if (!waitForMegaReady(2000)) {
+    delay(500);
+    return;
+  }
+
   while (Serial2.available() &gt; 0) Serial2.read();
   Serial2.write(CMD_CAPTURE_FRAME);
 
-  // 2. Read full QVGA RGB565 frame with 32-bit length &amp; CRC16 verification
   if (receiveFrame(imageBuffer, FRAME_BYTES)) {
     digitalWrite(LED_BUILTIN, HIGH);
     segmentCapsHSV(imageBuffer, detectedCaps, &amp;capCount);
@@ -2316,8 +2538,10 @@ void loop() {
     if (capCount &gt; 0) {
       optimizeSortingPath(detectedCaps, capCount);
       if (sendPlanBatchToMega(detectedCaps, capCount)) {
-        // Maintain 250ms heartbeat until Mega completes batch &amp; parks at (0,0)
-        superviseMegaExecutionWithHeartbeat();
+        BatchExecResult res = superviseMegaExecutionWithHeartbeat(capCount);
+        if (res != EXEC_COMPLETE) {
+          Serial.println(F(&quot;[TEENSY] Halting cycle until Mega is re-armed and READY.&quot;));
+        }
       }
     }
     digitalWrite(LED_BUILTIN, LOW);
@@ -2329,13 +2553,19 @@ void loop() {
         <!-- Code Block 2: Mega Motion -->
         <div id="code-mega" class="code-block hidden p-5 bg-[#0b0e14] overflow-x-auto max-h-[480px]">
           <pre><code class="text-slate-200">// =========================================================================
-// Arduino Mega 2560 - Deterministic Motion &amp; Fail-Safe Sequencer (V1 &amp; V2)
+// Arduino Mega 2560 - Motion &amp; Fail-Safe Sequencer (V1 &amp; V2)
+// Status: Pre-Validation Engineering Firmware (requires physical bench tests)
 // Hardware: ATmega2560 @ 16 MHz | 2x TMC2208 Steppers | PCA9685 Servos
 // Wiring:
 //   Serial1 (Pin 19 RX1, Pin 18 TX1) &lt;-&gt; 5V/3.3V Shifter &lt;-&gt; Teensy or Pi Zero 2W
 //   X Stepper (TMC2208): STEP = Pin 2, DIR = Pin 5, EN = Pin 8 (Active LOW)
 //   Y Stepper (TMC2208): STEP = Pin 3, DIR = Pin 6, EN = Pin 8 (Active LOW)
-//   Limit Switches (NC to GND, INPUT_PULLUP): X = Pin 22, Y = Pin 23, Z = Pin 24
+//   Limit Switches (NC to GND, INPUT_PULLUP, polled in loop - Port A has no ISR):
+//     X Home = Pin 22, Y Home = Pin 23, Z Limit = Pin 24
+//   E-Stop Auxiliary Contact (NC to GND, INPUT_PULLUP): Pin 25
+//     Primary E-stop pole MUST hard-cut 12V actuator power (Branch A + Branch B)
+//     independently of firmware. Pin 25 latches STATE_HARD_FAULT &amp; prevents
+//     unexpected motion on E-stop release until explicit re-arm + re-home.
 //   PCA9685 Servo Driver (I2C 0x40): SDA = Pin 20, SCL = Pin 21, OE = Pin 9
 // =========================================================================
 #include &lt;Wire.h&gt;
@@ -2344,31 +2574,48 @@ void loop() {
 #include &quot;packet_protocol.h&quot;
 
 // Pin Definitions
-#define PIN_X_STEP         2
-#define PIN_X_DIR          5
-#define PIN_Y_STEP         3
-#define PIN_Y_DIR          6
-#define PIN_STEPPER_EN     8   // Active LOW enable shared by both TMC2208 drivers
-#define PIN_SERVO_OE       9   // Active LOW PCA9685 Output Enable (prevents power-on glitch)
-#define PIN_X_HOME        22   // NC switch to GND: LOW = normal, HIGH = triggered/wire break
-#define PIN_Y_HOME        23   // NC switch to GND: LOW = normal, HIGH = triggered/wire break
-#define PIN_Z_HOME        24   // NC switch to GND: LOW = normal, HIGH = triggered/wire break
+#define PIN_X_STEP          2
+#define PIN_X_DIR           5
+#define PIN_Y_STEP          3
+#define PIN_Y_DIR           6
+#define PIN_STEPPER_EN      8   // Active LOW enable shared by both TMC2208 drivers
+#define PIN_SERVO_OE        9   // Active LOW PCA9685 Output Enable (HIGH = outputs disabled)
+#define PIN_X_HOME         22   // NC switch to GND: LOW = closed/normal, HIGH = open/fault
+#define PIN_Y_HOME         23   // NC switch to GND: LOW = closed/normal, HIGH = open/fault
+#define PIN_Z_HOME         24   // NC switch to GND: Z overtravel/retract limit (see mode below)
+#define PIN_ESTOP          25   // NC auxiliary pole of latching E-stop to GND: HIGH = E-stop active
 
-// Real-World 16 MHz AVR Kinematics:
-// 200 steps/rev * 8 microsteps (TMC2208 1/8 + 256 MicroPlyer) / 40mm GT2 pulley = 40 steps/mm
-// 2800 steps/sec = 70 mm/s per axis; 6000 steps/s^2 = 150 mm/s^2 belt gantry acceleration
-// Achieves ~5.2s total 8-step cycle time per cap while staying well within 16 MHz AVR step budget
-#define STEPS_PER_MM       40.0f
-#define MAX_SPEED_STEPS  2800.0f // 70 mm/s linear speed (&lt;4000 steps/s 16 MHz AVR ceiling)
-#define ACCEL_STEPS      6000.0f // 150 mm/s^2 smooth GT2 belt acceleration (0.47s ramp)
-#define MAX_TRAVEL_X_MM   370.0f // 300mm sorting board + 55-65mm external bin zone
-#define MAX_TRAVEL_Y_MM   300.0f
+// Optional Hardware Feature Hooks (set to 1 only when physical hardware is wired &amp; verified)
+// Z_LIMIT_IS_OVERTRAVEL:
+//   1 (default): Pin 24 is an NC overtravel/broken-wire limit above normal Z stroke (LOW=safe, HIGH=fault).
+//   0:           Pin 24 is an NC retracted-home confirmation switch pressed when Z is raised (HIGH=retracted).
+#define Z_LIMIT_IS_OVERTRAVEL  1
+#define ENABLE_MAX_ENDSTOPS    0   // Set to 1 if positive-end NC limit switches are fitted
+#define PIN_X_MAX             27   // Optional positive-end X NC limit switch to GND
+#define PIN_Y_MAX             28   // Optional positive-end Y NC limit switch to GND
+#define HAS_GRIP_SENSOR        0   // Set to 1 ONLY if physical cap-presence/grip sensor is fitted
+#define PIN_GRIP_SENSE        26   // Optional active-LOW cap-presence sensor input
 
-// Physical Toolhead Offset (mm) from Homed (0,0) to Board (0,0) Fiducial Corner
+// Nominal 16 MHz AVR Kinematics (Open-Loop Stepper Control - Bench Verification Required):
+// Nominal scaling: 200 steps/rev * 8 microsteps (TMC2208 MS1=GND, MS2=GND) / 40 mm GT2 pulley = 40.0 steps/mm.
+// 0.025 mm/step is commanded step resolution, NOT verified positioning accuracy (measure actual travel on bench).
+// 2800 steps/s = 70 mm/s per axis (&lt;4000 steps/s 16 MHz AVR AccelStepper ceiling).
+// 6000 steps/s^2 = 150 mm/s^2 belt acceleration (0.47 s ramp).
+// Realistic cycle time: ~5-13 s/cap depending on board-to-bin travel (1.8 s fixed servo dwells + XY moves).
+#define STEPS_PER_MM_X     40.0f
+#define STEPS_PER_MM_Y     40.0f
+#define MAX_SPEED_STEPS  2800.0f // 70 mm/s nominal linear speed
+#define ACCEL_STEPS      6000.0f // 150 mm/s^2 smooth GT2 belt acceleration
+#define HOMING_SPEED_STEPS 800.0f // 20 mm/s homing seek speed
+#define MAX_TRAVEL_X_MM   370.0f // 300 mm board + bin zone (software clamp; guard mechanically!)
+#define MAX_TRAVEL_Y_MM   300.0f // 300 mm board travel (software clamp; guard mechanically!)
+
+// Physical Toolhead Offset (mm) from Homed (0,0) to Board (0,0) Fiducial Corner.
+// MUST be measured on the physical machine; (0.0, 0.0) is an uncalibrated placeholder.
 #define TOOL_OFFSET_X_MM    0.0f
 #define TOOL_OFFSET_Y_MM    0.0f
 
-// PCA9685 50Hz (12-bit, 4096 ticks / 20ms) Calibrated MG90S Servo Pulse Counts
+// PCA9685 50Hz (12-bit, 4096 ticks / 20ms) Servo Pulse Counts (verify against exact servo SKU!)
 #define SERVO_Z_CH          0
 #define SERVO_GRIPPER_CH    1
 #define PWM_Z_RAISED      180    // 0 mm (retracted overhead clearance)
@@ -2378,8 +2625,10 @@ void loop() {
 #define PWM_GRIP_CLOSE    385    // ~26 mm jaw gap (clamped on 28-32mm cap)
 
 // Safety &amp; Watchdog Timeouts
-#define COMMS_TIMEOUT_MS  1200UL // 1.2s without 0xF0 heartbeat triggers localized fail-safe
-#define HOMING_TIMEOUT_MS 15000UL // 15s max homing duration (protects against belt slip)
+// Worst-case X homing: 370 mm / (800 / 40 = 20 mm/s) = 18.5 s -&gt; 30 s timeout (~1.6x margin).
+#define COMMS_TIMEOUT_MS    1200UL  // 1.2 s without 0xF0 heartbeat triggers fail-safe halt
+#define HOMING_TIMEOUT_MS  30000UL  // 30.0 s max homing seek duration
+#define BACKOFF_TIMEOUT_MS  3000UL  // 3.0 s max duration for pre-check / switch-release backoff
 
 AccelStepper stepperX(AccelStepper::DRIVER, PIN_X_STEP, PIN_X_DIR);
 AccelStepper stepperY(AccelStepper::DRIVER, PIN_Y_STEP, PIN_Y_DIR);
@@ -2407,47 +2656,157 @@ enum RobotState : uint8_t {
 };
 
 RobotState    currentState      = STATE_HOMING;
-CapTarget     batchQueue[100];
+CapTarget     batchQueue[MAX_BATCH_CAPS];
 CapTarget     currentCap;
 uint8_t       batchTotal        = 0;
 uint8_t       currentIdx        = 0;
+bool          isHomed           = false;
 bool          hasInFlightCap    = false;
 bool          commsFaultLatched = false;
-uint8_t       recoveryPingCount = 0;
 uint8_t       limitFaultCount   = 0;
+uint8_t       estopFaultCount   = 0;
 unsigned long stateTimerMs      = 0;
 unsigned long lastHeartbeatMs   = 0;
+
+bool isEstopActive() {
+  return digitalRead(PIN_ESTOP) == HIGH;
+}
+
+bool isAxisLimitOpen(uint8_t pin) {
+  return digitalRead(pin) == HIGH;
+}
+
+bool isAnyOvertravelLimitOpen() {
+  if (isAxisLimitOpen(PIN_X_HOME) || isAxisLimitOpen(PIN_Y_HOME)) {
+    return true;
+  }
+#if Z_LIMIT_IS_OVERTRAVEL
+  if (isAxisLimitOpen(PIN_Z_HOME)) {
+    return true;
+  }
+#endif
+#if ENABLE_MAX_ENDSTOPS
+  if (isAxisLimitOpen(PIN_X_MAX) || isAxisLimitOpen(PIN_Y_MAX)) {
+    return true;
+  }
+#endif
+  return false;
+}
+
+bool isZRetractedSafeForXY() {
+#if !Z_LIMIT_IS_OVERTRAVEL
+  // In retracted-confirmation mode, NC switch opens (HIGH) when Z reaches top stop
+  return digitalRead(PIN_Z_HOME) == HIGH;
+#else
+  return !isAxisLimitOpen(PIN_Z_HOME);
+#endif
+}
+
+bool isCapVerifiedHeld() {
+#if HAS_GRIP_SENSOR
+  return hasInFlightCap &amp;&amp; (digitalRead(PIN_GRIP_SENSE) == LOW);
+#else
+  // Without physical cap-presence or grip-force sensing, grip cannot be verified
+  return false;
+#endif
+}
 
 void moveGantryToMm(float boardX_mm, float boardY_mm) {
   float targetX = constrain(boardX_mm + TOOL_OFFSET_X_MM, 0.0f, MAX_TRAVEL_X_MM);
   float targetY = constrain(boardY_mm + TOOL_OFFSET_Y_MM, 0.0f, MAX_TRAVEL_Y_MM);
-  stepperX.moveTo(lroundf(targetX * STEPS_PER_MM));
-  stepperY.moveTo(lroundf(targetY * STEPS_PER_MM));
+  stepperX.moveTo(lroundf(targetX * STEPS_PER_MM_X));
+  stepperY.moveTo(lroundf(targetY * STEPS_PER_MM_Y));
 }
 
 bool isGantryAtTarget() {
   return (stepperX.distanceToGo() == 0 &amp;&amp; stepperY.distanceToGo() == 0);
 }
 
-void triggerHardFault() {
-  stepperX.stop();
-  stepperY.stop();
+void replyStatusQuery() {
+  if (currentState == STATE_IDLE &amp;&amp; isHomed &amp;&amp; !commsFaultLatched &amp;&amp; !isEstopActive()) {
+    Serial1.write(CMD_STATUS_READY);
+  } else if (currentState == STATE_FAILSAFE_HALT || currentState == STATE_HARD_FAULT) {
+    Serial1.write(CMD_STATUS_FAULT);
+  } else {
+    Serial1.write(CMD_STATUS_BUSY);
+  }
+}
+
+void serviceSerialDuringHoming() {
+  // Drain Serial1 non-blockingly while homing so host queries get BUSY and FIFO never stalls
+  while (Serial1.available() &gt; 0) {
+    uint8_t b = (uint8_t)Serial1.read();
+    if (b == CMD_QUERY_STATUS) {
+      Serial1.write(CMD_STATUS_BUSY);
+    } else if (b == PROTOCOL_MAGIC_BYTE) {
+      Serial1.write(CMD_BATCH_NACK);
+    }
+  }
+}
+
+void triggerHardFault(const __FlashStringHelper *reason) {
+  stepperX.setSpeed(0.0f);
+  stepperY.setSpeed(0.0f);
+  stepperX.moveTo(stepperX.currentPosition());
+  stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Disable stepper coils immediately
-  pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
-  Serial1.write(CMD_RECOVERY_HALT);
-  currentState = STATE_HARD_FAULT;
+  digitalWrite(PIN_SERVO_OE, HIGH);   // Disable PCA9685 PWM outputs (no commanded fault motion)
+  isHomed           = false;
+  hasInFlightCap    = false;
+  batchTotal        = 0;
+  currentIdx        = 0;
+  currentState      = STATE_HARD_FAULT;
+  Serial1.write(CMD_HARD_FAULT);
+  Serial.print(F(&quot;[HARD_FAULT] &quot;));
+  Serial.println(reason);
+}
+
+bool waitServicedDelayMs(unsigned long durationMs) {
+  unsigned long start = millis();
+  while (millis() - start &lt; durationMs) {
+    if (isEstopActive()) {
+      triggerHardFault(F(&quot;E-Stop active during servo settle&quot;));
+      return false;
+    }
+    serviceSerialDuringHoming();
+  }
+  return true;
 }
 
 void homeAxes() {
-  currentState = STATE_HOMING;
-  digitalWrite(PIN_STEPPER_EN, LOW);  // Enable TMC2208 drivers
+  currentState      = STATE_HOMING;
+  isHomed           = false;
+  hasInFlightCap    = false;
+  commsFaultLatched = false;
+  limitFaultCount   = 0;
+  estopFaultCount   = 0;
+  batchTotal        = 0;
+  currentIdx        = 0;
 
-  // 1. Retract Z-axis and open gripper before any XY homing travel
+  // 0. Refuse homing if hardwired E-stop auxiliary contact is active or Z overtravel is open
+  if (isEstopActive()) {
+    triggerHardFault(F(&quot;E-Stop active at homing start&quot;));
+    return;
+  }
+#if Z_LIMIT_IS_OVERTRAVEL
+  if (isAxisLimitOpen(PIN_Z_HOME)) {
+    triggerHardFault(F(&quot;Z overtravel switch open or broken wire at homing start&quot;));
+    return;
+  }
+#endif
+
+  // 1. Retract Z-axis and open gripper cleanly before energizing XY steppers
   pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
   pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
-  digitalWrite(PIN_SERVO_OE, LOW);    // Enable PCA9685 outputs cleanly after latching PWM
-  delay(400);
+  digitalWrite(PIN_SERVO_OE, LOW);    // Enable PCA9685 outputs after latching safe PWM
+  if (!waitServicedDelayMs(450UL)) return;
 
+  if (!isZRetractedSafeForXY()) {
+    triggerHardFault(F(&quot;Z-axis did not confirm retracted safe state before XY homing&quot;));
+    return;
+  }
+
+  digitalWrite(PIN_STEPPER_EN, LOW);  // Enable TMC2208 drivers (Active LOW)
   stepperX.setMinPulseWidth(2);
   stepperY.setMinPulseWidth(2);
   stepperX.setMaxSpeed(1000.0f);
@@ -2455,64 +2814,106 @@ void homeAxes() {
   stepperX.setAcceleration(800.0f);
   stepperY.setAcceleration(800.0f);
 
-  // 2. Broken NC Wire Pre-Check: If switch already reads HIGH, back off +10mm first
-  if (digitalRead(PIN_X_HOME) == HIGH || digitalRead(PIN_Y_HOME) == HIGH) {
+  // 2. Broken NC Wire Pre-Check: Back off ONLY the axis whose switch already reads HIGH
+  bool xInitiallyHigh = isAxisLimitOpen(PIN_X_HOME);
+  bool yInitiallyHigh = isAxisLimitOpen(PIN_Y_HOME);
+  if (xInitiallyHigh || yInitiallyHigh) {
     stepperX.setCurrentPosition(0);
     stepperY.setCurrentPosition(0);
-    moveGantryToMm(10.0f, 10.0f);
+    stepperX.moveTo(xInitiallyHigh ? lroundf(10.0f * STEPS_PER_MM_X) : 0L);
+    stepperY.moveTo(yInitiallyHigh ? lroundf(10.0f * STEPS_PER_MM_Y) : 0L);
     unsigned long preStart = millis();
-    while (!isGantryAtTarget() &amp;&amp; (millis() - preStart &lt; 2000UL)) {
+    while (!isGantryAtTarget()) {
+      if (isEstopActive()) {
+        triggerHardFault(F(&quot;E-Stop triggered during pre-homing backoff&quot;));
+        return;
+      }
+      if (millis() - preStart &gt; BACKOFF_TIMEOUT_MS) {
+        triggerHardFault(F(&quot;Pre-homing backoff timeout&quot;));
+        return;
+      }
       stepperX.run();
       stepperY.run();
+      serviceSerialDuringHoming();
     }
-    // If switch STILL reads HIGH after 10mm backoff, NC wire is broken/unplugged!
-    if (digitalRead(PIN_X_HOME) == HIGH || digitalRead(PIN_Y_HOME) == HIGH) {
-      triggerHardFault();
+    // If switch STILL reads HIGH after +10 mm backoff, NC wire is broken/unplugged or stuck!
+    if (isAxisLimitOpen(PIN_X_HOME) || isAxisLimitOpen(PIN_Y_HOME)) {
+      triggerHardFault(F(&quot;X/Y NC home switch stuck open or wire broken&quot;));
       return;
     }
   }
 
-  // 3. Seek X &amp; Y Normally-Closed home switches with strict 15-second timeout
+  // 3. Seek X &amp; Y Normally-Closed home switches at 20 mm/s with 30 s worst-case timeout
   unsigned long homeStartMs = millis();
-  while (digitalRead(PIN_X_HOME) == LOW || digitalRead(PIN_Y_HOME) == LOW) {
-    if (millis() - homeStartMs &gt; HOMING_TIMEOUT_MS) {
-      triggerHardFault(); // Belt slip or motor stall timeout
+  while (!isAxisLimitOpen(PIN_X_HOME) || !isAxisLimitOpen(PIN_Y_HOME)) {
+    if (isEstopActive()) {
+      triggerHardFault(F(&quot;E-Stop triggered during homing seek&quot;));
       return;
     }
-    if (digitalRead(PIN_X_HOME) == LOW) {
-      stepperX.setSpeed(-800.0f);
+#if Z_LIMIT_IS_OVERTRAVEL
+    if (isAxisLimitOpen(PIN_Z_HOME)) {
+      triggerHardFault(F(&quot;Z overtravel limit tripped during homing seek&quot;));
+      return;
+    }
+#endif
+    if (millis() - homeStartMs &gt; HOMING_TIMEOUT_MS) {
+      triggerHardFault(F(&quot;Homing seek timeout (&gt;30s): stall, belt slip, or switch failure&quot;));
+      return;
+    }
+    if (!isAxisLimitOpen(PIN_X_HOME)) {
+      stepperX.setSpeed(-HOMING_SPEED_STEPS);
       stepperX.runSpeed();
     }
-    if (digitalRead(PIN_Y_HOME) == LOW) {
-      stepperY.setSpeed(-800.0f);
+    if (!isAxisLimitOpen(PIN_Y_HOME)) {
+      stepperY.setSpeed(-HOMING_SPEED_STEPS);
       stepperY.runSpeed();
     }
+    serviceSerialDuringHoming();
   }
 
-  // 4. Back off 3.0 mm (120 steps) off switches so switches close (LOW) again
+  // 4. Back off 3.0 mm off switches and VERIFY switches re-close (LOW) within timeout
   stepperX.setCurrentPosition(0);
   stepperY.setCurrentPosition(0);
-  stepperX.moveTo(lroundf(3.0f * STEPS_PER_MM));
-  stepperY.moveTo(lroundf(3.0f * STEPS_PER_MM));
+  stepperX.moveTo(lroundf(3.0f * STEPS_PER_MM_X));
+  stepperY.moveTo(lroundf(3.0f * STEPS_PER_MM_Y));
+  unsigned long releaseStartMs = millis();
   while (!isGantryAtTarget()) {
+    if (isEstopActive()) {
+      triggerHardFault(F(&quot;E-Stop triggered during homing switch release&quot;));
+      return;
+    }
+    if (millis() - releaseStartMs &gt; BACKOFF_TIMEOUT_MS) {
+      triggerHardFault(F(&quot;Homing switch release backoff timeout&quot;));
+      return;
+    }
     stepperX.run();
     stepperY.run();
+    serviceSerialDuringHoming();
   }
+  if (isAxisLimitOpen(PIN_X_HOME) || isAxisLimitOpen(PIN_Y_HOME)) {
+    triggerHardFault(F(&quot;X/Y home switch did not re-close after 3mm backoff&quot;));
+    return;
+  }
+
   stepperX.setCurrentPosition(0);
   stepperY.setCurrentPosition(0);
 
-  // 5. Restore production operating speed (2400 steps/s = 60 mm/s) &amp; acceleration
+  // 5. Restore operating speed (2800 steps/s = 70 mm/s) &amp; acceleration (6000 steps/s^2 = 150 mm/s^2)
   stepperX.setMaxSpeed(MAX_SPEED_STEPS);
   stepperX.setAcceleration(ACCEL_STEPS);
   stepperY.setMaxSpeed(MAX_SPEED_STEPS);
   stepperY.setAcceleration(ACCEL_STEPS);
 
-  hasInFlightCap    = false;
-  commsFaultLatched = false;
-  recoveryPingCount = 0;
-  limitFaultCount   = 0;
-  lastHeartbeatMs   = millis();
-  currentState      = STATE_IDLE;
+  // Drain any stale bytes before declaring READY
+  while (Serial1.available() &gt; 0) {
+    Serial1.read();
+  }
+
+  isHomed         = true;
+  lastHeartbeatMs = millis();
+  currentState    = STATE_IDLE;
+  Serial1.write(CMD_STATUS_READY);
+  Serial.println(F(&quot;[READY] Homing complete. Gantry at (0, 0).&quot;));
 }
 
 bool readSerial1Bytes(uint8_t *dest, uint16_t len, unsigned long timeoutMs) {
@@ -2520,6 +2921,10 @@ bool readSerial1Bytes(uint8_t *dest, uint16_t len, unsigned long timeoutMs) {
   unsigned long start = millis();
   uint16_t idx = 0;
   while (idx &lt; len) {
+    if (isEstopActive()) {
+      triggerHardFault(F(&quot;E-Stop triggered during batch receive&quot;));
+      return false;
+    }
     if (Serial1.available() &gt; 0) {
       dest[idx++] = (uint8_t)Serial1.read();
     } else if (millis() - start &gt; timeoutMs) {
@@ -2533,37 +2938,55 @@ void pollVisionHostPackets() {
   while (Serial1.available() &gt; 0) {
     uint8_t peekByte = (uint8_t)Serial1.read();
 
-    // 1. Heartbeat Keep-Alive Ping from Teensy 4.1 or Raspberry Pi Zero 2 W
+    // 1. Explicit Host Readiness Query
+    if (peekByte == CMD_QUERY_STATUS) {
+      replyStatusQuery();
+      continue;
+    }
+
+    // 2. Heartbeat Keep-Alive Ping (never auto-clears faults or initiates motion!)
     if (peekByte == CMD_HEARTBEAT_PING) {
       lastHeartbeatMs = millis();
-      // Auto-recover from comms-loss STATE_FAILSAFE_HALT after 3 consecutive pings
-      if (currentState == STATE_FAILSAFE_HALT &amp;&amp; commsFaultLatched) {
-        recoveryPingCount++;
-        if (recoveryPingCount &gt;= 3) {
-          commsFaultLatched = false;
-          recoveryPingCount = 0;
-          currentState      = STATE_IDLE;
+      continue;
+    }
+
+    // 3. Explicit Operator Re-Arm &amp; Re-Home Command from Fault/Halt State
+    if (peekByte == CMD_REARM_HOME) {
+      if (currentState == STATE_FAILSAFE_HALT || currentState == STATE_HARD_FAULT) {
+        if (isEstopActive()) {
+          Serial.println(F(&quot;[REARM_REJECTED] Release physical E-Stop before re-arming.&quot;));
+          Serial1.write(CMD_STATUS_FAULT);
+          continue;
         }
+        Serial.println(F(&quot;[REARM] Explicit re-arm accepted; starting full re-home.&quot;));
+        homeAxes();
+      } else {
+        replyStatusQuery();
       }
       continue;
     }
 
-    // 2. New Batch Header (only accepted when IDLE)
-    if (peekByte == PROTOCOL_MAGIC_BYTE &amp;&amp; currentState == STATE_IDLE) {
+    // 4. New Batch Header (ONLY accepted when homed, fault-free, and IDLE)
+    if (peekByte == PROTOCOL_MAGIC_BYTE) {
+      if (currentState != STATE_IDLE || !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+
       BatchHeader hdr;
       hdr.magic = PROTOCOL_MAGIC_BYTE;
       if (!readSerial1Bytes(((uint8_t*)&amp;hdr) + 1, sizeof(BatchHeader) - 1, 250)) {
-        Serial1.write(CMD_BATCH_NACK);
+        if (currentState == STATE_IDLE) Serial1.write(CMD_BATCH_NACK);
         return;
       }
-      if (hdr.totalCaps == 0 || hdr.totalCaps &gt; 100) {
+      if (hdr.totalCaps == 0 || hdr.totalCaps &gt; MAX_BATCH_CAPS) {
         Serial1.write(CMD_BATCH_NACK);
         return;
       }
 
       uint16_t payloadBytes = (uint16_t)hdr.totalCaps * sizeof(CapTarget);
-      if (!readSerial1Bytes((uint8_t*)batchQueue, payloadBytes, 1000)) {
-        Serial1.write(CMD_BATCH_NACK);
+      if (!readSerial1Bytes((uint8_t*)batchQueue, payloadBytes, 1500)) {
+        if (currentState == STATE_IDLE) Serial1.write(CMD_BATCH_NACK);
         return;
       }
 
@@ -2573,11 +2996,16 @@ void pollVisionHostPackets() {
         return;
       }
 
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F(&quot;Z-axis not retracted before batch start&quot;));
+        return;
+      }
+
       // Valid batch received! Store locally &amp; acknowledge
       batchTotal        = hdr.totalCaps;
       currentIdx        = 0;
+      hasInFlightCap    = false;
       commsFaultLatched = false;
-      recoveryPingCount = 0;
       lastHeartbeatMs   = millis();
       Serial1.write(CMD_BATCH_ACK);
 
@@ -2589,13 +3017,25 @@ void pollVisionHostPackets() {
   }
 }
 
-void checkRuntimeLimitSwitches() {
+void checkRuntimeSafetyInputs() {
   if (currentState == STATE_HOMING || currentState == STATE_HARD_FAULT) return;
-  // NC switches read LOW during normal travel; HIGH indicates endstop collision or broken wire
-  if (digitalRead(PIN_X_HOME) == HIGH || digitalRead(PIN_Y_HOME) == HIGH) {
+
+  // Priority 1: Auxiliary NC E-Stop contact (2 consecutive samples)
+  if (isEstopActive()) {
+    estopFaultCount++;
+    if (estopFaultCount &gt;= 2) {
+      triggerHardFault(F(&quot;Physical E-Stop auxiliary contact open&quot;));
+      return;
+    }
+  } else {
+    estopFaultCount = 0;
+  }
+
+  // Priority 2: Polled NC limit switches for X, Y, and Z (3-sample debounce)
+  if (isAnyOvertravelLimitOpen()) {
     limitFaultCount++;
     if (limitFaultCount &gt;= 3) {
-      triggerHardFault();
+      triggerHardFault(F(&quot;Runtime X/Y/Z NC limit switch open or broken wire&quot;));
     }
   } else {
     limitFaultCount = 0;
@@ -2611,26 +3051,43 @@ bool checkCommunicationLoss() {
   return (millis() - lastHeartbeatMs &gt; COMMS_TIMEOUT_MS);
 }
 
-void executeSafeLocalizedCompletion() {
+void executeSafeCommsLossPolicy() {
   commsFaultLatched = true;
-  recoveryPingCount = 0;
-  if (hasInFlightCap) {
-    // Cap is currently gripped: allow state machine to finish depositing
-    // this cap into its assigned bin, then park at STATE_RETRACT_Z!
+
+  // Only continue bin deposit if a physical grip sensor verifies a cap is held
+  // AND Z has already lifted the cap clear of the workspace.
+  bool inCarryStage = (currentState == STATE_TRAVERSE_BIN ||
+                       currentState == STATE_LOWER_BIN ||
+                       currentState == STATE_RELEASE_CAP);
+  if (inCarryStage &amp;&amp; isCapVerifiedHeld()) {
+    Serial.println(F(&quot;[COMMS_LOSS] Verified held cap in transit; completing deposit then halting.&quot;));
     return;
   }
-  // No cap gripped yet: immediately retract Z, open jaws, and park at (0,0)
-  pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
-  pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+
+  // Default fail-closed policy (un-sensed gripper or not carrying):
+  // Never assume a cap was picked and never traverse blindly to a bin.
+  // Stop XY immediately, raise Z safely (preserving jaw state), disable steppers,
+  // latch STATE_FAILSAFE_HALT, and require explicit CMD_REARM_HOME + re-home.
+  stepperX.setSpeed(0.0f);
+  stepperY.setSpeed(0.0f);
+  stepperX.moveTo(stepperX.currentPosition());
+  stepperY.moveTo(stepperY.currentPosition());
+  digitalWrite(PIN_STEPPER_EN, HIGH); // Remove stepper drive torque safely
+  pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED); // Retract Z clear of board; preserve jaw state
+  isHomed        = false;
+  hasInFlightCap = false;
+  batchTotal     = 0;
+  currentIdx     = 0;
+  currentState   = STATE_FAILSAFE_HALT;
   Serial1.write(CMD_RECOVERY_HALT);
-  moveGantryToMm(0.0f, 0.0f);
-  currentState = STATE_FAILSAFE_PARKING;
+  Serial.println(F(&quot;[COMMS_LOSS] Fail-safe halt latched. Explicit re-arm &amp; re-home required.&quot;));
 }
 
 void executeMotionStateMachine() {
   switch (currentState) {
     case STATE_IDLE:
     case STATE_HOMING:
+    case STATE_FAILSAFE_HALT:
     case STATE_HARD_FAULT:
       break;
 
@@ -2647,7 +3104,6 @@ void executeMotionStateMachine() {
     case STATE_LOWER_Z:
       if (millis() - stateTimerMs &gt;= 350) {
         pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_CLOSE);
-        hasInFlightCap = true; // Cap is now held by gripper!
         stateTimerMs = millis();
         currentState = STATE_GRIP_CAP;
       }
@@ -2656,6 +3112,7 @@ void executeMotionStateMachine() {
     // Step 03: Clamp Gripper jaws (~26 mm)
     case STATE_GRIP_CAP:
       if (millis() - stateTimerMs &gt;= 300) {
+        hasInFlightCap = true; // Commanded grip complete (unverified unless HAS_GRIP_SENSOR == 1)
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
         stateTimerMs = millis();
         currentState = STATE_LIFT_Z;
@@ -2665,13 +3122,17 @@ void executeMotionStateMachine() {
     // Step 04: Lift Z linkage back to 0 mm overhead clearance
     case STATE_LIFT_Z:
       if (millis() - stateTimerMs &gt;= 350) {
+        if (!isZRetractedSafeForXY()) {
+          triggerHardFault(F(&quot;Z-axis failed retracted check before bin traverse&quot;));
+          return;
+        }
         uint8_t binId = constrain(currentCap.targetBinId, 1, 4);
         moveGantryToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
         currentState = STATE_TRAVERSE_BIN;
       }
       break;
 
-    // Step 05: Rapid traverse to designated color bin
+    // Step 05: Traverse to designated color bin
     case STATE_TRAVERSE_BIN:
       if (isGantryAtTarget()) {
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN);
@@ -2699,11 +3160,18 @@ void executeMotionStateMachine() {
       }
       break;
 
-    // Step 08: Retract Z to 0 mm &amp; check fail-safe or advance to next cap
+    // Step 08: Retract Z to 0 mm, emit progress pulse, advance or halt
     case STATE_RETRACT_Z:
       if (millis() - stateTimerMs &gt;= 300) {
+        if (!isZRetractedSafeForXY()) {
+          triggerHardFault(F(&quot;Z-axis failed retracted check after bin release&quot;));
+          return;
+        }
+
+        Serial1.write(CMD_CAP_PROGRESS);
+
         if (commsFaultLatched) {
-          // Fail-safe recovery completed in-flight cap drop; now return to (0,0)
+          // Verified in-flight cap deposit finished; park at (0,0) then require explicit re-arm
           Serial1.write(CMD_RECOVERY_HALT);
           moveGantryToMm(0.0f, 0.0f);
           currentState = STATE_FAILSAFE_PARKING;
@@ -2716,7 +3184,7 @@ void executeMotionStateMachine() {
           moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
           currentState = STATE_MOVING_TO_CAP;
         } else {
-          // Batch finished! Return gantry to (0,0) out of camera FOV
+          // Batch finished! Return gantry to (0,0) clear of camera FOV
           moveGantryToMm(0.0f, 0.0f);
           currentState = STATE_PARKING_HOME;
         }
@@ -2734,31 +3202,48 @@ void executeMotionStateMachine() {
 
     case STATE_FAILSAFE_PARKING:
       if (isGantryAtTarget()) {
+        digitalWrite(PIN_STEPPER_EN, HIGH);
+        isHomed    = false;
         batchTotal = 0;
         currentIdx = 0;
         currentState = STATE_FAILSAFE_HALT;
       }
       break;
-
-    case STATE_FAILSAFE_HALT:
-      // Parked at (0,0); auto-recovers to STATE_IDLE after 3 consecutive 0xF0 pings
-      break;
   }
 }
 
 void setup() {
+  // Keep actuators disabled during power-up until E-stop &amp; I2C are initialized
   pinMode(PIN_SERVO_OE, OUTPUT);
-  digitalWrite(PIN_SERVO_OE, HIGH);  // Hold PCA9685 outputs disabled during power-up
+  digitalWrite(PIN_SERVO_OE, HIGH);
 
   pinMode(PIN_STEPPER_EN, OUTPUT);
-  digitalWrite(PIN_STEPPER_EN, LOW); // Enable TMC2208 drivers (Active LOW)
+  digitalWrite(PIN_STEPPER_EN, HIGH);
 
-  pinMode(PIN_X_HOME, INPUT_PULLUP); // NC limit switch to GND
-  pinMode(PIN_Y_HOME, INPUT_PULLUP); // NC limit switch to GND
-  pinMode(PIN_Z_HOME, INPUT_PULLUP); // NC limit switch to GND
+  pinMode(PIN_X_HOME, INPUT_PULLUP);
+  pinMode(PIN_Y_HOME, INPUT_PULLUP);
+  pinMode(PIN_Z_HOME, INPUT_PULLUP);
+  pinMode(PIN_ESTOP,  INPUT_PULLUP);
+
+#if ENABLE_MAX_ENDSTOPS
+  pinMode(PIN_X_MAX, INPUT_PULLUP);
+  pinMode(PIN_Y_MAX, INPUT_PULLUP);
+#endif
+#if HAS_GRIP_SENSOR
+  pinMode(PIN_GRIP_SENSE, INPUT_PULLUP);
+#endif
 
   Serial.begin(115200);   // USB Debug
-  Serial1.begin(115200);  // Vision Host UART (Level shifted)
+  Serial1.begin(115200);  // Vision Host UART (Bidirectional 5V &lt;-&gt; 3.3V Level Shifter)
+
+  Serial.println(F(&quot;=== CapSorter Mega Motion Controller (Pre-Validation) ===&quot;));
+  Serial.print(F(&quot;Nominal Scale (steps/mm): X=&quot;)); Serial.print(STEPS_PER_MM_X);
+  Serial.print(F(&quot; Y=&quot;)); Serial.println(STEPS_PER_MM_Y);
+  Serial.print(F(&quot;Tool Offset (mm): dX=&quot;)); Serial.print(TOOL_OFFSET_X_MM);
+  Serial.print(F(&quot; dY=&quot;)); Serial.println(TOOL_OFFSET_Y_MM);
+  if (TOOL_OFFSET_X_MM == 0.0f &amp;&amp; TOOL_OFFSET_Y_MM == 0.0f) {
+    Serial.println(F(&quot;[WARN] TOOL_OFFSET is (0,0) placeholder; measure physical alignment on bench.&quot;));
+  }
 
   Wire.begin();
   Wire.setClock(400000);  // 400 kHz Fast-Mode I2C
@@ -2769,21 +3254,24 @@ void setup() {
 }
 
 void loop() {
-  stepperX.run();
-  stepperY.run();
+  // 1. Poll E-stop auxiliary contact and X/Y/Z NC limit switches
+  checkRuntimeSafetyInputs();
 
-  // Monitor NC limit switches for mid-run overtravel or broken wire
-  checkRuntimeLimitSwitches();
+  // 2. Step only when actively moving and fault-free
+  if (currentState != STATE_HARD_FAULT &amp;&amp; currentState != STATE_FAILSAFE_HALT) {
+    stepperX.run();
+    stepperY.run();
+  }
 
-  // Poll incoming batch packets &amp; 250ms heartbeat pings
+  // 3. Poll host status queries, batch packets, heartbeat pings &amp; re-arm commands
   pollVisionHostPackets();
 
-  // Execute non-blocking 8-step pick-and-place state machine
+  // 4. Execute non-blocking 8-step pick-and-place state machine
   executeMotionStateMachine();
 
-  // Watchdog: trigger localized fail-safe recovery if UART link drops
+  // 5. Watchdog: latch fail-safe halt if UART heartbeat drops during active motion
   if (checkCommunicationLoss()) {
-    executeSafeLocalizedCompletion();
+    executeSafeCommsLossPolicy();
   }
 }</code></pre>
         </div>
@@ -2792,32 +3280,68 @@ void loop() {
         <div id="code-esp32" class="code-block hidden p-5 bg-[#0b0e14] overflow-x-auto max-h-[480px]">
           <pre><code class="text-slate-200">// =========================================================================
 // ESP32-CAM (AI-Thinker OV2640) - High-Speed Frame Streamer (V1)
-// Pure Image Acquisition (Zero Network Overhead, 32-Bit Length + CRC16)
+// Status: Pre-Validation Engineering Firmware
+// Pinned Target SDK: arduino-esp32 2.0.17 (esp32-camera 2.0.x), PSRAM Enabled
+// Pure Image Acquisition (Zero Network Overhead, 32-Bit Length + CRC16-CCITT)
 // Wiring: GPIO13 (TX2) -&gt; Teensy Pin 7 (RX2) | GPIO14 (RX2) &lt;- Teensy Pin 8 (TX2)
 // =========================================================================
+#include &lt;Arduino.h&gt;
 #include &quot;esp_camera.h&quot;
 #include &lt;HardwareSerial.h&gt;
 #include &quot;packet_protocol.h&quot;
 
 HardwareSerial TeensySerial(2); // UART2 (RX=GPIO14, TX=GPIO13)
 
-void setup() {
-  camera_config_t config;
-  config.ledc_channel = LEDC_CHANNEL_0;
-  config.ledc_timer   = LEDC_TIMER_0;
-  config.pin_d0       = 5;  config.pin_d1 = 18; config.pin_d2 = 19; config.pin_d3 = 21;
-  config.pin_d4       = 36; config.pin_d5 = 39; config.pin_d6 = 34; config.pin_d7 = 35;
-  config.pin_xclk     = 0;  config.pin_pclk = 22; config.pin_vsync = 25; config.pin_href = 23;
-  config.pin_sscb_sda = 26; config.pin_sscb_scl = 27;
-  config.pin_pwdn     = 32; config.pin_reset = -1;
-  config.xclk_freq_hz = 20000000;
-  config.pixel_format = PIXFORMAT_RGB565;   // Raw 16-bit color (320x240x2 = 153,600 bytes)
-  config.frame_size   = FRAMESIZE_QVGA;     // 320x240
-  config.fb_count     = 2;
-  config.grab_mode    = CAMERA_GRAB_LATEST; // Always capture freshest frame on trigger
+void haltCameraInitFault(const char *msg) {
+  Serial.print(F(&quot;[ESP32-CAM ERROR] &quot;));
+  Serial.println(msg);
+  while (true) {
+    delay(1000);
+  }
+}
 
-  if (esp_camera_init(&amp;config) != ESP_OK) {
-    while (true) { delay(1000); }
+void setup() {
+  Serial.begin(115200); // USB/UART0 boot diagnostics
+
+  // RGB565 QVGA uses 320 * 240 * 2 = 153,600 bytes/frame (307,200 bytes for 2 FBs).
+  // AI-Thinker ESP32-CAM requires external PSRAM for double-buffered RGB565 capture.
+  if (!psramFound()) {
+    haltCameraInitFault(&quot;PSRAM not detected; enable PSRAM in Board Tools for RGB565 fb_count=2.&quot;);
+  }
+
+  // Zero-initialize full camera_config_t so no driver field holds stack garbage
+  camera_config_t config = {};
+  config.ledc_channel  = LEDC_CHANNEL_0;
+  config.ledc_timer    = LEDC_TIMER_0;
+  config.pin_d0        = 5;
+  config.pin_d1        = 18;
+  config.pin_d2        = 19;
+  config.pin_d3        = 21;
+  config.pin_d4        = 36;
+  config.pin_d5        = 39;
+  config.pin_d6        = 34;
+  config.pin_d7        = 35;
+  config.pin_xclk      = 0;
+  config.pin_pclk      = 22;
+  config.pin_vsync     = 25;
+  config.pin_href      = 23;
+  config.pin_sccb_sda  = 26;
+  config.pin_sccb_scl  = 27;
+  config.pin_pwdn      = 32;
+  config.pin_reset     = -1;
+  config.xclk_freq_hz  = 20000000;
+  config.pixel_format  = PIXFORMAT_RGB565;    // Raw 16-bit color (320x240x2 = 153,600 bytes)
+  config.frame_size    = FRAMESIZE_QVGA;      // 320x240
+  config.jpeg_quality  = 12;                  // Explicitly initialized for driver safety
+  config.fb_count      = 2;
+  config.fb_location   = CAMERA_FB_IN_PSRAM;  // Explicitly allocate framebuffers in PSRAM
+  config.grab_mode     = CAMERA_GRAB_LATEST;  // Always capture freshest frame on trigger
+  config.sccb_i2c_port = 0;                   // Explicitly select I2C port 0
+
+  esp_err_t err = esp_camera_init(&amp;config);
+  if (err != ESP_OK) {
+    Serial.printf(&quot;[ESP32-CAM ERROR] esp_camera_init failed: 0x%x\n&quot;, (unsigned int)err);
+    haltCameraInitFault(&quot;Camera initialization failed.&quot;);
   }
 
   // 1. Allow AWB, AEC, and AGC to converge under diffused LED light plate for 800 ms
@@ -2836,7 +3360,7 @@ void setup() {
       delay(50);
     }
 
-    // 2. Lock AWB, Exposure, and Gain so colored caps never shift hue balance!
+    // 2. Lock AWB, Exposure, and Gain so colored caps do not shift hue balance
     s-&gt;set_whitebal(s, 0);
     s-&gt;set_awb_gain(s, 0);
     s-&gt;set_exposure_ctrl(s, 0);
@@ -2844,15 +3368,16 @@ void setup() {
   }
 
   TeensySerial.begin(921600, SERIAL_8N1, 14, 13);
+  Serial.println(F(&quot;[ESP32-CAM READY] Streaming QVGA RGB565 on UART2 @ 921600 baud.&quot;));
 }
 
 void loop() {
   if (TeensySerial.available() &gt; 0) {
-    uint8_t cmd = TeensySerial.read();
+    uint8_t cmd = (uint8_t)TeensySerial.read();
     if (cmd == CMD_CAPTURE_FRAME) {
       camera_fb_t *fb = esp_camera_fb_get();
       if (fb) {
-        uint32_t frameLen = (uint32_t)fb-&gt;len; // 153,600 bytes (requires 32-bit length!)
+        uint32_t frameLen = (uint32_t)fb-&gt;len; // Expected 153,600 bytes (32-bit length)
         uint16_t crc16    = computeCRC16(fb-&gt;buf, frameLen);
 
         // 1. Send 6-byte Frame Header: [0x55, 0xAA, Len3, Len2, Len1, Len0]
@@ -2885,7 +3410,7 @@ void loop() {
         <div id="code-protocol" class="code-block hidden p-5 bg-[#0b0e14] overflow-x-auto max-h-[480px]">
           <pre><code class="text-slate-200">// =========================================================================
 // packet_protocol.h - Shared Inter-Controller Wire Definitions (V1 &amp; V2)
-// Ensures Type Safety, CRC16-CCITT Checking &amp; Atomic Batch Execution
+// Ensures Type Safety, CRC16-CCITT Checking, Explicit Handshake &amp; Supervision
 // Python Packing Format:
 //   BatchHeader : struct.pack(&#x27;&lt;BHBH&#x27;, magic, batchId, totalCaps, crc16) [6B]
 //   CapTarget   : struct.pack(&#x27;&lt;BBHHffB&#x27;, id, color, pxX, pxY, x_mm, y_mm, bin) [15B]
@@ -2895,18 +3420,30 @@ void loop() {
 
 #include &lt;stdint.h&gt;
 
+// Shared Batch Capacity Limit
+#define MAX_BATCH_CAPS        100   // Maximum CapTarget entries accepted in one batch
+
 // Frame &amp; Batch Magic Bytes
 #define FRAME_SYNC_BYTE_1     0x55
 #define FRAME_SYNC_BYTE_2     0xAA
 #define PROTOCOL_MAGIC_BYTE   0x5A
 
-// Inter-Controller Command &amp; Handshake Opcodes
+// Inter-Controller Command, Handshake &amp; Supervision Opcodes
 #define CMD_CAPTURE_FRAME     0xAA  // Teensy -&gt; ESP32-CAM: Trigger QVGA capture
-#define CMD_BATCH_ACK         0xA1  // Mega -&gt; Vision Host: Batch CRC valid, starting motion
-#define CMD_BATCH_NACK        0xA2  // Mega -&gt; Vision Host: CRC mismatch, retransmit
-#define CMD_BATCH_COMPLETE    0xA3  // Mega -&gt; Vision Host: All caps sorted &amp; parked at (0,0)
-#define CMD_HEARTBEAT_PING    0xF0  // Vision Host -&gt; Mega: 250ms keep-alive pulse
-#define CMD_RECOVERY_HALT     0xEE  // Mega -&gt; Vision Host: Comms-loss fail-safe triggered
+#define CMD_BATCH_ACK         0xA1  // Mega -&gt; Vision Host: Batch CRC16 valid, starting motion
+#define CMD_BATCH_NACK        0xA2  // Mega -&gt; Vision Host: CRC16 mismatch, invalid length, or busy
+#define CMD_BATCH_COMPLETE    0xA3  // Mega -&gt; Vision Host: All caps sorted &amp; gantry parked at (0,0)
+#define CMD_CAP_PROGRESS      0xA4  // Mega -&gt; Vision Host: One cap cycle completed (resets stall timer)
+
+#define CMD_QUERY_STATUS      0xB0  // Vision Host -&gt; Mega: Query readiness/fault state
+#define CMD_STATUS_READY      0xB1  // Mega -&gt; Vision Host: Homed, fault-free, ready in STATE_IDLE
+#define CMD_STATUS_BUSY       0xB2  // Mega -&gt; Vision Host: Homing or actively executing a batch
+#define CMD_STATUS_FAULT      0xB3  // Mega -&gt; Vision Host: Fail-safe halt or hard fault latched
+#define CMD_REARM_HOME        0xB4  // Vision Host -&gt; Mega: Explicit operator re-arm &amp; re-home request
+
+#define CMD_HEARTBEAT_PING    0xF0  // Vision Host -&gt; Mega: 250ms keep-alive pulse during active batch
+#define CMD_RECOVERY_HALT     0xEE  // Mega -&gt; Vision Host: Comms-loss fail-safe halt latched
+#define CMD_HARD_FAULT        0xEF  // Mega -&gt; Vision Host: E-stop, NC limit trip, or homing fault
 
 enum CapColor : uint8_t {
   COLOR_NONE   = 0x00,
@@ -2932,7 +3469,7 @@ struct CapTarget {
 struct BatchHeader {
   uint8_t  magic;        // Must equal PROTOCOL_MAGIC_BYTE (0x5A)
   uint16_t batchId;      // Monotonic batch counter
-  uint8_t  totalCaps;    // Number of CapTarget structs following header (1..100)
+  uint8_t  totalCaps;    // Number of CapTarget structs following header (1..MAX_BATCH_CAPS)
   uint16_t crc16;        // CRC16-CCITT (poly 0x1021, init 0xFFFF) over CapTarget payload
 };
 #pragma pack(pop)
@@ -2975,29 +3512,29 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
         <div class="tech-card p-5">
-          <div class="flex items-center gap-2 text-orange-400 font-bold text-sm mb-2">
-            <i data-lucide="thermometer" class="w-4 h-4"></i>
-            1. TMC2208 Vref & Thermals
+          <div class="flex items-start gap-2.5 text-orange-400 font-bold text-sm leading-snug mb-2">
+            <i data-lucide="thermometer" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <span>1. TMC2208 Vref &amp; Thermals</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
-            Your NEMA 17 motors are rated at 1.3A/phase. Inexpensive TMC2208 breakout boards will overheat and shut down in thermal protect at 1.3A RMS. Adjust potentiometer Vref for <span class="font-mono text-orange-300">I<sub>RMS</sub> ≈ 0.8–0.9 A</span> (<span class="font-mono text-orange-300">V<sub>ref</sub> ≈ 1.1–1.2 V</span>) and supply forced cooling air.
+            Inspect the exact <code class="text-orange-300">R<sub>sense</sub></code> resistor on your TMC2208 carrier (commonly 0.11 Ω). Per ADI TMC2208 Rev 1.13: <span class="font-mono text-orange-300">I<sub>RMS</sub> = (0.325 / (R<sub>sense</sub> + 0.03)) × (V<sub>ref</sub> / (2.5 × √2))</span>. At R<sub>sense</sub>=0.11 Ω and <span class="font-mono text-orange-300">V<sub>ref</sub> ≈ 1.15 V</span>, <span class="font-mono text-orange-300">I<sub>RMS</sub> ≈ 0.75 A</span> (peak ~1.07 A). Verify motor current &amp; heatsink thermals on the bench.
           </p>
         </div>
 
         <div class="tech-card p-5">
-          <div class="flex items-center gap-2 text-purple-400 font-bold text-sm mb-2">
-            <i data-lucide="zap" class="w-4 h-4"></i>
-            2. Dedicated Servo Power Rail
+          <div class="flex items-start gap-2.5 text-purple-400 font-bold text-sm leading-snug mb-2">
+            <i data-lucide="zap" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <span>2. Dedicated Servo Power Rail</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
-            Never attempt to power the two MG90S servos from the Arduino Mega 5V regulator pin. Servo stall and acceleration currents create voltage sags that crash the microcontroller. Always route through a dedicated 5V 5A buck converter directly into PCA9685 V+.
+            Never power MG90S servos from the Arduino Mega 5V pin. Route servos through a separate regulated buck converter (Branch B, common star GND) into PCA9685 V+. Check your exact MG90S SKU voltage rating (original TowerPro MG90S is specified at 4.8 V nominal) and PCA9685 terminal/MOSFET current limits.
           </p>
         </div>
 
         <div class="tech-card p-5">
-          <div class="flex items-center gap-2 text-cyan-400 font-bold text-sm mb-2">
-            <i data-lucide="sun" class="w-4 h-4"></i>
-            3. Lighting Constancy
+          <div class="flex items-start gap-2.5 text-cyan-400 font-bold text-sm leading-snug mb-2">
+            <i data-lucide="sun" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <span>3. Lighting Constancy</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
             Glossy bottle caps reflect harsh point-source room lights, creating hot white specular highlights that destroy HSV color thresholds. The included LED light plate with diffusion layer provides uniform, shadow-free illumination essential for reliable edge segmentation.
@@ -3005,9 +3542,9 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
         </div>
 
         <div class="tech-card p-5">
-          <div class="flex items-center gap-2 text-emerald-400 font-bold text-sm mb-2">
-            <i data-lucide="weight" class="w-4 h-4"></i>
-            4. Z-Axis Servo Weight Balance
+          <div class="flex items-start gap-2.5 text-emerald-400 font-bold text-sm leading-snug mb-2">
+            <i data-lucide="weight" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <span>4. Z-Axis Servo Weight Balance</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
             The Z-axis MG90S servo lifts not only the cap, but the entire weight of the 3D-printed gripper mechanism and its clamping servo. Use a tension spring counterbalance or small counterweight so the servo only overcomes friction, preventing gear stripping.
@@ -3015,9 +3552,9 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
         </div>
 
         <div class="tech-card p-5">
-          <div class="flex items-center gap-2 text-amber-400 font-bold text-sm mb-2">
-            <i data-lucide="layers" class="w-4 h-4"></i>
-            5. Three Coordinate Frames
+          <div class="flex items-start gap-2.5 text-amber-400 font-bold text-sm leading-snug mb-2">
+            <i data-lucide="layers" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <span>5. Three Coordinate Frames</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
             Camera image pixels <span class="font-mono text-amber-300">(u, v)</span>, gantry carriage coordinates <span class="font-mono text-amber-300">(X<sub>g</sub>, Y<sub>g</sub>)</span>, and actual physical gripper tip <span class="font-mono text-amber-300">(X<sub>t</sub>, Y<sub>t</sub>)</span> are three distinct reference frames. Compute toolhead offset <span class="font-mono text-amber-300">(dx, dy)</span> and calibrate camera homography independently.
@@ -3025,29 +3562,29 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
         </div>
 
         <div class="tech-card p-5">
-          <div class="flex items-center gap-2 text-red-400 font-bold text-sm mb-2">
-            <i data-lucide="shield-alert" class="w-4 h-4"></i>
-            6. Physical Emergency Stop &amp; NC Wire-Break Guard
+          <div class="flex items-start gap-2.5 text-red-400 font-bold text-sm leading-snug mb-2">
+            <i data-lucide="shield-alert" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <span>6. Physical Emergency Stop &amp; NC Wire-Break Guard</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
-            A hardware mushroom E-Stop switch directly cuts the 12V SMPS line, while <code class="text-red-300">mega_motion.ino</code> continuously monitors the NC limit switches in <code class="text-red-300">loop()</code> (3-sample debounce) and performs a +10 mm pre-homing broken-wire test at boot.
+            A dual-pole latching mushroom E-Stop cuts 12V actuator power (Branch A steppers + Branch B servo buck input) independently of firmware while signaling Mega Pin 25. <code class="text-red-300">mega_motion.ino</code> polls X/Y/Z NC limits (3-sample debounce) and E-stop (2-sample debounce) in <code class="text-red-300">loop()</code>, disabling outputs until explicit re-arm &amp; re-homing.
           </p>
         </div>
 
         <div class="tech-card p-5">
-          <div class="flex items-center gap-2 text-cyan-400 font-bold text-sm mb-2">
-            <i data-lucide="cpu" class="w-4 h-4"></i>
-            7. 16 MHz AVR Step Budget (40 steps/mm)
+          <div class="flex items-start gap-2.5 text-cyan-400 font-bold text-sm leading-snug mb-2">
+            <i data-lucide="cpu" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <span>7. 16 MHz AVR Step Budget (40 steps/mm)</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
-            On an 8-bit 16 MHz ATmega2560, <code class="text-cyan-300">AccelStepper::run()</code> has a ~4,000 steps/s combined ceiling. Running TMC2208 at 1/8 microstepping (<code class="text-cyan-300">40 steps/mm</code> with 1/256 MicroPlyer interpolation) achieves 70 mm/s (<code class="text-cyan-300">2800 steps/s</code>) and 0.025 mm resolution without CPU saturation.
+            On an 8-bit 16 MHz ATmega2560, <code class="text-cyan-300">AccelStepper::run()</code> has a ~4,000 steps/s combined ceiling. Running TMC2208 at 1/8 microstepping (<code class="text-cyan-300">40 steps/mm</code> nominal) gives 70 mm/s (<code class="text-cyan-300">2800 steps/s</code>) and 0.025 mm commanded step resolution (open-loop — measure physical positioning accuracy &amp; repeatability on the bench).
           </p>
         </div>
 
         <div class="tech-card p-5">
-          <div class="flex items-center gap-2 text-orange-400 font-bold text-sm mb-2">
-            <i data-lucide="activity" class="w-4 h-4"></i>
-            8. 64-Byte AVR UART FIFO Pacing &amp; 16KB DMA
+          <div class="flex items-start gap-2.5 text-orange-400 font-bold text-sm leading-snug mb-2">
+            <i data-lucide="activity" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <span>8. 64-Byte AVR UART FIFO Pacing &amp; 16KB DMA</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
             Teensy allocates a 16 KB <code class="text-orange-300">DMAMEM</code> RX buffer for the 921,600 baud camera stream and paces batch transmissions to the Mega in 32-byte chunks (2 ms pause) so the Mega's 64-byte hardware UART FIFO never overflows.
@@ -3055,9 +3592,9 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
         </div>
 
         <div class="tech-card p-5">
-          <div class="flex items-center gap-2 text-emerald-400 font-bold text-sm mb-2">
-            <i data-lucide="sparkles" class="w-4 h-4"></i>
-            9. Specular Pinhole Healing &amp; 24mm Spatial NMS
+          <div class="flex items-start gap-2.5 text-emerald-400 font-bold text-sm leading-snug mb-2">
+            <i data-lucide="sparkles" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <span>9. Specular Pinhole Healing &amp; 24mm Spatial NMS</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
             After an 800 ms warm-up under the LED diffuser, OV2640 AWB/AEC/AGC are locked. Teensy applies a 3×3 morphological pinhole healer and 24 mm Spatial Non-Maximum Suppression so glossy caps are never double-queued.
@@ -3072,15 +3609,15 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4">
         <div class="mt-4 p-4 rounded-2xl bg-slate-900/80 border border-orange-500/25 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div class="flex items-center gap-2 text-xs text-slate-400 font-mono">
-            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0"></i>
             <span>End of Engineering Deep-Dive &bull; 5 of 5 modules</span>
           </div>
           <div class="flex items-center gap-2">
-            <button id="btn-eng-back-top" class="px-4 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer">
+            <button type="button" id="btn-eng-back-top" class="px-4 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer">
               <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>
               <span>Back to Engineering Top</span>
             </button>
-            <button id="btn-eng-collapse-bottom" class="px-4 py-2 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition-all cursor-pointer">
+            <button type="button" id="btn-eng-collapse-bottom" class="px-4 py-2 rounded-full bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition-all cursor-pointer">
               <i data-lucide="chevrons-up" class="w-3.5 h-3.5"></i>
               <span>Collapse Engineering</span>
             </button>
@@ -3093,24 +3630,31 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
   <!-- ==========================================
        FOOTER
        ========================================== -->
-  <footer class="border-t border-white/10 bg-[#06080d] py-12">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-bold">
-          <i data-lucide="bot" class="w-4 h-4"></i>
-        </div>
+  <footer class="border-t border-white/10 bg-[#06080d] py-10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row items-center justify-between gap-6">
+      <div class="flex items-center gap-3.5">
+        <a href="index.html" class="w-11 h-11 rounded-xl bg-slate-900/95 border border-orange-500/30 flex items-center justify-center p-1.5 shadow-lg shadow-orange-500/10 hover:border-orange-400/60 transition-colors shrink-0" aria-label="CapSorter Portal">
+          <img src="assets/logo_mark.png?v=3" alt="CapSorter Emblem" class="w-full h-full object-contain">
+        </a>
         <div>
-          <span class="font-bold text-white text-sm">Autonomous Bottle-Cap Sorting Machine</span>
+          <span class="font-bold text-white text-sm tracking-tight block">Autonomous Bottle-Cap Sorting Machine</span>
           <p class="text-xs text-orange-400 font-mono font-semibold">Made by Neil Shettigar</p>
-          <p class="text-[11px] text-slate-500 font-mono">Teensy 4.1 + Arduino Mega 2560 + ESP32-CAM Architecture • by Neil, Kahan and Shourya</p>
+          <p class="text-[11px] text-slate-500 font-mono">Teensy 4.1 + Arduino Mega 2560 + ESP32-CAM &bull; Team: Neil, Kahan and Shourya</p>
         </div>
       </div>
-      <div class="flex items-center gap-4 text-xs font-mono text-slate-400">
-        <a href="index.html" class="text-orange-400 hover:underline">Version Portal</a>
-        <span>•</span>
-        <a href="v2.html" class="text-cyan-400 hover:underline">Switch to V2 (Pi Zero 2 W)</a>
-        <span>•</span>
-        <button class="btn-open-poster text-slate-300 hover:underline">View System Poster</button>
+      <div class="flex flex-wrap items-center justify-center gap-2 shrink-0">
+        <a href="index.html" class="footer-link-pill text-slate-300 hover:text-white">
+          <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-orange-400"></i>
+          <span>Version Portal</span>
+        </a>
+        <a href="v2.html" class="footer-link-pill text-cyan-300 hover:text-cyan-200 hover:border-cyan-500/40">
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+          <span>Switch to V2</span>
+        </a>
+        <button type="button" class="btn-open-poster footer-link-pill text-slate-300 hover:text-white">
+          <i data-lucide="file-image" class="w-3.5 h-3.5 text-orange-400"></i>
+          <span>4K System Poster</span>
+        </button>
       </div>
     </div>
   </footer>
@@ -3120,29 +3664,33 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
        ========================================== -->
   <div id="poster-modal" class="poster-modal">
     <!-- Modal Toolbar -->
-    <div class="h-14 px-6 bg-slate-900/95 border-b border-white/10 flex items-center justify-between z-10 shrink-0">
-      <div class="flex items-center gap-3">
-        <i data-lucide="file-image" class="w-5 h-5 text-orange-400"></i>
-        <span class="font-bold text-sm text-white">System Architecture &amp; Engineering Poster</span>
-        <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">4K UHD</span>
+    <div class="min-h-14 py-2 px-3 sm:px-6 bg-slate-900/95 border-b border-white/10 flex items-center justify-between gap-2 z-10 shrink-0">
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+        <i data-lucide="file-image" class="w-5 h-5 text-orange-400 shrink-0 hidden sm:block"></i>
+        <span class="font-bold text-xs sm:text-sm text-white truncate hidden md:inline">System Architecture &amp; Engineering Poster</span>
+        <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-orange-500/20 text-orange-300 border border-orange-500/30 hidden lg:inline-block shrink-0">4K UHD</span>
 
-        <!-- Version Toggles -->
-        <div class="hidden sm:flex items-center gap-1.5 ml-3 pl-3 border-l border-white/10">
-          <button id="btn-poster-v1" class="px-2.5 py-1 text-xs rounded bg-orange-600 text-white font-semibold transition-all shadow-sm">V1 (Teensy 4.1)</button>
-          <button id="btn-poster-v2" class="px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all">V2 (Pi Zero 2 W)</button>
+        <!-- Version Toggles (Visible on Mobile & Desktop) -->
+        <div class="flex items-center gap-1.5 sm:ml-2 sm:pl-3 sm:border-l border-white/10 shrink-0">
+          <button type="button" id="btn-poster-v1" class="px-2.5 py-1 text-xs rounded-md bg-orange-500 text-white font-bold transition-all shadow-sm">V1<span class="hidden sm:inline"> (Teensy 4.1)</span></button>
+          <button type="button" id="btn-poster-v2" class="px-2.5 py-1 text-xs rounded-md bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all">V2<span class="hidden sm:inline"> (Pi Zero 2 W)</span></button>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="btn-zoom-in" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <span id="poster-zoom-level" class="hidden sm:inline-block px-2 py-1 text-[11px] font-mono text-slate-400 bg-slate-800/70 rounded border border-white/5 min-w-[48px] text-center">100%</span>
+        <button type="button" id="btn-zoom-in" aria-label="Zoom in" title="Zoom in (+)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs transition-colors">
           <i data-lucide="zoom-in" class="w-4 h-4"></i>
         </button>
-        <button id="btn-zoom-out" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs">
+        <button type="button" id="btn-zoom-out" aria-label="Zoom out" title="Zoom out (-)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs transition-colors">
           <i data-lucide="zoom-out" class="w-4 h-4"></i>
         </button>
-        <button id="btn-zoom-reset" class="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono">
+        <button type="button" id="btn-zoom-reset" aria-label="Reset zoom" title="Reset view (0)" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono transition-colors">
           Reset
         </button>
-        <button id="btn-close-poster" class="p-2 rounded bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs ml-2">
+        <a id="btn-download-poster" href="assets/system_poster.jpg" download aria-label="Download poster image" title="Download 4K Poster" class="hidden sm:flex p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-xs transition-colors">
+          <i data-lucide="download" class="w-4 h-4"></i>
+        </a>
+        <button type="button" id="btn-close-poster" aria-label="Close poster viewer" title="Close (Esc)" class="p-2 rounded-lg bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs ml-1 transition-colors">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -3150,7 +3698,7 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
 
     <!-- Viewport -->
     <div class="poster-viewport">
-      <img id="modal-poster-img" src="assets/system_poster.jpg" alt="Master System Poster Diagram">
+      <img id="modal-poster-img" data-src="assets/system_poster.jpg" alt="Master System Poster Diagram" draggable="false">
     </div>
   </div>
 

@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Autonomous Bottle-Cap Sorting Machine | Comprehensive Technical Dossier</title>
-  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CapSorter V1 | Comprehensive Technical Dossier</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png?v=3">
   <style>
     /* ==========================================================================
        Print & Pagination Setup for PDF Generation
@@ -328,9 +329,108 @@
       line-height: 1;
       margin: 1mm 0;
     }
+
+    /* Screen-Only Paper Presentation & Floating Toolbar (Print Layout Unchanged) */
+    .screen-toolbar {
+      display: none;
+    }
+    @media screen {
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background: radial-gradient(ellipse 900px 480px at 50% 0%, rgba(255, 107, 0, 0.08), transparent 70%), #070a10;
+        padding: 0 16px 48px;
+        font-size: 10.5pt;
+      }
+      .screen-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        max-width: 960px;
+        margin: 0 auto 20px;
+        padding: 12px 18px;
+        background: rgba(10, 13, 20, 0.92);
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-top: none;
+        border-radius: 0 0 14px 14px;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+      }
+      .toolbar-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .toolbar-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #141b2b;
+        color: #e2e8f0;
+        transition: all 0.2s ease;
+      }
+      .toolbar-btn:hover {
+        background: #1e293b;
+        border-color: rgba(255, 255, 255, 0.25);
+        color: #ffffff;
+      }
+      .toolbar-btn-primary {
+        background: #ff6b00;
+        border-color: #ff8533;
+        color: #ffffff;
+      }
+      .toolbar-btn-primary:hover {
+        background: #ff7e21;
+        color: #ffffff;
+      }
+      .page {
+        max-width: 960px;
+        margin: 0 auto 28px;
+        padding: 28px 34px 48px;
+        background: #0d121d;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        box-shadow: 0 20px 55px rgba(0, 0, 0, 0.6);
+        min-height: auto;
+      }
+      .doc-footer {
+        position: static;
+        margin-top: 24px;
+        padding-top: 10px;
+      }
+      @media (max-width: 720px) {
+        .page { padding: 18px 16px 28px; }
+        .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      }
+    }
+    @media print {
+      .screen-toolbar { display: none !important; }
+    }
   </style>
 </head>
 <body>
+  <div class="screen-toolbar">
+    <div class="toolbar-group">
+      <a href="v1.html" class="toolbar-btn">&larr; Back to CapSorter V1</a>
+      <a href="pdf_dossier_v2.html" class="toolbar-btn">View V2 Dossier</a>
+    </div>
+    <div class="toolbar-group">
+      <button type="button" onclick="window.print()" class="toolbar-btn toolbar-btn-primary">Print / Save as PDF</button>
+    </div>
+  </div>
 
   <!-- =========================================================================
        PAGE 1: COVER PAGE & EXECUTIVE SUMMARY
@@ -384,9 +484,9 @@
           <div style="color: #38bdf8; font-size: 6.5pt;">10×10 Grid (30mm Pitch)</div>
         </div>
         <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
-          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Pick Cycle Time</div>
-          <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">~4–6 s / cap</div>
-          <div style="color: #34d399; font-size: 6.5pt;">4 Colours (R, Y, G, B)</div>
+          <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Pick Cycle Time (Est.)</div>
+          <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">~5–13 s / cap</div>
+          <div style="color: #34d399; font-size: 6.5pt;">Pending Bench Timing</div>
         </div>
         <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
           <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Connectivity</div>
@@ -438,9 +538,9 @@
         </p>
       </div>
       <div class="card card-purple" style="margin: 0;">
-        <h4>Fail-Safe Recovery</h4>
+        <h4>Fail-Safe Halt</h4>
         <p style="font-size: 7pt; margin-top: 1mm; color: #94a3b8;">
-          Completes in-flight pickup and placement safely if inter-controller communication is severed mid-operation.
+          Latches a safe controlled halt on UART loss or limit/E-stop trip, requiring explicit operator re-arm &amp; re-homing.
         </p>
       </div>
     </div>
@@ -477,19 +577,19 @@
           <tr>
             <td><strong style="color: #34d399;">Arduino Mega 2560</strong></td>
             <td class="font-mono">ATmega2560 AVR @ 16 MHz, 54 I/O</td>
-            <td>Real-time deterministic motion control: AccelStepper pulse generation, homing sequence, limit switch ISR monitoring, PCA9685 I2C sequencing, and fail-safe recovery watchdog.</td>
+            <td>Real-time motion control: AccelStepper pulse generation, homing sequence, polled X/Y/Z NC limits &amp; E-stop sense, PCA9685 I2C sequencing, and comms watchdog.</td>
             <td><span class="badge badge-orange">5.0V Logic</span></td>
           </tr>
           <tr>
             <td><strong style="color: #c084fc;">PCA9685</strong></td>
             <td class="font-mono">16-Channel 12-Bit PWM Driver (I2C)</td>
-            <td>Offloads analog servo pulse width generation (50 Hz) from the Mega, guaranteeing rock-steady jitter-free holding torque on Z-linkage and gripper servos.</td>
+            <td>Offloads analog servo pulse width generation (50 Hz) from the Mega with active-LOW OE startup/fault suppression on Z-linkage and gripper servos.</td>
             <td><span class="badge badge-purple">5V VCC / 5V V+</span></td>
           </tr>
           <tr>
             <td><strong style="color: #e2e8f0;">TMC2208 × 2</strong></td>
             <td class="font-mono">Trinamic SilentStepStick Driver</td>
-            <td>Ultra-quiet, resonance-free driving of X and Y NEMA 17 steppers using StealthChop2 technology with up to 1/16 microstepping.</td>
+            <td>StealthChop2 driving of X and Y NEMA 17 steppers at 1/8 microstepping (MS1/MS2=GND -> 40 steps/mm nominal + 1/256 internal MicroPlyer).</td>
             <td><span class="badge badge-orange">12V VMOT / 5V VIO</span></td>
           </tr>
         </tbody>
@@ -809,7 +909,7 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
 
     <h2><span class="sec-num">05.</span> Electrical Architecture & 3-Branch Power Distribution</h2>
     <p>
-      Inductive motor noise and high servo stall currents are the leading causes of spontaneous microcontroller resets in robotics projects. To eliminate brownouts and voltage transients, power distribution is partitioned into <strong>three electrically isolated branches</strong> derived from a central 12V 10A (120W) switched-mode power supply (SMPS).
+      Inductive motor noise and high servo stall currents are common causes of microcontroller resets in robotics builds. To reduce rail sag and transients, power distribution is partitioned into <strong>three separate regulated branches sharing a common star ground</strong> (not galvanically isolated) from a 12V 10A (120W) SMPS. Combined Branch B (5V/5A) and Branch C (5V/3A) equal 40W rated output (~45–47W drawn at 12V input at ~85–90% efficiency); exact wire gauges, fuses, connectors, and part SKUs must be confirmed before assembly.
     </p>
 
     <!-- 3-Branch Power Breakdown Cards -->
@@ -819,16 +919,16 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
       <div class="card card-orange" style="margin: 0;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h4 style="color: #ff9142;">Branch A: Steppers</h4>
-          <span class="badge badge-orange">12V Direct</span>
+          <span class="badge badge-orange">12V Direct (E-Stop Cut)</span>
         </div>
         <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1.5mm;">
-          Direct 12V rail supplying VMOT to both TMC2208 stepper motor driver modules.
+          Direct 12V rail (switched via dual-pole hardware E-stop) supplying VMOT to both TMC2208 modules.
         </p>
         <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
-          <li>• TMC2208 X-Axis ⟶ NEMA 17 (1.3 A)</li>
-          <li>• TMC2208 Y-Axis ⟶ NEMA 17 (1.3 A)</li>
+          <li>• TMC2208 X-Axis ⟶ NEMA 17 (verify SKU)</li>
+          <li>• TMC2208 Y-Axis ⟶ NEMA 17 (verify SKU)</li>
           <li>• 100 µF low-ESR capacitors on VMOT</li>
-          <li>• Dedicated 5.0A fast-acting inline fuse</li>
+          <li>• 5.0A fast-acting fuse + 18 AWG wiring</li>
         </ul>
       </div>
 
@@ -836,16 +936,16 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
       <div class="card card-purple" style="margin: 0;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h4 style="color: #c084fc;">Branch B: Servos</h4>
-          <span class="badge badge-purple">5V / 5A Buck</span>
+          <span class="badge badge-purple">5V / 5A Buck (E-Stop Cut)</span>
         </div>
         <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1.5mm;">
-          Isolated high-efficiency buck converter feeding the high-current PCA9685 V+ rail.
+          Separate high-current buck converter (12V input switched via E-stop) feeding PCA9685 V+. Verify MG90S SKU voltage (TowerPro original = 4.8V nominal).
         </p>
         <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
-          <li>• PCA9685 Channel 0 ⟶ MG90S (Z-Axis)</li>
-          <li>• PCA9685 Channel 1 ⟶ MG90S (Gripper)</li>
-          <li>• Absorbs 1.8A instantaneous stall spikes</li>
-          <li>• Dedicated 3.0A fast-acting inline fuse</li>
+          <li>• PCA9685 CH0 ⟶ Z-Axis Servo</li>
+          <li>• PCA9685 CH1 ⟶ Gripper Servo</li>
+          <li>• 1000 µF bulk cap on V+ (verify board rating)</li>
+          <li>• 3.0A fuse + 18 AWG wiring</li>
         </ul>
       </div>
 
@@ -856,12 +956,12 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
           <span class="badge badge-cyan">5V / 3A Regulated</span>
         </div>
         <p style="font-size: 7pt; color: #cbd5e1; margin-top: 1.5mm;">
-          Clean, noise-free regulated 5V line powering microcontrollers and logic ICs.
+          Separate regulated 5V logic rail (stays live during E-stop for fault telemetry; common star GND).
         </p>
         <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
-          <li>• Arduino Mega 2560 5V/VIN pin</li>
+          <li>• Arduino Mega 2560 5V pin (NOT VIN; avoid USB backfeed)</li>
           <li>• Teensy 4.1 VIN (internally regulated 3.3V)</li>
-          <li>• ESP32-CAM 5V input rail</li>
+          <li>• ESP32-CAM 5V input rail (PSRAM enabled)</li>
           <li>• PCA9685 VCC logic supply</li>
         </ul>
       </div>
@@ -871,31 +971,30 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
     <!-- Mandatory Level Shifter Safety Warning -->
     <div class="callout callout-danger">
       <strong style="font-size: 8pt; display: block; margin-bottom: 1mm;">⚠️ MANDATORY LOGIC LEVEL SHIFTER SPECIFICATION:</strong>
-      The Arduino Mega 2560 operates strictly on <strong>5.0V TTL logic</strong>. The Teensy 4.1 and ESP32-CAM operate strictly on <strong>3.3V LVCMOS logic and are NOT 5V tolerant</strong>. Exposing Teensy Pin 0 (RX1) directly to Arduino Mega Pin 18 (TX1, 5V) will cause irreversible dielectric breakdown of the ARM Cortex-M7 I/O ring. A dedicated bidirectional logic level shifter (TXS0108E or BSS138-based MOSFET shifter) must be placed between Mega TX1 and Teensy RX1. Teensy Pin 1 (TX1, 3.3V) can connect directly to Mega Pin 19 (RX1) because the ATmega2560 recognizes 3.3V as a logic HIGH (V_{IH} = 0.6 × V_{CC} = 3.0V).
+      The Arduino Mega 2560 operates strictly on <strong>5.0V TTL logic</strong>. The Teensy 4.1 and ESP32-CAM operate strictly on <strong>3.3V LVCMOS logic — NO pins are 5V tolerant</strong>. Connecting Mega Pin 18 (TX1, 5V) directly to Teensy Pin 0 (RX1) will damage the Cortex-M7 I/O pin. Route <strong>BOTH TX1 and RX1</strong> through a 4-channel bidirectional level shifter (HV=5V, LV=3.3V) so Mega RX1 also receives full 5V noise margin (3.3V direct into Mega RX1 has minimal margin over V_IH = 0.6 × V_CC).
     </div>
 
     <!-- Power Tree Schematic ASCII / Visual Diagram -->
     <div class="card">
       <div style="font-weight: bold; font-size: 7.5pt; color: #ff9142; margin-bottom: 2mm; text-transform: uppercase;">
-        Electrical Power Flow & Star Grounding Topology
+        Electrical Power Flow, Hardwired E-Stop Cutoff &amp; Star Grounding Topology
       </div>
-      <div class="code-box" style="font-size: 7pt; line-height: 1.3;">
+      <div class="code-box" style="font-size: 6.8pt; line-height: 1.3;">
 +-------------------+
-|  12V, 10A SMPS    | ────── Master 10A Fuse ──┬── [BRANCH A: 12V Direct] ────────> TMC2208 Motor VMOT (X & Y Steppers)
-|  (120W DC Supply) |                          │
-+-------------------+                          ├── [BRANCH B: 12V -> 5V/5A Buck] ─> PCA9685 V+ Power Terminal (Servos)
-         │                                     │
-    Common GND Star Point                      └── [BRANCH C: 12V -> 5V/3A Buck] ─┬─> Arduino Mega 2560 5V Pin
-         │                                                                        ├─> Teensy 4.1 VIN Pin
-         └───────────── Tied to Single Earth Terminal Chassis                     ├─> ESP32-CAM 5V Pin
-                                                                                  └─> PCA9685 VCC Logic Pin</div>
+|  12V, 10A SMPS    | ── Master 10A Fuse ─┬─ [E-STOP POLE 1 (NC, >=10A)] ─┬─ [BRANCH A: 12V Direct, 5A Fuse] ───> TMC2208 VMOT (X &amp; Y)
+|  (120W DC Supply) |                     │                               └─ [BRANCH B: 12V->5V/5A Buck, 3A] ──> PCA9685 V+ (Servos)
++-------------------+                     │
+         │                                └─ [BRANCH C: 12V->5V/3A Buck] ──┬─> Arduino Mega 2560 5V Pin (NOT VIN; check USB backfeed)
+    Common GND Star Point                                                  ├─> Teensy 4.1 VIN Pin (3.3V LDO)
+    (Non-Isolated Return)                                                  ├─> ESP32-CAM 5V Pin &amp; PCA9685 VCC
+    [E-STOP POLE 2 (NC)] ──────────────────────────────────────────────────┴─> Mega Pin 25 (PIN_ESTOP, INPUT_PULLUP -> STATE_HARD_FAULT)</div>
     </div>
 
     <!-- Grounding Best Practices -->
     <div class="card card-emerald">
       <h4 style="color: #34d399; margin-bottom: 1mm;">Single-Point Star Grounding Protocol</h4>
       <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-        High-current return paths from the NEMA 17 stepper coils and MG90S servos must never share return PCB traces with sensitive 3.3V logic grounds. All ground wires must route back independently to a <strong>single-point star grounding terminal</strong> located adjacent to the 12V SMPS negative terminal. This eliminates ground bounce and ground loops that trigger false limit switch interrupts.
+        High-current return paths from the NEMA 17 stepper coils and MG90S servos must never share return PCB traces with sensitive 3.3V logic grounds. All ground wires must route back independently to a <strong>single-point star grounding terminal</strong> located adjacent to the 12V SMPS negative terminal. This reduces ground bounce and ground loops that could trigger false limit switch readings.
       </p>
     </div>
 
@@ -958,8 +1057,8 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
             <td class="font-mono">Teensy Pin 1 (TX1)</td>
             <td class="font-mono">Mega Pin 19 (RX1)</td>
             <td>Sorting plan batch instruction packets</td>
-            <td><span class="badge badge-cyan">3.3V ⟶ 5V Tolerant</span></td>
-            <td>ATmega2560 reads 3.3V HIGH reliably (V_{IH} = 3.0V)</td>
+            <td><span class="badge badge-cyan">3.3V ⟶ Shifter ⟶ 5V</span></td>
+            <td>Route through bidirectional level shifter for full 5V noise margin</td>
           </tr>
           <tr>
             <td><strong style="color: #34d399;">Mega ⟶ Teensy</strong></td>
@@ -973,11 +1072,11 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
           <!-- Mega to TMC2208 X-Axis -->
           <tr>
             <td><strong style="color: #e2e8f0;">Mega ⟶ TMC2208 (X)</strong></td>
-            <td class="font-mono">Mega Pin 2 (or 54)</td>
+            <td class="font-mono">Mega Pin 2</td>
             <td class="font-mono">Driver STEP Pin</td>
             <td>X-Axis stepper pulse train</td>
             <td><span class="badge badge-orange">5V Logic VIO</span></td>
-            <td>Up to 20 kHz pulse rate via AccelStepper</td>
+            <td>2.8 kHz max (70 mm/s nominal; &lt;4 kHz AVR AccelStepper ceiling)</td>
           </tr>
           <tr>
             <td><strong style="color: #e2e8f0;">Mega ⟶ TMC2208 (X)</strong></td>
@@ -1069,9 +1168,17 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
             <td><strong style="color: #34d399;">Limit Switches ⟶ Mega</strong></td>
             <td class="font-mono">NC Contact Pin</td>
             <td class="font-mono">Mega Pin 24</td>
-            <td>Z-Axis Retracted Home Switch</td>
+            <td>Z-Axis Overtravel / Retract NC Switch</td>
             <td><span class="badge badge-emerald">5V Internal Pull-Up</span></td>
-            <td>Normally Closed: open circuit = fault/endstop</td>
+            <td>Polled in loop (Port A has no ISR); open = fault/endstop</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #f87171;">E-Stop Aux Pole ⟶ Mega</strong></td>
+            <td class="font-mono">Latching E-Stop Pole 2</td>
+            <td class="font-mono">Mega Pin 25</td>
+            <td>Hardwired E-Stop State Sense (NC to GND)</td>
+            <td><span class="badge badge-red">5V Internal Pull-Up</span></td>
+            <td>Latches STATE_HARD_FAULT; Pole 1 cuts 12V actuator power</td>
           </tr>
         </tbody>
       </table>
@@ -1183,28 +1290,28 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
 
     <!-- Communication-Loss Safe Recovery Architecture -->
     <div class="card card-orange" style="margin-top: 3mm;">
-      <h3 style="color: #ff9142; margin-bottom: 1.5mm;">Autonomous Communication-Loss Recovery Architecture</h3>
+      <h3 style="color: #ff9142; margin-bottom: 1.5mm;">Fail-Closed Communication-Loss Halt &amp; Re-Arm Policy</h3>
       <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-        A major failure mode in distributed robotic systems is host communication loss mid-trajectory. If an embedded system depends on receiving continuous streaming instructions, an unexpected cable disconnect or Teensy reboot could leave the gripper stranded holding a cap mid-air, risking collision or motor burnout.
+        Because the default gripper has no physical cap-presence or grip-force sensor (<code>HAS_GRIP_SENSOR == 0</code>), firmware never assumes a cap was gripped on UART loss. Hosts maintain 250 ms heartbeats across the entire batch via per-cap <code>CMD_CAP_PROGRESS</code> updates.
       </p>
       
       <div class="grid-3" style="font-size: 7.5pt; margin-top: 2mm;">
         <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #ff9142;">
-          <strong style="color: #ff9142;">1. Atomic Batch Plan Storage</strong>
+          <strong style="color: #ff9142;">1. READY Handshake &amp; CRC16</strong>
           <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
-            The Teensy transmits the entire batch sorting plan (up to 100 caps) with batch IDs and CRC16 checksums before physical motion commences. The Mega stores this plan in local SRAM.
+            Teensy polls <code>CMD_QUERY_STATUS</code> and waits for <code>CMD_STATUS_READY</code> after homing before transmitting a CRC16-CCITT batch (32-byte chunks, 2 ms pause).
           </p>
         </div>
         <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #38bdf8;">
-          <strong style="color: #38bdf8;">2. In-Flight Cap Safe Completion</strong>
+          <strong style="color: #38bdf8;">2. Safe Controlled Halt</strong>
           <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
-            If the UART link drops while a cap is being picked or carried, the Mega recognizes the heartbeat loss but <strong>completes depositing that specific cap into its assigned bin</strong>.
+            If heartbeats stop (&gt;1.2 s), Mega immediately halts XY travel, raises Z (preserving jaw state), disables steppers, and emits <code>CMD_RECOVERY_HALT</code> without blind bin travel.
           </p>
         </div>
         <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #34d399;">
-          <strong style="color: #34d399;">3. Safe Retraction & Park</strong>
+          <strong style="color: #34d399;">3. Explicit Operator Re-Arm</strong>
           <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
-            After releasing the in-flight cap, the Z-axis fully retracts to height 0 mm, further pickups are suppressed, the carriage returns to safe parking (0, 0), and enters a safe standby state.
+            Heartbeat pings never auto-clear a halt. Leaving <code>STATE_FAILSAFE_HALT</code> or <code>STATE_HARD_FAULT</code> requires explicit <code>CMD_REARM_HOME</code> + full re-homing.
           </p>
         </div>
       </div>
@@ -1213,15 +1320,15 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
     <!-- Safety Circuits -->
     <div class="grid-2" style="margin-top: 3mm;">
       <div class="card card-emerald" style="margin: 0;">
-        <h4 style="color: #34d399;">Normally Closed (NC) Endstops</h4>
+        <h4 style="color: #34d399;">Normally Closed (NC) Polled Endstops</h4>
         <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.35; margin-top: 1mm;">
-          All limit switches utilize Normally Closed contacts held at 5V logic via internal pull-ups. If a cable snags or disconnects, the circuit breaks instantly, triggering an immediate hardware e-stop interrupt.
+          X, Y, and Z limit switches (Pins 22–24, Port A — no AVR ISR) are polled in <code>loop()</code> with 3-sample debounce. Any open contact or wire break latches <code>STATE_HARD_FAULT</code> and disables stepper &amp; servo outputs.
         </p>
       </div>
       <div class="card card-red" style="margin: 0;">
-        <h4 style="color: #f87171;">Hardware Master Emergency Stop</h4>
+        <h4 style="color: #f87171;">Hardwired Dual-Pole E-Stop</h4>
         <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.35; margin-top: 1mm;">
-          A latching red mushroom E-Stop button cuts the primary 12V supply to the TMC2208 drivers and servo buck. Logic remains energized to report telemetry while hazardous actuator movement halts in &lt;10 µs.
+          Pole 1 cuts 12V actuator power (Branch A steppers + Branch B servo buck) independently of firmware while Branch C keeps logic on. Pole 2 signals Mega Pin 25 so reset requires deliberate re-arm; counterbalance Z against gravity drop and measure actual stop distance on the machine.
         </p>
       </div>
     </div>
@@ -1560,19 +1667,19 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
       <div class="card card-orange" style="margin: 0;">
         <h4 style="color: #ff9142;">1. TMC2208 Vref Calculation & Thermals</h4>
         <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
-          The NEMA 17 motors are rated at 1.3 A per phase. Standard TMC2208 carrier boards with small heatsinks cannot sustain 1.3 A RMS continuously without triggering internal overtemperature thermal shutdown (T_J > 150^°C).
+          Inspect the exact R_sense resistor on your TMC2208 carrier (commonly 0.11 Ω). Using the ADI TMC2208 Datasheet Rev 1.13 equation (30 mΩ internal sense path):
         </p>
         <div class="code-box">
-I_RMS = V_ref / (1.414 * R_sense)  [For R_sense = 0.11 Ω]
-Set V_ref = 1.15 V  ⟶  I_RMS ≈ 0.74 A (Peak: 1.05 A)
-Sufficient torque for gantry acceleration with safe thermal headroom.</div>
+I_RMS = (0.325 V / (R_sense + 0.03 Ω)) * (1 / 1.414) * (V_ref / 2.5 V)
+At R_sense = 0.11 Ω, V_ref = 1.15 V ⟶ I_RMS ≈ 0.75 A (Peak: ~1.07 A)
+Verify actual phase current &amp; heatsink temperature on the bench.</div>
       </div>
 
-      <!-- 2. Servo Power Isolation -->
+      <!-- 2. Servo Power Decoupling -->
       <div class="card card-purple" style="margin: 0;">
-        <h4 style="color: #c084fc;">2. Servo Power Isolation & Inrush Currents</h4>
+        <h4 style="color: #c084fc;">2. Separate Servo Rail &amp; SKU Verification</h4>
         <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.4; margin-top: 1mm;">
-          <strong>Never power servos from the Arduino Mega 5V regulator pin!</strong> The onboard linear regulator can only supply ~500 mA before entering thermal shutdown. Two MG90S servos under active clamping draw transient stall current spikes up to 1.8 A. Powering them via the Mega will cause immediate brownouts and CPU reboot loops.
+          <strong>Never power servos from the Arduino Mega 5V pin!</strong> Feed PCA9685 V+ from Branch B (separate regulated buck, common star GND) with a 1000 µF cap. Verify your exact MG90S SKU voltage rating (original TowerPro MG90S specifies 4.8 V nominal) and PCA9685 V+ terminal limits.
         </p>
       </div>
 
@@ -1626,19 +1733,19 @@ Sufficient torque for gantry acceleration with safe thermal headroom.</div>
         </thead>
         <tbody>
           <tr>
-            <td style="color: #f87171;">Teensy reboots or halts during image transfer</td>
-            <td>UART baud rate timing mismatch or buffer overflow</td>
-            <td>Verify Serial2 buffer is enlarged via `SERIAL2_RX_BUFFER_SIZE 1024`. Ensure baud rate is locked to 921,600 baud.</td>
+            <td style="color: #f87171;">Teensy drops bytes during image transfer</td>
+            <td>UART2 baud mismatch or small RX buffer</td>
+            <td>Verify <code>Serial2.addMemoryForRead(serial2RxBuf, 16384)</code> (16 KB DMAMEM) and 921,600 baud on both ends.</td>
           </tr>
           <tr>
             <td style="color: #f87171;">Mega resets when gripper clamps cap</td>
             <td>Servo inrush current causing logic voltage dip</td>
-            <td>Ensure Branch B (Servos) is powered via dedicated 5V 5A buck and decoupling capacitor (1000\,µF) is on PCA9685 V+.</td>
+            <td>Ensure Branch B (Servos) uses its separate 5V 5A buck with 1000 µF cap on PCA9685 V+ and star GND.</td>
           </tr>
           <tr>
             <td style="color: #f87171;">Stepper motor stutters or loses steps mid-travel</td>
-            <td>TMC2208 overheating or acceleration set too high</td>
-            <td>Lower acceleration from 2000 to 1200 mm/s^2. Verify driver heatsink airflow and adjust V_{ref} potentiometer.</td>
+            <td>TMC2208 thermal throttle or high acceleration</td>
+            <td>Verify <code>ACCEL_STEPS = 6000</code> (150 mm/s²), <code>MAX_SPEED_STEPS = 2800</code> (70 mm/s), cooling airflow, and carrier V_ref.</td>
           </tr>
           <tr>
             <td style="color: #f87171;">Red caps detected as yellow or missing</td>
@@ -1668,7 +1775,7 @@ Sufficient torque for gantry acceleration with safe thermal headroom.</div>
 
     <h2><span class="sec-num">11.</span> Core Embedded Firmware Architecture (Part 1)</h2>
     <p>
-      Complete production C++ firmware implementations for inter-controller wire packet structures and the ESP32-CAM frame acquisition streamer.
+      Pre-validation C++ firmware summaries for inter-controller wire packet structures (CRC16-CCITT + READY handshake) and ESP32-CAM frame acquisition (full source in <code>firmware/</code>).
     </p>
 
     <div class="grid-2">
@@ -1680,42 +1787,37 @@ Sufficient torque for gantry acceleration with safe thermal headroom.</div>
           <span class="badge badge-orange">Header</span>
         </div>
         <div class="code-box" style="font-size: 6.2pt; line-height: 1.3;">
-<span class="code-comment">// packet_protocol.h - Inter-Controller Definitions</span>
+<span class="code-comment">// packet_protocol.h - Shared V1 &amp; V2 Definitions</span>
 #ifndef PACKET_PROTOCOL_H
 #define PACKET_PROTOCOL_H
-
+#define MAX_BATCH_CAPS        100
 #define PROTOCOL_MAGIC_BYTE   0x5A
 #define CMD_CAPTURE_FRAME     0xAA
-#define CMD_BATCH_START       0xB1
-#define CMD_EXECUTE_PICK      0xC2
+#define CMD_BATCH_ACK         0xA1
+#define CMD_BATCH_NACK        0xA2
+#define CMD_BATCH_COMPLETE    0xA3
+#define CMD_CAP_PROGRESS      0xA4
+#define CMD_QUERY_STATUS      0xB0
+#define CMD_STATUS_READY      0xB1
+#define CMD_STATUS_BUSY       0xB2
+#define CMD_STATUS_FAULT      0xB3
+#define CMD_REARM_HOME        0xB4
+#define CMD_HEARTBEAT_PING    0xF0
 #define CMD_RECOVERY_HALT     0xEE
-
-<span class="code-keyword">enum</span> CapColor : <span class="code-type">uint8_t</span> {
-  COLOR_RED    = 0x01,
-  COLOR_YELLOW = 0x02,
-  COLOR_GREEN  = 0x03,
-  COLOR_BLUE   = 0x04
-};
+#define CMD_HARD_FAULT        0xEF
 
 #pragma pack(push, 1)
-<span class="code-keyword">struct</span> CapTarget {
-  <span class="code-type">uint8_t</span>  capId;
-  CapColor color;
-  <span class="code-type">uint16_t</span> pixelX;
-  <span class="code-type">uint16_t</span> pixelY;
-  <span class="code-type">float</span>    boardX_mm;
-  <span class="code-type">float</span>    boardY_mm;
+<span class="code-keyword">struct</span> CapTarget { <span class="code-comment">// 15B (&lt;BBHHffB)</span>
+  <span class="code-type">uint8_t</span>  capId, color;
+  <span class="code-type">uint16_t</span> pixelX, pixelY;
+  <span class="code-type">float</span>    boardX_mm, boardY_mm;
   <span class="code-type">uint8_t</span>  targetBinId;
 };
-
-<span class="code-keyword">struct</span> BatchHeader {
-  <span class="code-type">uint8_t</span>  magic;
-  <span class="code-type">uint16_t</span> batchId;
-  <span class="code-type">uint8_t</span>  totalCaps;
-  <span class="code-type">uint16_t</span> crc16;
+<span class="code-keyword">struct</span> BatchHeader { <span class="code-comment">// 6B (&lt;BHBH)</span>
+  <span class="code-type">uint8_t</span>  magic;   <span class="code-type">uint16_t</span> batchId;
+  <span class="code-type">uint8_t</span>  totalCaps; <span class="code-type">uint16_t</span> crc16;
 };
 #pragma pack(pop)
-
 #endif</div>
       </div>
 
@@ -1726,53 +1828,38 @@ Sufficient torque for gantry acceleration with safe thermal headroom.</div>
           <span class="badge badge-cyan">ESP32-CAM</span>
         </div>
         <div class="code-box" style="font-size: 6.2pt; line-height: 1.3;">
-<span class="code-comment">// esp32cam_uart.ino - High-Speed Frame Streamer</span>
+<span class="code-comment">// esp32cam_uart.ino (arduino-esp32 2.0.17, PSRAM)</span>
+#include &lt;Arduino.h&gt;
 #include "esp_camera.h"
 #include &lt;HardwareSerial.h&gt;
+#include "packet_protocol.h"
 
 HardwareSerial TeensySerial(2);
 
 <span class="code-type">void</span> setup() {
-  camera_config_t config;
-  config.ledc_channel = LEDC_CHANNEL_0;
-  config.ledc_timer   = LEDC_TIMER_0;
+  Serial.begin(115200);
+  <span class="code-keyword">if</span> (!psramFound()) { <span class="code-keyword">while</span>(<span class="code-keyword">true</span>) delay(1000); }
+  camera_config_t config = {}; <span class="code-comment">// Zero-init!</span>
+  config.ledc_channel  = LEDC_CHANNEL_0;
+  config.ledc_timer    = LEDC_TIMER_0;
   config.pin_d0 = 5;  config.pin_d1 = 18;
   config.pin_d2 = 19; config.pin_d3 = 21;
   config.pin_d4 = 36; config.pin_d5 = 39;
   config.pin_d6 = 34; config.pin_d7 = 35;
   config.pin_xclk     = 0;  config.pin_pclk     = 22;
   config.pin_vsync    = 25; config.pin_href     = 23;
-  config.pin_sscb_sda = 26; config.pin_sscb_scl = 27;
+  config.pin_sccb_sda = 26; config.pin_sccb_scl = 27;
   config.pin_pwdn     = 32; config.pin_reset    = -1;
-  config.xclk_freq_hz = 20000000;
-  config.pixel_format = PIXFORMAT_RGB565;
-  config.frame_size   = FRAMESIZE_QVGA; <span class="code-comment">// 320x240</span>
-  config.fb_count     = 2;
-  config.grab_mode    = CAMERA_GRAB_LATEST;
-
-  esp_camera_init(&amp;config);
+  config.xclk_freq_hz  = 20000000;
+  config.pixel_format  = PIXFORMAT_RGB565;
+  config.frame_size    = FRAMESIZE_QVGA;
+  config.jpeg_quality  = 12;
+  config.fb_count      = 2;
+  config.fb_location   = CAMERA_FB_IN_PSRAM;
+  config.grab_mode     = CAMERA_GRAB_LATEST;
+  config.sccb_i2c_port = 0;
+  <span class="code-keyword">if</span> (esp_camera_init(&amp;config) != ESP_OK) <span class="code-keyword">while</span>(<span class="code-keyword">true</span>) delay(1000);
   TeensySerial.begin(921600, SERIAL_8N1, 14, 13);
-}
-
-<span class="code-type">void</span> loop() {
-  <span class="code-keyword">if</span> (TeensySerial.available() &amp;&amp; 
-      TeensySerial.read() == 0xAA) {
-    camera_fb_t *fb = esp_camera_fb_get();
-    <span class="code-keyword">if</span> (fb) {
-      <span class="code-type">uint32_t</span> len = fb-&gt;len; <span class="code-comment">// 153,600B</span>
-      <span class="code-type">uint16_t</span> crc = computeCRC16(fb-&gt;buf, len);
-      TeensySerial.write(0x55);
-      TeensySerial.write(0xAA);
-      TeensySerial.write((len &gt;&gt; 24) &amp; 0xFF);
-      TeensySerial.write((len &gt;&gt; 16) &amp; 0xFF);
-      TeensySerial.write((len &gt;&gt; 8)  &amp; 0xFF);
-      TeensySerial.write(len &amp; 0xFF);
-      TeensySerial.write(fb-&gt;buf, len);
-      TeensySerial.write((crc &gt;&gt; 8) &amp; 0xFF);
-      TeensySerial.write(crc &amp; 0xFF);
-      esp_camera_fb_return(fb);
-    }
-  }
 }</div>
       </div>
 
@@ -1786,18 +1873,18 @@ HardwareSerial TeensySerial(2);
   </div>
 
   <!-- =========================================================================
-       PAGE 12: SECTION 11 - CORE FIRMWARE (PART 2) & PROJECT SIGN-OFF
+       PAGE 12: SECTION 11 - CORE FIRMWARE (PART 2) & PRE-BUILD REVIEW
        ========================================================================= -->
   <div class="page">
     <div class="doc-header">
-      <span>SECTION 11 • CORE FIRMWARE VAULT (VISION & MOTION CONTROL)</span>
+      <span>SECTION 11 • CORE FIRMWARE VAULT (VISION &amp; MOTION CONTROL)</span>
       <span class="brand">CAPSORTER ROBOTICS</span>
-      <span>DOC-REV 2.4</span>
+      <span>DOC-REV 2.5</span>
     </div>
 
     <h2><span class="sec-num">11.</span> Core Embedded Firmware Architecture (Part 2)</h2>
     <p>
-      High-speed embedded image analytics running on Teensy 4.1 alongside non-blocking stepper pulse sequencing on Arduino Mega.
+      Summary of Teensy 4.1 calibrated HSV/NMS vision and Arduino Mega fail-closed motion sequencing (see <code>firmware/</code> for complete verified sources).
     </p>
 
     <div class="grid-2" style="margin-bottom: 3.5mm;">
@@ -1809,46 +1896,36 @@ HardwareSerial TeensySerial(2);
           <span class="badge badge-cyan">Teensy 4.1</span>
         </div>
         <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
-<span class="code-comment">// teensy_vision.cpp - Cortex-M7 @ 600 MHz</span>
+<span class="code-comment">// teensy_vision.cpp - Cortex-M7 @ 600 MHz (3.3V ONLY)</span>
 #include &lt;Arduino.h&gt;
 #include "packet_protocol.h"
+#define V1_CALIBRATION_VERIFIED 0 <span class="code-comment">// Fail-closed guard</span>
 
-#define FRAME_BYTES (320 * 240 * 2) <span class="code-comment">// 150 KiB</span>
-<span class="code-type">uint8_t</span> imageBuffer[FRAME_BYTES];
-CapTarget detectedCaps[100];
-<span class="code-type">uint8_t</span> capCount = 0;
-
-<span class="code-type">float</span> H[9] = {
-  0.9854f, -0.0120f, -12.45f,
-  0.0105f,  0.9782f, -14.10f,
-  0.00004f, 0.00003f, 1.0000f
-};
-
-<span class="code-type">void</span> transformToMillimeters(CapTarget* cap) {
-  <span class="code-type">float</span> u = cap->pixelX, v = cap->pixelY;
-  <span class="code-type">float</span> w = H[6]*u + H[7]*v + H[8];
-  cap->boardX_mm = (H[0]*u + H[1]*v + H[2]) / w;
-  cap->boardY_mm = (H[3]*u + H[4]*v + H[5]) / w;
-}
-
+<span class="code-comment">// 4-pt fiducial DLT homography solver + area-sorted NMS</span>
 <span class="code-type">void</span> setup() {
   Serial.begin(115200);
-  Serial1.begin(115200); <span class="code-comment">// Mega Link</span>
-  Serial2.begin(921600); <span class="code-comment">// ESP32 Link</span>
+  Serial1.begin(115200); <span class="code-comment">// Shifter &lt;-&gt; Mega</span>
+  Serial2.addMemoryForRead(serial2RxBuf, 16384);
+  Serial2.begin(921600); <span class="code-comment">// ESP32-CAM Link</span>
+  homographyOk = computeHomography4Pt(
+      BOARD_FIDUCIALS_PX, BOARD_FIDUCIALS_MM, H);
+  waitForMegaReady(0); <span class="code-comment">// Poll CMD_QUERY_STATUS</span>
 }
 
 <span class="code-type">void</span> loop() {
+#if !V1_CALIBRATION_VERIFIED
+  delay(1000); <span class="code-keyword">return</span>;
+#endif
+  <span class="code-keyword">if</span> (!homographyOk || megaFaulted || !waitForMegaReady(2000)) <span class="code-keyword">return</span>;
   Serial2.write(CMD_CAPTURE_FRAME);
-  <span class="code-keyword">if</span> (receiveFrameWithCRC(imageBuffer, FRAME_BYTES)) {
-    capCount = 0;
-    segmentCapsHSV(imageBuffer, detectedCaps, &capCount);
-    <span class="code-keyword">for</span> (<span class="code-type">uint8_t</span> i = 0; i &lt; capCount; i++) {
-      transformToMillimeters(&detectedCaps[i]);
+  <span class="code-keyword">if</span> (receiveFrame(imageBuffer, FRAME_BYTES)) {
+    segmentCapsHSV(imageBuffer, detectedCaps, &amp;capCount);
+    <span class="code-keyword">if</span> (capCount &gt; 0) {
+      optimizeSortingPath(detectedCaps, capCount);
+      <span class="code-keyword">if</span> (sendPlanBatchToMega(detectedCaps, capCount))
+        superviseMegaExecutionWithHeartbeat(capCount);
     }
-    optimizeSortingPath(detectedCaps, capCount);
-    sendPlanBatchToMega(detectedCaps, capCount);
   }
-  delay(100);
 }</div>
       </div>
 
@@ -1859,67 +1936,56 @@ CapTarget detectedCaps[100];
           <span class="badge badge-emerald">Arduino Mega</span>
         </div>
         <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
-<span class="code-comment">// mega_motion.ino - ATmega2560 @ 16 MHz</span>
-#include &lt;Wire.h&gt;
-#include &lt;Adafruit_PWMServoDriver.h&gt;
-#include &lt;AccelStepper.h&gt;
-#include "packet_protocol.h"
-
-AccelStepper stepperX(AccelStepper::DRIVER, 2, 5);
-AccelStepper stepperY(AccelStepper::DRIVER, 3, 6);
-Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver(0x40);
-
-<span class="code-keyword">enum</span> RobotState { 
-  STATE_IDLE, STATE_HOMING, STATE_MOVING,
-  STATE_LOWER_Z, STATE_GRIP, STATE_LIFT,
-  STATE_TRAVERSE, STATE_RELEASE, STATE_RETRACT,
-  STATE_FAILSAFE 
-};
-RobotState currentState = STATE_HOMING;
-CapTarget currentCap;
-<span class="code-type">bool</span> hasInFlightCap = <span class="code-keyword">false</span>;
+<span class="code-comment">// mega_motion.ino - ATmega2560 @ 16 MHz (70 mm/s, 150 mm/s^2)</span>
+#define MAX_SPEED_STEPS    2800.0f <span class="code-comment">// 70 mm/s nominal</span>
+#define ACCEL_STEPS        6000.0f <span class="code-comment">// 150 mm/s^2</span>
+#define HOMING_TIMEOUT_MS 30000UL  <span class="code-comment">// 370mm@20mm/s + margin</span>
+#define PIN_Z_HOME 24  <span class="code-comment">// NC Z limit (polled)</span>
+#define PIN_ESTOP  25  <span class="code-comment">// NC E-Stop aux contact</span>
 
 <span class="code-type">void</span> setup() {
-  pinMode(8, OUTPUT); digitalWrite(8, LOW); <span class="code-comment">// TMC2208 EN</span>
-  pinMode(22, INPUT_PULLUP); pinMode(23, INPUT_PULLUP);
+  pinMode(PIN_SERVO_OE, OUTPUT);   digitalWrite(PIN_SERVO_OE, HIGH);
+  pinMode(PIN_STEPPER_EN, OUTPUT); digitalWrite(PIN_STEPPER_EN, HIGH);
+  pinMode(PIN_X_HOME, INPUT_PULLUP); pinMode(PIN_Y_HOME, INPUT_PULLUP);
+  pinMode(PIN_Z_HOME, INPUT_PULLUP); pinMode(PIN_ESTOP,  INPUT_PULLUP);
   Serial.begin(115200); Serial1.begin(115200);
+  Wire.begin(); Wire.setClock(400000);
   pca.begin(); pca.setPWMFreq(50);
-  stepperX.setMaxSpeed(4000);
-  stepperX.setAcceleration(2000);
-  stepperY.setMaxSpeed(4000);
-  stepperY.setAcceleration(2000);
-  homeAxes();
+  homeAxes(); <span class="code-comment">// Emits CMD_STATUS_READY on success</span>
 }
 
 <span class="code-type">void</span> loop() {
-  stepperX.run(); stepperY.run();
-  executeMotionStateMachine();
-  <span class="code-keyword">if</span> (checkCommunicationLoss() && hasInFlightCap) {
-    executeSafeLocalizedCompletion(); <span class="code-comment">// FAIL-SAFE</span>
+  checkRuntimeSafetyInputs(); <span class="code-comment">// E-Stop + X/Y/Z NC limits</span>
+  <span class="code-keyword">if</span> (currentState != STATE_HARD_FAULT &amp;&amp;
+      currentState != STATE_FAILSAFE_HALT) {
+    stepperX.run(); stepperY.run();
   }
+  pollVisionHostPackets();   <span class="code-comment">// READY/BUSY/REARM/CRC16</span>
+  executeMotionStateMachine(); <span class="code-comment">// Emits CMD_CAP_PROGRESS</span>
+  <span class="code-keyword">if</span> (checkCommunicationLoss()) executeSafeCommsLossPolicy();
 }</div>
       </div>
 
     </div>
 
-    <!-- Final Verification & Project Sign-Off Card -->
+    <!-- Pre-Build Design Review & Bench Validation Gate -->
     <div class="card card-emerald" style="margin: 0; padding: 3mm 4mm;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5mm;">
-        <h3 style="color: #34d399; margin: 0;">Engineering Verification & Project Sign-Off</h3>
-        <span class="badge badge-emerald">Approved for Production</span>
+        <h3 style="color: #facc15; margin: 0;">Pre-Build Engineering Status &amp; Bench Validation Gate</h3>
+        <span class="badge badge-orange">Pending Physical Bench Validation</span>
       </div>
       <div class="grid-2" style="font-size: 7.2pt; color: #cbd5e1; line-height: 1.45;">
         <div>
-          <strong>Document Title:</strong> Autonomous Bottle-Cap Sorting Machine Technical Dossier<br>
-          <strong>Authored & Engineered by:</strong> Neil Shettigar, Kahan, and Shourya<br>
-          <strong>Principal Architecture, Firmware & Design:</strong> Neil Shettigar<br>
-          <strong>Hardware Revisions:</strong> Teensy 4.1 Rev B • Arduino Mega 2560 R3 • ESP32-CAM AI-Thinker
+          <strong>Document Title:</strong> Autonomous Bottle-Cap Sorting Machine V1 Technical Dossier<br>
+          <strong>Authored &amp; Engineered by:</strong> Neil Shettigar, Kahan, and Shourya<br>
+          <strong>Principal Architecture, Firmware &amp; Design:</strong> Neil Shettigar<br>
+          <strong>Target Hardware (V1):</strong> Teensy 4.1 • Arduino Mega 2560 R3 • ESP32-CAM AI-Thinker (PSRAM)
         </div>
         <div>
           <strong>GitHub Code Repository:</strong> github.com/Neilboss/CapSorter<br>
-          <strong>Interactive Web Application:</strong> neilboss.github.io/CapSorter<br>
-          <strong>Operational Safety Status:</strong> Fully Isolated Rails with Master Hardware E-Stop<br>
-          <strong>Release Date & Timestamp:</strong> November 2026 • Production Release
+          <strong>Safety Architecture:</strong> Hardwired Dual-Pole Actuator E-Stop + Polled X/Y/Z NC Limits<br>
+          <strong>Required Before Sign-Off:</strong> SKU verification, power/thermal tests, E-stop/limit tests, camera fiducial calibration &amp; endurance run<br>
+          <strong>Revision Status:</strong> Pre-Build Review Rev 2.5 (Not Yet Production-Validated)
         </div>
       </div>
     </div>
