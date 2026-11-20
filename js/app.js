@@ -330,8 +330,9 @@ function initSimulator() {
       c.prevY = null;
     });
 
+    // In the web simulation, pick every visible cap on the board even if it crosses
+    // the hardware safety margin line (actual firmware still enforces SAFE_PICK bounds).
     const pickable = visibleCaps
-      .filter(c => isInSafePickBounds(c.x, c.y))
       .map(c => {
         const { blockedSides, minNeighbor } = countJawCollisionsSim(c, visibleCaps);
         const travel = Math.hypot(c.x - curX, c.y - curY);
@@ -602,9 +603,6 @@ function initSimulator() {
       return;
     } else {
       caps.push(makeCap(Date.now() + Math.random(), selectedColor, pt.x, pt.y));
-      if (!pt.inSafe) {
-        showNotification('Cap placed in outer edge margin (<18 mm from border): camera sees it as an obstacle, Mega skips unsafe pick.', 'warning');
-      }
     }
     hoverPoint = getBoardPointFromPointer(e);
     updateTelemetryUI();
@@ -833,10 +831,8 @@ function initSimulator() {
           simState = 'IDLE';
           updateControlButtonsState();
           updateTelemetryUI();
-          const edgeSkipped = caps.filter(c => !isInSafePickBounds(c.x, c.y)).length;
-          const extra = edgeSkipped > 0 ? ` (${edgeSkipped} edge-margin cap skipped safely)` : '';
           showNotification(
-            `Closed-loop sort verified complete! Sorted ${sortedCaps.length} caps across ${scanCount} scans (${shiftEvents} bumps re-acquired)${extra}.`,
+            `Closed-loop sort verified complete! Sorted ${sortedCaps.length} caps across ${scanCount} scans (${shiftEvents} bumps re-acquired).`,
             'success'
           );
         }
@@ -1098,7 +1094,7 @@ function initSimulator() {
         ctx.arc(cx, cy, cr, 0, Math.PI * 2);
         ctx.fillStyle = hoverPoint.overlap ? '#ef4444' : getCapHex(selectedColor);
         ctx.fill();
-        ctx.strokeStyle = hoverPoint.overlap ? '#f87171' : (hoverPoint.inSafe ? '#ffffff' : '#fbbf24');
+        ctx.strokeStyle = hoverPoint.overlap ? '#f87171' : '#ffffff';
         ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.restore();
@@ -1222,7 +1218,7 @@ function initSimulator() {
       ctx.arc(cx, cy, cr, 0, Math.PI * 2);
       ctx.fillStyle = getCapHex(cap.color);
       ctx.fill();
-      ctx.strokeStyle = isInSafePickBounds(cap.x, cap.y) ? 'rgba(255, 255, 255, 0.45)' : '#fbbf24';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
       ctx.lineWidth = 1.75;
       ctx.stroke();
 
@@ -1355,7 +1351,6 @@ function initSimulator() {
       const action =
         hoverPoint.existingIdx >= 0 ? 'Click to remove' :
         hoverPoint.overlap ? 'Overlap blocked' :
-        !hoverPoint.inSafe ? `Edge margin (${selectedColor.toUpperCase()})` :
         `Place ${selectedColor.toUpperCase()}${hoverPoint.snapped ? ' [SNAP]' : ' (free)'}`;
       ctx.fillStyle = hoverPoint.overlap ? '#f87171' : '#e2e8f0';
       hudLeft = `(${hoverPoint.x.toFixed(1)}, ${hoverPoint.y.toFixed(1)} mm) • ${action}`;
