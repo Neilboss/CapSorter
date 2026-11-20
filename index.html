@@ -339,6 +339,12 @@
                 <td>Native fisheye undistortion, contours &amp; homography</td>
               </tr>
               <tr>
+                <td class="font-bold text-white">Sorting Loop &amp; Workspace</td>
+                <td class="font-mono text-xs">Continuous 300×300 mm • Bin-Side Re-Scan (heartbeat-safe 1.67 s stream) + Chamfer split</td>
+                <td class="font-mono text-xs text-emerald-400">Continuous 300×300 mm • Pipelined Bin-Side Re-Scan (~45 ms during 800 ms drop) + Distance-Transform split</td>
+                <td>Zero added cycle delay per re-scan; handles bumped &amp; touching caps</td>
+              </tr>
+              <tr>
                 <td class="font-bold text-white">Mega 2560 Link &amp; Shifter</td>
                 <td class="font-mono text-xs">Teensy TX1/RX1 ⇄ 3.3V/5V Shifter ⇄ Mega Serial1</td>
                 <td class="font-mono text-xs">Pi GPIO 14/15 ⇄ 3.3V/5V Shifter ⇄ Mega Serial1</td>

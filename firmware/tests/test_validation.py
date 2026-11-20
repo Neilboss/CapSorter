@@ -169,13 +169,17 @@ class TestProtocolParity(unittest.TestCase):
         text = _read_text(hdr_path)
         defines = {
             m.group(1): int(m.group(2), 0)
-            for m in re.finditer(r"#define\s+(MAX_BATCH_CAPS|PROTOCOL_MAGIC_BYTE|CMD_\w+)\s+(0x[0-9A-Fa-f]+|\d+)", text)
+            for m in re.finditer(
+                r"#define\s+(MAX_BATCH_CAPS|PROTOCOL_MAGIC_BYTE|PROTOCOL_SINGLE_MAGIC|CMD_\w+)\s+(0x[0-9A-Fa-f]+|\d+)",
+                text,
+            )
         }
         expected_shared = [
-            "MAX_BATCH_CAPS", "PROTOCOL_MAGIC_BYTE",
+            "MAX_BATCH_CAPS", "PROTOCOL_MAGIC_BYTE", "PROTOCOL_SINGLE_MAGIC",
             "CMD_BATCH_ACK", "CMD_BATCH_NACK", "CMD_BATCH_COMPLETE", "CMD_CAP_PROGRESS",
+            "CMD_SCAN_WINDOW_OPEN", "CMD_AWAIT_NEXT",
             "CMD_QUERY_STATUS", "CMD_STATUS_READY", "CMD_STATUS_BUSY",
-            "CMD_STATUS_FAULT", "CMD_REARM_HOME",
+            "CMD_STATUS_FAULT", "CMD_REARM_HOME", "CMD_PARK_FOR_SCAN", "CMD_FINISH_SESSION",
             "CMD_HEARTBEAT_PING", "CMD_RECOVERY_HALT", "CMD_HARD_FAULT",
         ]
         for name in expected_shared:
@@ -214,6 +218,13 @@ class TestProtocolParity(unittest.TestCase):
                 ctrl.pack_batch_packet([])
             with self.assertRaises(ValueError):
                 ctrl.pack_batch_packet(caps * 51)  # 102 > 100
+
+            # Verify 18-byte closed-loop single-target packet layout & CRC16
+            single_pkt = ctrl.pack_single_target_packet(caps[0])
+            self.assertEqual(len(single_pkt), 18)
+            self.assertEqual(single_pkt[0], pzv.PROTOCOL_SINGLE_MAGIC)
+            crc_rx = struct.unpack("<H", single_pkt[16:18])[0]
+            self.assertEqual(crc_rx, pzv.crc16_ccitt(single_pkt[1:16]))
 
 
 class TestV2CalibrationAndFailClosed(unittest.TestCase):
@@ -491,6 +502,12 @@ class TestV1AlgorithmsAndFirmwareInvariants(unittest.TestCase):
         self.assertIn("CMD_REARM_HOME", mega)
         self.assertIn("CMD_STATUS_READY", mega)
         self.assertIn("CMD_CAP_PROGRESS", mega)
+        self.assertIn("CMD_SCAN_WINDOW_OPEN", mega)
+        self.assertIn("CMD_AWAIT_NEXT", mega)
+        self.assertIn("STATE_BIN_SETTLE", mega)
+        self.assertIn("STATE_AWAIT_NEXT_TARGET", mega)
+        self.assertIn("STATE_PARKING_FOR_SCAN", mega)
+        self.assertIn("isValidSingleTarget", mega)
         self.assertIn("digitalWrite(PIN_SERVO_OE, HIGH);", mega)
         self.assertIn("#define HAS_GRIP_SENSOR        0", mega)
 
@@ -500,13 +517,267 @@ class TestV1AlgorithmsAndFirmwareInvariants(unittest.TestCase):
         self.assertIn("config.fb_location   = CAMERA_FB_IN_PSRAM;", esp)
         self.assertIn("config.jpeg_quality  = 12;", esp)
         self.assertIn("config.sccb_i2c_port = 0;", esp)
+        self.assertIn("staleFb", esp)
 
         teensy = _read_text(os.path.join(REPO_ROOT, "firmware", "v1_teensy41", "teensy_vision.cpp"))
         self.assertIn("#define V1_CALIBRATION_VERIFIED  0", teensy)
         self.assertIn("computeHomography4Pt", teensy)
         self.assertIn("waitForMegaReady", teensy)
+        self.assertIn("receiveFrameWithHeartbeat", teensy)
+        self.assertIn("splitMergedSameColorBlob", teensy)
+        self.assertIn("selectNextCapClearanceAware", teensy)
+        self.assertIn("runClosedLoopSortSession", teensy)
         self.assertNotIn("delay(1500)", teensy)
         self.assertNotIn("180000UL", teensy)
+
+
+def _draw_synthetic_board(H_inv: np.ndarray, caps_spec: list) -> np.ndarray:
+    """Renders synthetic colored circular caps (radius ~15 mm) on a 640x480 rectified canvas."""
+    bgr_map = {
+        pzv.COLOR_RED:    (20, 20, 230),
+        pzv.COLOR_YELLOW: (15, 225, 235),
+        pzv.COLOR_GREEN:  (30, 190, 30),
+        pzv.COLOR_BLUE:   (230, 60, 20),
+    }
+    canvas = np.full((480, 640, 3), 230, dtype=np.uint8)
+    # Estimate px radius for 15 mm cap
+    p0 = cv2.perspectiveTransform(np.array([[[150.0, 150.0]]], dtype=np.float32), H_inv)[0][0]
+    p1 = cv2.perspectiveTransform(np.array([[[165.0, 150.0]]], dtype=np.float32), H_inv)[0][0]
+    rad_px = max(10, int(round(float(np.linalg.norm(p1 - p0)))))
+    for x_mm, y_mm, col in caps_spec:
+        uv = cv2.perspectiveTransform(np.array([[[x_mm, y_mm]]], dtype=np.float32), H_inv)[0][0]
+        cv2.circle(canvas, (int(round(uv[0])), int(round(uv[1]))), rad_px, bgr_map[col], -1)
+    return canvas
+
+
+class TestContinuousVisionAndEdgeCases(unittest.TestCase):
+    def _make_controller(self, td, camera_height_mm=0.0, cap_height_mm=13.0, bridge_mm=35.0):
+        cal_path = os.path.join(td, "cal.npz")
+        H = fc.compute_homography_from_fiducials([[92, 34], [548, 34], [548, 446], [92, 446]])
+        fc.save_validated_calibration(
+            cal_path,
+            np.array([[320.0, 0, 320.0], [0, 320.0, 240.0], [0, 0, 1.0]]),
+            np.zeros((4, 1)), H, "picamera2_imx219", "fisheye", (640, 480), 0.1,
+            camera_height_mm=camera_height_mm, cap_height_mm=cap_height_mm,
+        )
+        return pzv.PiZeroVisionController(
+            calib_file=cal_path, camera_type="picamera2_imx219", init_hardware=False,
+            bridge_occlusion_half_mm=bridge_mm,
+        )
+
+    def test_continuous_arbitrary_offgrid_and_edge_bounds(self):
+        with tempfile.TemporaryDirectory() as td:
+            ctrl = self._make_controller(td)
+            board = _draw_synthetic_board(ctrl.H_inv, [
+                (23.4, 178.9, pzv.COLOR_RED),
+                (269.2, 41.6, pzv.COLOR_BLUE),
+                (10.5, 150.0, pzv.COLOR_GREEN),  # Outside SAFE_PICK_MIN_X_MM (18.0)
+            ])
+            detected = ctrl.detect_caps(board)
+            self.assertEqual(len(detected), 3)
+            by_col = {c["color"]: c for c in detected}
+            self.assertAlmostEqual(by_col[pzv.COLOR_RED]["boardX_mm"], 23.4, delta=2.0)
+            self.assertAlmostEqual(by_col[pzv.COLOR_RED]["boardY_mm"], 178.9, delta=2.0)
+            self.assertTrue(by_col[pzv.COLOR_RED]["in_safe_bounds"])
+            self.assertTrue(by_col[pzv.COLOR_BLUE]["in_safe_bounds"])
+            self.assertFalse(by_col[pzv.COLOR_GREEN]["in_safe_bounds"])
+
+    def test_touching_same_color_caps_split_via_distance_transform(self):
+        with tempfile.TemporaryDirectory() as td:
+            ctrl = self._make_controller(td)
+            # Two touching red caps (30.5 mm apart) + three touching blue caps in a triangle
+            specs = [
+                (90.0, 90.0, pzv.COLOR_RED),
+                (120.5, 90.0, pzv.COLOR_RED),
+                (200.0, 180.0, pzv.COLOR_BLUE),
+                (231.0, 180.0, pzv.COLOR_BLUE),
+                (215.5, 207.0, pzv.COLOR_BLUE),
+            ]
+            board = _draw_synthetic_board(ctrl.H_inv, specs)
+            detected = ctrl.detect_caps(board)
+            reds = [c for c in detected if c["color"] == pzv.COLOR_RED]
+            blues = [c for c in detected if c["color"] == pzv.COLOR_BLUE]
+            self.assertEqual(len(reds), 2, f"Expected 2 split red caps, got {reds}")
+            self.assertEqual(len(blues), 3, f"Expected 3 split blue caps, got {blues}")
+            for tx, ty, col in specs:
+                self.assertTrue(
+                    any(c["color"] == col and math.hypot(c["boardX_mm"] - tx, c["boardY_mm"] - ty) < 3.0
+                        for c in detected),
+                    f"Missing split cap near ({tx}, {ty}) color={col} in {detected}",
+                )
+
+    def test_radial_cap_height_parallax_compensation(self):
+        with tempfile.TemporaryDirectory() as td:
+            H_cam, h_cap = 260.0, 13.0
+            ctrl = self._make_controller(td, camera_height_mm=H_cam, cap_height_mm=h_cap)
+            true_x, true_y = 35.0, 35.0
+            cx, cy = ctrl.cam_center_board_mm
+            # Apparent projected position on Z=0 plane is shifted radially outward by 1 / (1 - h/H)
+            inv_scale = 1.0 / (1.0 - h_cap / H_cam)
+            apparent_x = cx + (true_x - cx) * inv_scale
+            apparent_y = cy + (true_y - cy) * inv_scale
+            board = _draw_synthetic_board(ctrl.H_inv, [(apparent_x, apparent_y, pzv.COLOR_YELLOW)])
+            detected = ctrl.detect_caps(board)
+            self.assertEqual(len(detected), 1)
+            self.assertAlmostEqual(detected[0]["boardX_mm"], true_x, delta=1.5)
+            self.assertAlmostEqual(detected[0]["boardY_mm"], true_y, delta=1.5)
+
+    def test_clearance_first_peels_outer_caps_before_sandwiched_middle(self):
+        with tempfile.TemporaryDirectory() as td:
+            ctrl = self._make_controller(td)
+            caps = [
+                {"capId": 1, "color": pzv.COLOR_RED, "pixelX": 100, "pixelY": 100,
+                 "boardX_mm": 100.0, "boardY_mm": 150.0, "targetBinId": 1, "in_safe_bounds": True},
+                {"capId": 2, "color": pzv.COLOR_YELLOW, "pixelX": 150, "pixelY": 100,
+                 "boardX_mm": 131.0, "boardY_mm": 150.0, "targetBinId": 2, "in_safe_bounds": True},
+                {"capId": 3, "color": pzv.COLOR_GREEN, "pixelX": 200, "pixelY": 100,
+                 "boardX_mm": 162.0, "boardY_mm": 150.0, "targetBinId": 3, "in_safe_bounds": True},
+            ]
+            # Even starting closest to sandwiched middle cap (131, 150), must peel outer cap first!
+            chosen = ctrl.select_next_cap(caps, cur_xy=(131.0, 125.0))
+            self.assertIsNotNone(chosen)
+            self.assertIn(chosen["capId"], (1, 3))
+            self.assertEqual(chosen["blocked_sides"], 1)
+
+
+class TestClosedLoopBinReimagingAndRecovery(unittest.TestCase):
+    def _make_controller(self, td, bridge_mm=35.0):
+        cal_path = os.path.join(td, "cal.npz")
+        H = fc.compute_homography_from_fiducials([[92, 34], [548, 34], [548, 446], [92, 446]])
+        fc.save_validated_calibration(
+            cal_path,
+            np.array([[320.0, 0, 320.0], [0, 320.0, 240.0], [0, 0, 1.0]]),
+            np.zeros((4, 1)), H, "picamera2_imx219", "fisheye", (640, 480), 0.1,
+        )
+        return pzv.PiZeroVisionController(
+            calib_file=cal_path, camera_type="picamera2_imx219", init_hardware=False,
+            bridge_occlusion_half_mm=bridge_mm,
+        )
+
+    def _run_virtual_mega_session(self, ctrl, world_caps, on_pick_hook=None):
+        """
+        Simulates the Arduino Mega closed-loop FSM over FakeUART:
+          - Accepts 18B CMD_PICK_SINGLE (0x5B), emits ACK -> SCAN_WINDOW_OPEN -> PROGRESS -> AWAIT_NEXT.
+          - Executes on_pick_hook(x, y, color, world_caps) when gripper lowers & picks.
+          - Supports CMD_PARK_FOR_SCAN (0xB5) -> AWAIT_NEXT and CMD_FINISH_SESSION (0xB6) -> BATCH_COMPLETE.
+        """
+        now = [0.0]
+        picked_commands = []
+        park_cmds = [0]
+        pending_events = []  # list of (trigger_time, byte)
+
+        def clock():
+            return now[0]
+
+        def sleep_fn(dt):
+            now[0] += dt
+            while pending_events and pending_events[0][0] <= now[0]:
+                _, b = pending_events.pop(0)
+                ctrl.uart.rx_queue.append(b)
+
+        def mega_script(raw, rx):
+            if raw[0] == pzv.PROTOCOL_SINGLE_MAGIC and len(raw) == 18:
+                _, color, _, _, bx, by, bin_id = struct.unpack("<BBHHffB", raw[1:16])
+                picked_commands.append((bx, by, color, bin_id))
+                rx.append(pzv.CMD_BATCH_ACK)
+                if on_pick_hook is not None:
+                    on_pick_hook(bx, by, color, world_caps)
+                # Mega arrives at bin after 2.0 s, emits SCAN_WINDOW_OPEN, then finishes drop at 2.8 s
+                pending_events.append((now[0] + 2.0, pzv.CMD_SCAN_WINDOW_OPEN))
+                pending_events.append((now[0] + 2.8, pzv.CMD_CAP_PROGRESS))
+                pending_events.append((now[0] + 2.8, pzv.CMD_AWAIT_NEXT))
+            elif raw == bytes([pzv.CMD_PARK_FOR_SCAN]):
+                park_cmds[0] += 1
+                pending_events.append((now[0] + 1.5, pzv.CMD_AWAIT_NEXT))
+            elif raw == bytes([pzv.CMD_FINISH_SESSION]):
+                pending_events.append((now[0] + 0.5, pzv.CMD_BATCH_COMPLETE))
+
+        ctrl.uart = FakeUART(mega_script)
+        capture_fn = lambda: _draw_synthetic_board(ctrl.H_inv, [(c[0], c[1], c[2]) for c in world_caps])
+        res = ctrl.run_closed_loop_sort_session(capture_fn=capture_fn, clock=clock, sleep_fn=sleep_fn)
+        return res, picked_commands, park_cmds[0]
+
+    def test_bin_side_reimaging_reacquires_bumped_neighbor(self):
+        with tempfile.TemporaryDirectory() as td:
+            ctrl = self._make_controller(td, bridge_mm=35.0)
+            # Cap 1 (Green) picked first; when picked, Cap 2 (Blue) is bumped by (+32, -24) mm!
+            world_caps = [
+                [80.0, 120.0, pzv.COLOR_GREEN],
+                [150.0, 220.0, pzv.COLOR_BLUE],
+            ]
+
+            def bump_on_first_pick(bx, by, color, w_caps):
+                # Remove picked cap
+                for i, c in enumerate(w_caps):
+                    if math.hypot(c[0] - bx, c[1] - by) < 10.0:
+                        w_caps.pop(i)
+                        break
+                # Physically bump the remaining blue cap to a brand-new location!
+                if color == pzv.COLOR_GREEN and w_caps:
+                    w_caps[0][0] += 32.0
+                    w_caps[0][1] -= 24.0
+
+            res, cmds, parks = self._run_virtual_mega_session(ctrl, world_caps, bump_on_first_pick)
+            self.assertEqual(res["status"], "COMPLETE")
+            self.assertEqual(res["picked"], 2)
+            self.assertEqual(len(world_caps), 0)
+            self.assertEqual(len(cmds), 2)
+            # Second pick MUST target the NEW bumped coordinates (182, 196), NOT stale (150, 220)!
+            self.assertAlmostEqual(cmds[1][0], 182.0, delta=2.5)
+            self.assertAlmostEqual(cmds[1][1], 196.0, delta=2.5)
+            self.assertGreaterEqual(parks, 1)
+
+    def test_bridge_occlusion_triggers_clear_fov_park_and_reveals_hidden_cap(self):
+        with tempfile.TemporaryDirectory() as td:
+            ctrl = self._make_controller(td, bridge_mm=35.0)
+            # Cap 1 (Red) at (60, 140) is closer to (0,0) (152 mm) so picked first -> Bin 1 (Y=55).
+            # Cap 2 (Yellow) at (220, 56) (227 mm from 0,0) sits inside Bin 1's [20..90] bridge occlusion strip!
+            world_caps = [
+                [60.0, 140.0, pzv.COLOR_RED],
+                [220.0, 56.0, pzv.COLOR_YELLOW],
+            ]
+
+            def normal_pick(bx, by, color, w_caps):
+                for i, c in enumerate(w_caps):
+                    if math.hypot(c[0] - bx, c[1] - by) < 10.0:
+                        w_caps.pop(i)
+                        break
+
+            res, cmds, parks = self._run_virtual_mega_session(ctrl, world_caps, normal_pick)
+            self.assertEqual(res["status"], "COMPLETE")
+            self.assertEqual(res["picked"], 2)
+            self.assertEqual(len(world_caps), 0)
+            # First park reveals the Yellow cap hidden under Bin 1's bridge; second park confirms empty!
+            self.assertGreaterEqual(parks, 2)
+            self.assertTrue(any(c[2] == pzv.COLOR_YELLOW for c in cmds))
+
+    def test_missed_pick_retries_and_quarantines_stuck_cap_without_infinite_loop(self):
+        with tempfile.TemporaryDirectory() as td:
+            ctrl = self._make_controller(td, bridge_mm=35.0)
+            # Red cap at (140, 140) is glued/stuck and never lifts; Blue cap at (220, 220) lifts normally
+            world_caps = [
+                [140.0, 140.0, pzv.COLOR_RED],
+                [220.0, 220.0, pzv.COLOR_BLUE],
+            ]
+
+            def stuck_red_pick(bx, by, color, w_caps):
+                if color == pzv.COLOR_RED:
+                    return  # Simulate missed pick: Red cap stays stuck on the board!
+                for i, c in enumerate(w_caps):
+                    if c[2] == color and math.hypot(c[0] - bx, c[1] - by) < 10.0:
+                        w_caps.pop(i)
+                        break
+
+            res, cmds, _ = self._run_virtual_mega_session(ctrl, world_caps, stuck_red_pick)
+            self.assertEqual(res["status"], "COMPLETE")
+            self.assertEqual(len(res["quarantined"]), 1)
+            red_attempts = [c for c in cmds if c[2] == pzv.COLOR_RED]
+            blue_attempts = [c for c in cmds if c[2] == pzv.COLOR_BLUE]
+            self.assertEqual(len(red_attempts), pzv.MAX_PICK_RETRIES)
+            self.assertEqual(len(blue_attempts), 1)
+            # Blue cap was sorted cleanly even though Red was stuck!
+            self.assertEqual(len(world_caps), 1)
+            self.assertEqual(world_caps[0][2], pzv.COLOR_RED)
 
 
 class TestHTMLCodeVaultSyncAndDocsAudit(unittest.TestCase):

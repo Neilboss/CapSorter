@@ -14,7 +14,7 @@
 
 ## 📌 Executive Overview
 
-The **Autonomous Bottle-Cap Sorting Machine** is an embedded robotics project designed to detect, pick, and sort standard plastic bottle caps ($\varnothing 28\text{–}32\text{ mm}$) by colour across a $300 \times 300\text{ mm}$ grid workspace, depositing them into four designated color bins (Red, Yellow, Green, Blue).
+The **Autonomous Bottle-Cap Sorting Machine** is an embedded robotics project designed to detect, pick, and sort standard plastic bottle caps ($\varnothing 28\text{–}32\text{ mm}$) by colour anywhere across a continuous **$300 \times 300\text{ mm}$ open flat plywood workspace** (with an optional 10×10 visual reference grid), depositing them into four designated color bins (Red, Yellow, Green, Blue) using **closed-loop bin-side re-imaging** after every pick.
 
 The system operates **100% offline** without laptops, Wi-Fi, or cloud connectivity. The web portal (`index.html`) now presents **two complete hardware architecture versions**:
 
@@ -28,7 +28,8 @@ The system operates **100% offline** without laptops, Wi-Fi, or cloud connectivi
 | Specification | Version 1 (`v1.html`) | Version 2 (`v2.html`) |
 | :--- | :--- | :--- |
 | **Machine Envelope** | $500 \times 500 \times 500\text{ mm}$ | $500 \times 500 \times 500\text{ mm}$ |
-| **Sorting Workspace** | $300 \times 300\text{ mm}$ (10 × 10 cells, $30\text{ mm}$ pitch) | $300 \times 300\text{ mm}$ (10 × 10 cells, $30\text{ mm}$ pitch) |
+| **Sorting Workspace** | Continuous $300 \times 300\text{ mm}$ open flat plywood plate (caps anywhere; 10×10 reference grid) | Continuous $300 \times 300\text{ mm}$ open flat plywood plate (caps anywhere; 10×10 reference grid) |
+| **Sorting Loop & Bump Handling** | Closed-loop bin-side re-imaging (`CMD_SCAN_WINDOW_OPEN`), chamfer blob split, X-jaw clearance peeling & clear-FOV verify park | Closed-loop bin-side re-imaging (`CMD_SCAN_WINDOW_OPEN`), OpenCV distance-transform split, X-jaw clearance peeling & clear-FOV verify park |
 | **Cap Outer Diameter** | $\varnothing 28\text{–}32\text{ mm}$ standard beverage bottle caps | $\varnothing 28\text{–}32\text{ mm}$ standard beverage bottle caps |
 | **Colours Handled** | 4 primary colours (Red, Yellow, Green, Blue) | 4 primary colours (Red, Yellow, Green, Blue) |
 | **Primary Vision Processor** | Teensy 4.1 ($600\text{ MHz}$ Cortex-M7, $1\text{ MB}$ RAM) | **Raspberry Pi Zero 2 W** ($4\times 1\text{ GHz}$ Cortex-A53, $512\text{ MB}$ RAM, $16\text{ GB}$ microSD) |

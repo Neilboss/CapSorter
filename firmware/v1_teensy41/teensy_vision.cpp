@@ -1,5 +1,5 @@
 // =========================================================================
-// Teensy 4.1 - Embedded Vision & Plan Generator (V1)
+// Teensy 4.1 - Embedded Vision & Closed-Loop Bin-Side Planner (V1)
 // Status: Pre-Validation Engineering Firmware (requires bench calibration)
 // Hardware: ARM Cortex-M7 @ 600 MHz | RAM: 1024 KB | 3.3V ONLY (NOT 5V tolerant)
 // Wiring:
@@ -11,19 +11,37 @@
 #include <string.h>
 #include "../common/packet_protocol.h"
 
-#define FRAME_WIDTH        320
-#define FRAME_HEIGHT       240
-#define FRAME_PIXELS       (FRAME_WIDTH * FRAME_HEIGHT)
-#define FRAME_BYTES        (FRAME_PIXELS * 2) // 153,600 bytes RGB565
-#define BFS_QUEUE_SIZE     4096
-#define MIN_CAP_SEP_MM     24.0f              // Spatial NMS radius (caps are 28-32 mm)
+#define FRAME_WIDTH               320
+#define FRAME_HEIGHT              240
+#define FRAME_PIXELS              (FRAME_WIDTH * FRAME_HEIGHT)
+#define FRAME_BYTES               (FRAME_PIXELS * 2) // 153,600 bytes RGB565
+#define BFS_QUEUE_SIZE            4096
+#define SPLIT_ROI_MAX             112                // Max ROI dim for merged same-color split
+
+// Continuous 300x300 mm Open Flat Plywood Workspace & X-Axis Gripper Geometry
+#define CAP_RADIUS_MM             15.0f   // Nominal cap radius (28-32 mm diameter)
+#define MIN_CAP_SEP_MM            22.0f   // Spatial NMS radius (distinguishes touching 28 mm caps)
+#define GRIPPER_JAW_AXIS_X        1       // 1 = jaws open along X-axis, 0 = Y-axis
+#define JAW_INNER_HALF_MM         18.0f   // Open jaw inner gap = 36 mm (+/-18 mm)
+#define JAW_OUTER_HALF_MM         26.0f   // Outer jaw finger reach (+/-26 mm along jaw axis)
+#define JAW_WIDTH_HALF_MM         10.0f   // Jaw pad half-width perpendicular to jaw axis
+#define JAW_CLEARANCE_PAD_MM      1.5f    // Extra collision clearance margin around neighbor caps
+
+// Overhead Camera Bridge Occlusion, Parallax & Retry Quarantine Guard
+#define BRIDGE_OCCLUSION_HALF_MM  35.0f   // Masked horizontal Y band around BIN_Y (0 disables)
+#define CAMERA_HEIGHT_MM          0.0f    // Set measured overhead lens height in mm (0 disables parallax)
+#define CAP_HEIGHT_MM             13.0f   // Nominal cap top height above board plane (mm)
+#define MISSED_PICK_RADIUS_MM     14.0f   // Same-color cap still within 14 mm => missed attempt
+#define MAX_PICK_RETRIES          3       // Quarantine stuck/unpickable spot after 3 failed attempts
+#define MAX_RETRY_RECORDS         16
+#define MAX_SESSION_CYCLES        200
 
 // Supervision & Handshake Timeouts
-#define READY_POLL_INTERVAL_MS   500UL
-#define HEARTBEAT_INTERVAL_MS    250UL
-#define MAX_SINGLE_CAP_MS      25000UL  // Per-cap stall watchdog (reset by CMD_CAP_PROGRESS)
-#define PER_CAP_BUDGET_MS      18000UL  // Worst-case cap cycle + margin for dynamic total ceiling
-#define BATCH_OVERHEAD_MS      30000UL  // Homing/parking & handshake margin
+#define READY_POLL_INTERVAL_MS    500UL
+#define HEARTBEAT_INTERVAL_MS     250UL
+#define MAX_SINGLE_CAP_MS       25000UL  // Per-cap stall watchdog (reset on progress/await)
+#define PER_CAP_BUDGET_MS       18000UL  // Worst-case cap cycle + margin for legacy batch mode
+#define BATCH_OVERHEAD_MS       30000UL  // Homing/parking & handshake margin
 
 // FAIL-CLOSED CALIBRATION GUARD:
 // Measure the 4 board corner fiducials (Top-Left, Top-Right, Bottom-Right, Bottom-Left)
@@ -52,14 +70,35 @@ DMAMEM uint8_t  imageBuffer[FRAME_BYTES];
 DMAMEM uint8_t  rawMask[FRAME_PIXELS];
 DMAMEM uint8_t  colorMask[FRAME_PIXELS];
 DMAMEM uint32_t bfsQueue[BFS_QUEUE_SIZE];
+DMAMEM uint8_t  splitDistMap[SPLIT_ROI_MAX * SPLIT_ROI_MAX];
+
+struct RetryZone {
+  float   x_mm;
+  float   y_mm;
+  uint8_t color;
+  uint8_t attempts;
+  bool    quarantined;
+};
+
+struct MegaLinkFlags {
+  bool     active;
+  bool     gotProgress;
+  bool     gotAwaitNext;
+  bool     gotFault;
+  uint32_t lastPingMs;
+};
 
 CapTarget detectedCaps[MAX_BATCH_CAPS];
 uint32_t  detectedAreas[MAX_BATCH_CAPS];
+bool      detectedSafe[MAX_BATCH_CAPS];
 uint8_t   capCount       = 0;
 uint16_t  currentBatchId = 1;
 float     H[9]           = {0};
 bool      homographyOk   = false;
 bool      megaFaulted    = false;
+
+RetryZone retryZones[MAX_RETRY_RECORDS];
+uint8_t   retryZoneCount = 0;
 
 // External Sorting Bin Coordinates (mm)
 const float BIN_X_MM[5] = { 0.0f, 355.0f, 355.0f, 355.0f, 355.0f };
@@ -123,10 +162,38 @@ bool computeHomography4Pt(const float srcPx[4][2], const float dstMm[4][2], floa
   return true;
 }
 
-bool readBytesWithTimeout(HardwareSerial &port, uint8_t *dest, uint32_t len, uint32_t timeoutMs) {
+void serviceMegaLinkDuringStream(MegaLinkFlags *flags) {
+  if (!flags || !flags->active) return;
+  uint32_t now = millis();
+  if (now - flags->lastPingMs >= HEARTBEAT_INTERVAL_MS) {
+    Serial1.write(CMD_HEARTBEAT_PING);
+    flags->lastPingMs = now;
+  }
+  while (Serial1.available() > 0) {
+    uint8_t resp = (uint8_t)Serial1.read();
+    if (resp == CMD_CAP_PROGRESS) {
+      flags->gotProgress = true;
+    } else if (resp == CMD_AWAIT_NEXT) {
+      flags->gotAwaitNext = true;
+    } else if (resp == CMD_RECOVERY_HALT || resp == CMD_HARD_FAULT || resp == CMD_STATUS_FAULT) {
+      flags->gotFault = true;
+      megaFaulted = true;
+    }
+  }
+}
+
+bool readBytesWithTimeout(
+  HardwareSerial &port,
+  uint8_t *dest,
+  uint32_t len,
+  uint32_t timeoutMs,
+  MegaLinkFlags *linkFlags = nullptr
+) {
   uint32_t startMs = millis();
   uint32_t idx = 0;
   while (idx < len) {
+    serviceMegaLinkDuringStream(linkFlags);
+    if (linkFlags && linkFlags->gotFault) return false;
     if (port.available() > 0) {
       dest[idx++] = (uint8_t)port.read();
     } else if (millis() - startMs > timeoutMs) {
@@ -162,11 +229,13 @@ bool waitForMegaReady(uint32_t timeoutMs) {
   return false;
 }
 
-bool receiveFrame(uint8_t *buf, uint32_t expectedBytes) {
+bool receiveFrameWithHeartbeat(uint8_t *buf, uint32_t expectedBytes, MegaLinkFlags *linkFlags) {
   uint32_t startMs = millis();
   uint8_t prev = 0;
   bool synced = false;
   while (millis() - startMs < 2500) {
+    serviceMegaLinkDuringStream(linkFlags);
+    if (linkFlags && linkFlags->gotFault) return false;
     if (Serial2.available() > 0) {
       uint8_t b = (uint8_t)Serial2.read();
       if (prev == FRAME_SYNC_BYTE_1 && b == FRAME_SYNC_BYTE_2) {
@@ -179,18 +248,18 @@ bool receiveFrame(uint8_t *buf, uint32_t expectedBytes) {
   if (!synced) return false;
 
   uint8_t lenBytes[4];
-  if (!readBytesWithTimeout(Serial2, lenBytes, 4, 500)) return false;
+  if (!readBytesWithTimeout(Serial2, lenBytes, 4, 500, linkFlags)) return false;
   uint32_t frameLen = ((uint32_t)lenBytes[0] << 24) |
                       ((uint32_t)lenBytes[1] << 16) |
                       ((uint32_t)lenBytes[2] << 8)  |
                       ((uint32_t)lenBytes[3]);
   if (frameLen != expectedBytes) return false;
 
-  // Read full RGB565 payload (153,600 bytes @ 921,600 baud ~ 1.67 s)
-  if (!readBytesWithTimeout(Serial2, buf, expectedBytes, 3000)) return false;
+  // Read full RGB565 payload (153,600 B @ 921,600 baud ~ 1.67 s) while heartbeating Mega!
+  if (!readBytesWithTimeout(Serial2, buf, expectedBytes, 3000, linkFlags)) return false;
 
   uint8_t crcBytes[2];
-  if (!readBytesWithTimeout(Serial2, crcBytes, 2, 500)) return false;
+  if (!readBytesWithTimeout(Serial2, crcBytes, 2, 500, linkFlags)) return false;
   uint16_t rxCrc = ((uint16_t)crcBytes[0] << 8) | crcBytes[1];
   return (computeCRC16(buf, expectedBytes) == rxCrc);
 }
@@ -227,6 +296,7 @@ uint8_t classifyRgb565Pixel(uint16_t pixel) {
 }
 
 void cleanColorMask3x3() {
+  // Pass 1: Speckle removal & glare-hole fill (3x3 majority + 5-neighbor close)
   memset(colorMask, COLOR_NONE, FRAME_PIXELS);
   for (uint16_t y = 1; y < FRAME_HEIGHT - 1; y++) {
     for (uint16_t x = 1; x < FRAME_WIDTH - 1; x++) {
@@ -239,17 +309,27 @@ void cleanColorMask3x3() {
           if (c <= 4) counts[c]++;
         }
       }
-      if (center != COLOR_NONE && counts[center] >= 5) {
+      if (center != COLOR_NONE && counts[center] >= 4) {
         colorMask[idx] = center;
       } else if (center == COLOR_NONE) {
         for (uint8_t col = 1; col <= 4; col++) {
-          if (counts[col] >= 6) {
+          if (counts[col] >= 5) {
             colorMask[idx] = col;
             break;
           }
         }
       }
     }
+  }
+}
+
+void applyParallaxCorrection(float *x_mm, float *y_mm) {
+  if (CAMERA_HEIGHT_MM > CAP_HEIGHT_MM && CAP_HEIGHT_MM > 0.0f) {
+    float scale = 1.0f - (CAP_HEIGHT_MM / CAMERA_HEIGHT_MM);
+    const float cx = BOARD_SIZE_MM * 0.5f;
+    const float cy = BOARD_SIZE_MM * 0.5f;
+    *x_mm = cx + (*x_mm - cx) * scale;
+    *y_mm = cy + (*y_mm - cy) * scale;
   }
 }
 
@@ -260,30 +340,144 @@ bool transformToMillimeters(CapTarget *cap) {
   if (fabsf(w) < 1e-6f) return false;
   cap->boardX_mm = (H[0] * u + H[1] * v + H[2]) / w;
   cap->boardY_mm = (H[3] * u + H[4] * v + H[5]) / w;
-  return isfinite(cap->boardX_mm) && isfinite(cap->boardY_mm);
+  if (!isfinite(cap->boardX_mm) || !isfinite(cap->boardY_mm)) return false;
+  applyParallaxCorrection(&cap->boardX_mm, &cap->boardY_mm);
+  return true;
+}
+
+bool isInSafePickBounds(float x_mm, float y_mm) {
+  return (x_mm >= SAFE_PICK_MIN_X_MM && x_mm <= SAFE_PICK_MAX_X_MM &&
+          y_mm >= SAFE_PICK_MIN_Y_MM && y_mm <= SAFE_PICK_MAX_Y_MM);
+}
+
+void tryAddDetectedCandidate(
+  uint8_t targetColor,
+  uint16_t u,
+  uint16_t v,
+  uint32_t estArea,
+  bool hasOccludedY,
+  float occludedY_mm,
+  CapTarget *outCaps,
+  uint8_t *outCount
+) {
+  if (*outCount >= MAX_BATCH_CAPS) return;
+  CapTarget cap;
+  cap.capId       = *outCount + 1;
+  cap.color       = targetColor;
+  cap.pixelX      = u;
+  cap.pixelY      = v;
+  cap.targetBinId = targetColor;
+
+  if (!transformToMillimeters(&cap)) return;
+  if (cap.boardX_mm < 0.0f || cap.boardX_mm > BOARD_SIZE_MM ||
+      cap.boardY_mm < 0.0f || cap.boardY_mm > BOARD_SIZE_MM) {
+    return;
+  }
+  if (hasOccludedY && BRIDGE_OCCLUSION_HALF_MM > 0.0f &&
+      fabsf(cap.boardY_mm - occludedY_mm) <= BRIDGE_OCCLUSION_HALF_MM) {
+    return;
+  }
+
+  outCaps[*outCount]       = cap;
+  detectedAreas[*outCount] = estArea;
+  detectedSafe[*outCount]  = isInSafePickBounds(cap.boardX_mm, cap.boardY_mm);
+  (*outCount)++;
+}
+
+// Two-pass chamfer distance peak splitter for touching same-color cap clusters on QVGA
+void splitMergedSameColorBlob(
+  uint8_t targetColor,
+  uint16_t minX, uint16_t minY, uint16_t maxX, uint16_t maxY,
+  bool hasOccludedY, float occludedY_mm,
+  CapTarget *outCaps, uint8_t *outCount
+) {
+  uint16_t roiW = (maxX - minX) + 3;
+  uint16_t roiH = (maxY - minY) + 3;
+  if (roiW > SPLIT_ROI_MAX || roiH > SPLIT_ROI_MAX) return;
+
+  for (uint16_t ry = 0; ry < roiH; ry++) {
+    for (uint16_t rx = 0; rx < roiW; rx++) {
+      int16_t fx = (int16_t)minX - 1 + (int16_t)rx;
+      int16_t fy = (int16_t)minY - 1 + (int16_t)ry;
+      bool inside = false;
+      if (fx >= 0 && fx < FRAME_WIDTH && fy >= 0 && fy < FRAME_HEIGHT) {
+        inside = ((colorMask[(uint32_t)fy * FRAME_WIDTH + fx] & 0x7F) == targetColor);
+      }
+      splitDistMap[ry * roiW + rx] = inside ? 255 : 0;
+    }
+  }
+
+  // Forward pass (3x3 chessboard chamfer)
+  for (uint16_t ry = 1; ry < roiH - 1; ry++) {
+    for (uint16_t rx = 1; rx < roiW - 1; rx++) {
+      uint8_t v = splitDistMap[ry * roiW + rx];
+      if (v == 0) continue;
+      uint8_t mn = min(splitDistMap[(ry - 1) * roiW + rx], splitDistMap[ry * roiW + (rx - 1)]);
+      mn = min(mn, splitDistMap[(ry - 1) * roiW + (rx - 1)]);
+      mn = min(mn, splitDistMap[(ry - 1) * roiW + (rx + 1)]);
+      splitDistMap[ry * roiW + rx] = (mn < 254) ? (mn + 1) : 254;
+    }
+  }
+  // Backward pass
+  for (int16_t ry = (int16_t)roiH - 2; ry >= 1; ry--) {
+    for (int16_t rx = (int16_t)roiW - 2; rx >= 1; rx--) {
+      uint8_t v = splitDistMap[ry * roiW + rx];
+      if (v == 0) continue;
+      uint8_t mn = min(splitDistMap[(ry + 1) * roiW + rx], splitDistMap[ry * roiW + (rx + 1)]);
+      mn = min(mn, splitDistMap[(ry + 1) * roiW + (rx + 1)]);
+      mn = min(mn, splitDistMap[(ry + 1) * roiW + (rx - 1)]);
+      uint8_t cand = (mn < 254) ? (mn + 1) : 254;
+      if (cand < v) splitDistMap[ry * roiW + rx] = cand;
+    }
+  }
+
+  // Local peaks (radius >= 6 px on 320x240 ~ 6+ mm) -> NMS deduplicates merged caps
+  for (uint16_t ry = 3; ry < roiH - 3; ry++) {
+    for (uint16_t rx = 3; rx < roiW - 3; rx++) {
+      uint8_t val = splitDistMap[ry * roiW + rx];
+      if (val < 6) continue;
+      bool isPeak = true;
+      for (int8_t dy = -3; dy <= 3 && isPeak; dy++) {
+        for (int8_t dx = -3; dx <= 3; dx++) {
+          uint8_t nb = splitDistMap[(ry + dy) * roiW + (rx + dx)];
+          if (nb > val || (nb == val && (dy < 0 || (dy == 0 && dx < 0)))) {
+            isPeak = false;
+            break;
+          }
+        }
+      }
+      if (isPeak) {
+        uint16_t u = (uint16_t)((int16_t)minX - 1 + (int16_t)rx);
+        uint16_t v = (uint16_t)((int16_t)minY - 1 + (int16_t)ry);
+        uint32_t estArea = (uint32_t)(3.14159f * (float)val * (float)val);
+        tryAddDetectedCandidate(targetColor, u, v, estArea, hasOccludedY, occludedY_mm, outCaps, outCount);
+      }
+    }
+  }
 }
 
 // Greedy spatial NMS sorted strictly by descending contour area so metadata & areas
 // stay synchronized and a smaller overlapping blob can never overwrite a larger one.
-void deduplicateTargetsNMS(CapTarget *caps, uint32_t *areas, uint8_t *count) {
+void deduplicateTargetsNMS(CapTarget *caps, uint32_t *areas, bool *safeFlags, uint8_t *count) {
   uint8_t n = *count;
   if (n <= 1) return;
 
-  // 1. Insertion-sort caps[] and areas[] together by area descending
   for (uint8_t i = 1; i < n; i++) {
     CapTarget keyCap  = caps[i];
     uint32_t  keyArea = areas[i];
+    bool      keySafe = safeFlags[i];
     int16_t j = (int16_t)i - 1;
     while (j >= 0 && areas[j] < keyArea) {
-      caps[j + 1]  = caps[j];
-      areas[j + 1] = areas[j];
+      caps[j + 1]      = caps[j];
+      areas[j + 1]     = areas[j];
+      safeFlags[j + 1] = safeFlags[j];
       j--;
     }
-    caps[j + 1]  = keyCap;
-    areas[j + 1] = keyArea;
+    caps[j + 1]      = keyCap;
+    areas[j + 1]     = keyArea;
+    safeFlags[j + 1] = keySafe;
   }
 
-  // 2. Greedily retain highest-area candidates separated by >= MIN_CAP_SEP_MM
   uint8_t kept = 0;
   for (uint8_t i = 0; i < n; i++) {
     bool overlap = false;
@@ -298,6 +492,7 @@ void deduplicateTargetsNMS(CapTarget *caps, uint32_t *areas, uint8_t *count) {
     if (!overlap) {
       caps[kept]       = caps[i];
       areas[kept]      = areas[i];
+      safeFlags[kept]  = safeFlags[i];
       caps[kept].capId = kept + 1;
       kept++;
     }
@@ -305,7 +500,13 @@ void deduplicateTargetsNMS(CapTarget *caps, uint32_t *areas, uint8_t *count) {
   *count = kept;
 }
 
-void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCount) {
+void segmentCapsHSV(
+  const uint8_t *frameBuf,
+  CapTarget *outCaps,
+  uint8_t *outCount,
+  bool hasOccludedY = false,
+  float occludedY_mm = 0.0f
+) {
   *outCount = 0;
   if (!homographyOk) return;
 
@@ -326,6 +527,7 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
       if (targetColor == COLOR_NONE || (targetColor & 0x80)) continue;
 
       uint32_t area = 0, perimeter = 0, sumX = 0, sumY = 0;
+      uint16_t minX = x, maxX = x, minY = y, maxY = y;
       uint16_t qHead = 0, qTail = 0;
 
       colorMask[seedIdx] |= 0x80;
@@ -340,6 +542,10 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
         area++;
         sumX += cx;
         sumY += cy;
+        if (cx < minX) minX = cx;
+        if (cx > maxX) maxX = cx;
+        if (cy < minY) minY = cy;
+        if (cy > maxY) maxY = cy;
         bool isBoundary = false;
 
         for (uint8_t d = 0; d < 4; d++) {
@@ -365,82 +571,216 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
         if (isBoundary) perimeter++;
       }
 
-      if (area >= 220 && area <= 1800 && perimeter > 0 && *outCount < MAX_BATCH_CAPS) {
+      if (area >= 220 && perimeter > 0 && *outCount < MAX_BATCH_CAPS) {
         float circularity = (4.0f * 3.1415926f * (float)area) / ((float)perimeter * (float)perimeter);
-        if (circularity >= 0.72f) {
-          CapTarget &cap = outCaps[*outCount];
-          cap.capId       = *outCount + 1;
-          cap.color       = targetColor;
-          cap.pixelX      = (uint16_t)(sumX / area);
-          cap.pixelY      = (uint16_t)(sumY / area);
-          cap.targetBinId = targetColor;
-
-          if (transformToMillimeters(&cap) &&
-              cap.boardX_mm >= 0.0f && cap.boardX_mm <= 300.0f &&
-              cap.boardY_mm >= 0.0f && cap.boardY_mm <= 300.0f) {
-            detectedAreas[*outCount] = area;
-            (*outCount)++;
-          }
+        if (area <= 1800 && circularity >= 0.70f) {
+          tryAddDetectedCandidate(
+            targetColor,
+            (uint16_t)(sumX / area),
+            (uint16_t)(sumY / area),
+            area,
+            hasOccludedY, occludedY_mm,
+            outCaps, outCount
+          );
+        } else {
+          // Oversized merged same-color cluster or glare-distorted blob -> chamfer peak split
+          splitMergedSameColorBlob(
+            targetColor, minX, minY, maxX, maxY,
+            hasOccludedY, occludedY_mm,
+            outCaps, outCount
+          );
         }
       }
     }
   }
 
-  deduplicateTargetsNMS(outCaps, detectedAreas, outCount);
+  deduplicateTargetsNMS(outCaps, detectedAreas, detectedSafe, outCount);
 }
 
-void optimizeSortingPath(CapTarget *caps, uint8_t count) {
-  float curX = 0.0f, curY = 0.0f;
+bool circleIntersectsRect(float cx, float cy, float r, float x0, float y0, float x1, float y1) {
+  float nx = constrain(cx, x0, x1);
+  float ny = constrain(cy, y0, y1);
+  float dx = cx - nx;
+  float dy = cy - ny;
+  return (dx * dx + dy * dy) < (r * r);
+}
+
+uint8_t countJawCollisions(uint8_t idx, const CapTarget *caps, uint8_t count, float *outMinDist) {
+  float tx = caps[idx].boardX_mm;
+  float ty = caps[idx].boardY_mm;
+  float rCheck = CAP_RADIUS_MM + JAW_CLEARANCE_PAD_MM;
+  bool negBlocked = false, posBlocked = false;
+  float minDist = 1e9f;
+
+  for (uint8_t j = 0; j < count; j++) {
+    if (j == idx) continue;
+    float ox = caps[j].boardX_mm;
+    float oy = caps[j].boardY_mm;
+    float d = hypotf(ox - tx, oy - ty);
+    if (d < minDist) minDist = d;
+
+#if GRIPPER_JAW_AXIS_X
+    if (!negBlocked && circleIntersectsRect(ox, oy, rCheck,
+        tx - JAW_OUTER_HALF_MM, ty - JAW_WIDTH_HALF_MM,
+        tx - JAW_INNER_HALF_MM, ty + JAW_WIDTH_HALF_MM)) {
+      negBlocked = true;
+    }
+    if (!posBlocked && circleIntersectsRect(ox, oy, rCheck,
+        tx + JAW_INNER_HALF_MM, ty - JAW_WIDTH_HALF_MM,
+        tx + JAW_OUTER_HALF_MM, ty + JAW_WIDTH_HALF_MM)) {
+      posBlocked = true;
+    }
+#else
+    if (!negBlocked && circleIntersectsRect(ox, oy, rCheck,
+        tx - JAW_WIDTH_HALF_MM, ty - JAW_OUTER_HALF_MM,
+        tx + JAW_WIDTH_HALF_MM, ty - JAW_INNER_HALF_MM)) {
+      negBlocked = true;
+    }
+    if (!posBlocked && circleIntersectsRect(ox, oy, rCheck,
+        tx - JAW_WIDTH_HALF_MM, ty + JAW_INNER_HALF_MM,
+        tx + JAW_WIDTH_HALF_MM, ty + JAW_OUTER_HALF_MM)) {
+      posBlocked = true;
+    }
+#endif
+  }
+
+  *outMinDist = minDist;
+  return (uint8_t)(negBlocked ? 1 : 0) + (uint8_t)(posBlocked ? 1 : 0);
+}
+
+bool isCapQuarantined(const CapTarget &cap) {
+  for (uint8_t i = 0; i < retryZoneCount; i++) {
+    if (retryZones[i].quarantined && retryZones[i].color == cap.color &&
+        hypotf(cap.boardX_mm - retryZones[i].x_mm, cap.boardY_mm - retryZones[i].y_mm) <= MISSED_PICK_RADIUS_MM) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool hasCapRetryPenalty(const CapTarget &cap) {
+  for (uint8_t i = 0; i < retryZoneCount; i++) {
+    if (!retryZones[i].quarantined && retryZones[i].attempts > 0 && retryZones[i].color == cap.color &&
+        hypotf(cap.boardX_mm - retryZones[i].x_mm, cap.boardY_mm - retryZones[i].y_mm) <= MISSED_PICK_RADIUS_MM) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool updateRetryState(
+  const CapTarget *lastTarget,
+  const CapTarget *caps,
+  uint8_t count,
+  bool hasOccludedY,
+  float occludedY_mm
+) {
+  if (!lastTarget) return false;
+  if (hasOccludedY && BRIDGE_OCCLUSION_HALF_MM > 0.0f &&
+      fabsf(lastTarget->boardY_mm - occludedY_mm) <= BRIDGE_OCCLUSION_HALF_MM) {
+    return false;
+  }
+
+  bool stillPresent = false;
   for (uint8_t i = 0; i < count; i++) {
-    uint8_t bestIdx = i;
-    float bestDist = 1e9f;
-    for (uint8_t j = i; j < count; j++) {
-      float dist = hypotf(caps[j].boardX_mm - curX, caps[j].boardY_mm - curY);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestIdx = j;
+    if (caps[i].color == lastTarget->color &&
+        hypotf(caps[i].boardX_mm - lastTarget->boardX_mm,
+               caps[i].boardY_mm - lastTarget->boardY_mm) <= MISSED_PICK_RADIUS_MM) {
+      stillPresent = true;
+      break;
+    }
+  }
+
+  int8_t foundIdx = -1;
+  for (uint8_t i = 0; i < retryZoneCount; i++) {
+    if (retryZones[i].color == lastTarget->color &&
+        hypotf(retryZones[i].x_mm - lastTarget->boardX_mm,
+               retryZones[i].y_mm - lastTarget->boardY_mm) <= MISSED_PICK_RADIUS_MM) {
+      foundIdx = (int8_t)i;
+      break;
+    }
+  }
+
+  if (foundIdx >= 0 && retryZones[foundIdx].quarantined) {
+    return true;
+  }
+
+  if (stillPresent) {
+    if (foundIdx < 0 && retryZoneCount < MAX_RETRY_RECORDS) {
+      foundIdx = (int8_t)retryZoneCount++;
+      retryZones[foundIdx].attempts    = 0;
+      retryZones[foundIdx].quarantined = false;
+    }
+    if (foundIdx >= 0) {
+      retryZones[foundIdx].x_mm  = lastTarget->boardX_mm;
+      retryZones[foundIdx].y_mm  = lastTarget->boardY_mm;
+      retryZones[foundIdx].color = lastTarget->color;
+      retryZones[foundIdx].attempts++;
+      if (retryZones[foundIdx].attempts >= MAX_PICK_RETRIES) {
+        retryZones[foundIdx].quarantined = true;
+        Serial.println(F("[TEENSY WARN] Stuck/unpickable cap quarantined after 3 failed attempts."));
       }
     }
-    if (bestIdx != i) {
-      CapTarget tmp = caps[i];
-      caps[i] = caps[bestIdx];
-      caps[bestIdx] = tmp;
+  } else if (foundIdx >= 0 && !retryZones[foundIdx].quarantined) {
+    retryZones[foundIdx].attempts = 0;
+  }
+  return true;
+}
+
+bool selectNextCapClearanceAware(
+  const CapTarget *caps,
+  const bool *safeFlags,
+  uint8_t count,
+  float curX,
+  float curY,
+  CapTarget *outSelected
+) {
+  int16_t bestIdx      = -1;
+  uint8_t bestPenalty  = 255;
+  uint8_t bestBlocked  = 255;
+  float   bestTravel   = 1e9f;
+  float   bestMinNeigh = -1.0f;
+
+  for (uint8_t i = 0; i < count; i++) {
+    if (!safeFlags[i] || isCapQuarantined(caps[i])) continue;
+
+    uint8_t penalty = hasCapRetryPenalty(caps[i]) ? 1 : 0;
+    float minNeigh = 1e9f;
+    uint8_t blocked = countJawCollisions(i, caps, count, &minNeigh);
+    float travel = hypotf(caps[i].boardX_mm - curX, caps[i].boardY_mm - curY);
+
+    bool better = (bestIdx < 0) ||
+                  (penalty < bestPenalty) ||
+                  (penalty == bestPenalty && blocked < bestBlocked) ||
+                  (penalty == bestPenalty && blocked == bestBlocked && travel < bestTravel - 0.5f) ||
+                  (penalty == bestPenalty && blocked == bestBlocked &&
+                   fabsf(travel - bestTravel) <= 0.5f && minNeigh > bestMinNeigh);
+    if (better) {
+      bestIdx      = i;
+      bestPenalty  = penalty;
+      bestBlocked  = blocked;
+      bestTravel   = travel;
+      bestMinNeigh = minNeigh;
     }
-    caps[i].capId = i + 1;
-    uint8_t binId = caps[i].targetBinId;
-    curX = BIN_X_MM[binId];
-    curY = BIN_Y_MM[binId];
   }
+
+  if (bestIdx < 0) return false;
+  *outSelected = caps[bestIdx];
+  return true;
 }
 
-void writePacedSerial1(const uint8_t *data, uint32_t len) {
-  // Pace transmissions in 32-byte chunks with 2 ms pause so Mega's 64B RX FIFO never overflows
-  uint32_t offset = 0;
-  while (offset < len) {
-    uint32_t chunk = min((uint32_t)32, len - offset);
-    Serial1.write(data + offset, chunk);
-    Serial1.flush();
-    offset += chunk;
-    if (offset < len) delay(2);
-  }
-}
-
-bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
-  if (count == 0 || count > MAX_BATCH_CAPS) return false;
-  uint32_t payloadBytes = (uint32_t)count * sizeof(CapTarget);
-
-  BatchHeader hdr;
-  hdr.magic     = PROTOCOL_MAGIC_BYTE;
-  hdr.batchId   = currentBatchId++;
-  hdr.totalCaps = count;
-  hdr.crc16     = computeCRC16((const uint8_t*)caps, payloadBytes);
+bool sendSingleTargetToMega(const CapTarget &cap) {
+  uint8_t pkt[18];
+  pkt[0] = PROTOCOL_SINGLE_MAGIC;
+  memcpy(pkt + 1, &cap, sizeof(CapTarget));
+  uint16_t crc = computeCRC16(pkt + 1, sizeof(CapTarget));
+  pkt[16] = (uint8_t)(crc & 0xFF);
+  pkt[17] = (uint8_t)((crc >> 8) & 0xFF);
 
   for (uint8_t attempt = 0; attempt < 3; attempt++) {
     while (Serial1.available() > 0) Serial1.read();
-    Serial1.write((const uint8_t*)&hdr, sizeof(BatchHeader));
+    Serial1.write(pkt, sizeof(pkt));
     Serial1.flush();
-    delay(2);
-    writePacedSerial1((const uint8_t*)caps, payloadBytes);
 
     uint32_t waitStart = millis();
     while (millis() - waitStart < 1000) {
@@ -459,40 +799,156 @@ bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
   return false;
 }
 
-BatchExecResult superviseMegaExecutionWithHeartbeat(uint8_t count) {
-  // Maintain 250 ms heartbeat for the full batch duration, bounded by per-cap progress
-  // and dynamic worst-case total duration (never a fixed 180 s cutoff).
-  uint32_t batchStartMs   = millis();
-  uint32_t lastPingMs     = batchStartMs;
-  uint32_t lastProgressMs = batchStartMs;
-  uint32_t maxTotalMs     = (uint32_t)count * PER_CAP_BUDGET_MS + BATCH_OVERHEAD_MS;
-
+BatchExecResult awaitMegaOpcodeWithHeartbeat(uint8_t targetOpcode, uint32_t timeoutMs) {
+  uint32_t startMs    = millis();
+  uint32_t lastPingMs = startMs;
   while (true) {
     uint32_t now = millis();
     if (now - lastPingMs >= HEARTBEAT_INTERVAL_MS) {
       Serial1.write(CMD_HEARTBEAT_PING);
       lastPingMs = now;
     }
-
     while (Serial1.available() > 0) {
-      uint8_t status = (uint8_t)Serial1.read();
-      if (status == CMD_CAP_PROGRESS) {
-        lastProgressMs = millis();
-      } else if (status == CMD_BATCH_COMPLETE) {
-        return EXEC_COMPLETE;
-      } else if (status == CMD_RECOVERY_HALT || status == CMD_HARD_FAULT || status == CMD_STATUS_FAULT) {
+      uint8_t resp = (uint8_t)Serial1.read();
+      if (resp == targetOpcode) return EXEC_COMPLETE;
+      if (resp == CMD_RECOVERY_HALT || resp == CMD_HARD_FAULT || resp == CMD_STATUS_FAULT) {
         megaFaulted = true;
         return EXEC_FAULT_HALT;
       }
     }
-
-    if ((now - lastProgressMs > MAX_SINGLE_CAP_MS) || (now - batchStartMs > maxTotalMs)) {
-      Serial.println(F("[TEENSY] Batch supervision stall/timeout detected."));
+    if (now - startMs > timeoutMs) {
       megaFaulted = true;
       return EXEC_TIMEOUT;
     }
     delay(5);
   }
+}
+
+bool captureAndSegmentBoard(
+  bool hasOccludedY,
+  float occludedY_mm,
+  MegaLinkFlags *linkFlags
+) {
+  while (Serial2.available() > 0) Serial2.read();
+  Serial2.write(CMD_CAPTURE_FRAME);
+  if (!receiveFrameWithHeartbeat(imageBuffer, FRAME_BYTES, linkFlags)) {
+    return false;
+  }
+  segmentCapsHSV(imageBuffer, detectedCaps, &capCount, hasOccludedY, occludedY_mm);
+  serviceMegaLinkDuringStream(linkFlags);
+  return true;
+}
+
+BatchExecResult runClosedLoopSortSession() {
+  retryZoneCount = 0;
+
+  // Scan #0: Unobstructed full-board scan while parked at (0, 0)
+  if (!captureAndSegmentBoard(false, 0.0f, nullptr)) {
+    return EXEC_COMPLETE;
+  }
+
+  CapTarget nextCap;
+  if (!selectNextCapClearanceAware(detectedCaps, detectedSafe, capCount, 0.0f, 0.0f, &nextCap)) {
+    return EXEC_COMPLETE;
+  }
+
+  for (uint16_t cycle = 0; cycle < MAX_SESSION_CYCLES; cycle++) {
+    if (!sendSingleTargetToMega(nextCap)) {
+      return megaFaulted ? EXEC_FAULT_HALT : EXEC_TIMEOUT;
+    }
+
+    CapTarget lastTarget = nextCap;
+    uint8_t binId = constrain(lastTarget.targetBinId, 1, 4);
+    float binX = BIN_X_MM[binId];
+    float binY = BIN_Y_MM[binId];
+
+    uint32_t cycleStartMs = millis();
+    MegaLinkFlags flags = { true, false, false, false, cycleStartMs };
+    bool scannedAtBin = false;
+    bool retryEvaluated = false;
+    bool hasCandidateNext = false;
+    CapTarget candidateNext;
+
+    while (!flags.gotAwaitNext) {
+      uint32_t now = millis();
+      if (now - flags.lastPingMs >= HEARTBEAT_INTERVAL_MS) {
+        Serial1.write(CMD_HEARTBEAT_PING);
+        flags.lastPingMs = now;
+      }
+      while (Serial1.available() > 0) {
+        uint8_t resp = (uint8_t)Serial1.read();
+        if (resp == CMD_SCAN_WINDOW_OPEN && !scannedAtBin) {
+          // Capture & stream fresh image in parallel with bin drop while heartbeating Mega!
+          scannedAtBin = true;
+          if (captureAndSegmentBoard(true, binY, &flags)) {
+            retryEvaluated = updateRetryState(&lastTarget, detectedCaps, capCount, true, binY);
+            hasCandidateNext = selectNextCapClearanceAware(
+              detectedCaps, detectedSafe, capCount, binX, binY, &candidateNext
+            );
+          }
+          if (flags.gotFault) return EXEC_FAULT_HALT;
+          if (flags.gotAwaitNext) break;
+        } else if (resp == CMD_CAP_PROGRESS) {
+          flags.gotProgress = true;
+          cycleStartMs = millis();
+        } else if (resp == CMD_AWAIT_NEXT) {
+          flags.gotAwaitNext = true;
+          break;
+        } else if (resp == CMD_RECOVERY_HALT || resp == CMD_HARD_FAULT || resp == CMD_STATUS_FAULT) {
+          megaFaulted = true;
+          return EXEC_FAULT_HALT;
+        }
+      }
+      if (!flags.gotAwaitNext && (millis() - cycleStartMs > MAX_SINGLE_CAP_MS)) {
+        megaFaulted = true;
+        return EXEC_TIMEOUT;
+      }
+      delay(5);
+    }
+
+    if (!scannedAtBin) {
+      if (captureAndSegmentBoard(true, binY, &flags)) {
+        retryEvaluated = updateRetryState(&lastTarget, detectedCaps, capCount, true, binY);
+        hasCandidateNext = selectNextCapClearanceAware(
+          detectedCaps, detectedSafe, capCount, binX, binY, &candidateNext
+        );
+      }
+      if (flags.gotFault) return EXEC_FAULT_HALT;
+    }
+
+    if (hasCandidateNext) {
+      nextCap = candidateNext;
+      continue;
+    }
+
+    // 0 graspable caps visible outside bridge occlusion band -> clear-FOV verification park
+    Serial1.write(CMD_PARK_FOR_SCAN);
+    Serial1.flush();
+    BatchExecResult parkRes = awaitMegaOpcodeWithHeartbeat(CMD_AWAIT_NEXT, MAX_SINGLE_CAP_MS);
+    if (parkRes != EXEC_COMPLETE) return parkRes;
+
+    MegaLinkFlags verifyFlags = { true, false, false, false, millis() };
+    if (captureAndSegmentBoard(false, 0.0f, &verifyFlags)) {
+      if (verifyFlags.gotFault) return EXEC_FAULT_HALT;
+      if (!retryEvaluated) {
+        updateRetryState(&lastTarget, detectedCaps, capCount, false, 0.0f);
+      }
+      if (selectNextCapClearanceAware(detectedCaps, detectedSafe, capCount, 0.0f, 0.0f, &nextCap)) {
+        continue;
+      }
+    } else if (verifyFlags.gotFault) {
+      return EXEC_FAULT_HALT;
+    }
+
+    // Verified empty -> finish cleanly and return Mega to STATE_IDLE
+    Serial1.write(CMD_FINISH_SESSION);
+    Serial1.flush();
+    return awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
+  }
+
+  Serial1.write(CMD_FINISH_SESSION);
+  Serial1.flush();
+  return awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
 }
 
 void setup() {
@@ -530,29 +986,18 @@ void loop() {
     return;
   }
 
-  // Confirm Mega is READY & parked at (0,0) before triggering camera capture
+  // Confirm Mega is READY & parked at (0,0) before triggering Scan #0
   if (!waitForMegaReady(2000)) {
     delay(500);
     return;
   }
 
-  while (Serial2.available() > 0) Serial2.read();
-  Serial2.write(CMD_CAPTURE_FRAME);
+  digitalWrite(LED_BUILTIN, HIGH);
+  BatchExecResult res = runClosedLoopSortSession();
+  digitalWrite(LED_BUILTIN, LOW);
 
-  if (receiveFrame(imageBuffer, FRAME_BYTES)) {
-    digitalWrite(LED_BUILTIN, HIGH);
-    segmentCapsHSV(imageBuffer, detectedCaps, &capCount);
-
-    if (capCount > 0) {
-      optimizeSortingPath(detectedCaps, capCount);
-      if (sendPlanBatchToMega(detectedCaps, capCount)) {
-        BatchExecResult res = superviseMegaExecutionWithHeartbeat(capCount);
-        if (res != EXEC_COMPLETE) {
-          Serial.println(F("[TEENSY] Halting cycle until Mega is re-armed and READY."));
-        }
-      }
-    }
-    digitalWrite(LED_BUILTIN, LOW);
+  if (res != EXEC_COMPLETE) {
+    Serial.println(F("[TEENSY] Halting closed-loop session until Mega is re-armed and READY."));
   }
   delay(500);
 }

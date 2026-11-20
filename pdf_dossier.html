@@ -1254,19 +1254,19 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
           </tr>
           <tr>
             <td class="font-mono" style="font-weight: bold; color: #ff9142;">05</td>
-            <td><strong>Travel to Bin</strong></td>
-            <td>Rapid linear traverse to assigned bin slot</td>
+            <td><strong>Travel to Bin &amp; Scan Trigger</strong></td>
+            <td>Traverse to bin (X=355 mm); 120 ms settle emits <code>CMD_SCAN_WINDOW_OPEN</code></td>
             <td>Raised (0 mm)</td>
             <td>Closed (Grip)</td>
-            <td>No Z travel during XY traverse</td>
+            <td>Triggers pipelined bin-side re-imaging</td>
           </tr>
           <tr>
             <td class="font-mono" style="font-weight: bold; color: #ff9142;">06</td>
             <td><strong>Lower into Bin</strong></td>
-            <td>Stationary over bin opening</td>
+            <td>Stationary over bin (Teensy streams &amp; analyses fresh frame in parallel)</td>
             <td><span class="badge badge-orange">Lower (~25 mm)</span></td>
             <td>Closed (Grip)</td>
-            <td>Prevents cap bounce/ejection</td>
+            <td>Prevents cap bounce; 250 ms heartbeats active</td>
           </tr>
           <tr>
             <td class="font-mono" style="font-weight: bold; color: #ff9142;">07</td>
@@ -1278,11 +1278,11 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
           </tr>
           <tr>
             <td class="font-mono" style="font-weight: bold; color: #ff9142;">08</td>
-            <td><strong>Retract & Advance</strong></td>
-            <td>Advance to next target or Home Park</td>
+            <td><strong>Retract &amp; Handover</strong></td>
+            <td>Stays at bin (<code>CMD_AWAIT_NEXT</code>) ⟶ next fresh cap or Clear-FOV verify park</td>
             <td><span class="badge badge-emerald">Raise (0 mm)</span></td>
             <td>Open (36 mm)</td>
-            <td>Increment completed counter</td>
+            <td>Re-acquires bumped caps &amp; guards stuck retries</td>
           </tr>
         </tbody>
       </table>

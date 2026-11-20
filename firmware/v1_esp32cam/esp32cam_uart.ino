@@ -95,6 +95,11 @@ void loop() {
   if (TeensySerial.available() > 0) {
     uint8_t cmd = (uint8_t)TeensySerial.read();
     if (cmd == CMD_CAPTURE_FRAME) {
+      // Flush 1 buffered frame (fb_count=2) so bin-side scans never return a stale
+      // exposure captured while the gantry carriage was still crossing the board.
+      camera_fb_t *staleFb = esp_camera_fb_get();
+      if (staleFb) esp_camera_fb_return(staleFb);
+
       camera_fb_t *fb = esp_camera_fb_get();
       if (fb) {
         uint32_t frameLen = (uint32_t)fb->len; // Expected 153,600 bytes (32-bit length)

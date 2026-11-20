@@ -156,6 +156,8 @@ def save_validated_calibration(
     lens_model: str,
     image_size: tuple,
     reprojection_error_px: float,
+    camera_height_mm: float = 0.0,
+    cap_height_mm: float = 13.0,
 ):
     if camera_type not in VALID_CAMERA_TYPES:
         raise ValueError(f"Unsupported camera_type '{camera_type}'")
@@ -176,12 +178,15 @@ def save_validated_calibration(
         lens_model=np.array(lens_model),
         image_size=np.array([int(image_size[0]), int(image_size[1])], dtype=np.int32),
         reprojection_error_px=np.array(float(reprojection_error_px), dtype=np.float64),
+        camera_height_mm=np.array(float(camera_height_mm), dtype=np.float64),
+        cap_height_mm=np.array(float(cap_height_mm), dtype=np.float64),
         calibrated=np.array(True, dtype=bool),
         calibrated_utc=np.array(timestamp),
     )
     print(
         f"[OK] Saved validated calibration ({camera_type}, {lens_model}, "
-        f"{image_size[0]}x{image_size[1]}, RMS={reprojection_error_px:.4f} px) -> {out_path}"
+        f"{image_size[0]}x{image_size[1]}, RMS={reprojection_error_px:.4f} px, "
+        f"H_cam={camera_height_mm:.1f} mm, h_cap={cap_height_mm:.1f} mm) -> {out_path}"
     )
 
 
@@ -250,6 +255,14 @@ def main():
         help="Maximum allowed RMS reprojection error in pixels (default: 1.0)",
     )
     parser.add_argument(
+        "--camera-height-mm", type=float, default=0.0,
+        help="Measured overhead camera lens height above board plane in mm for radial parallax correction (0 disables)",
+    )
+    parser.add_argument(
+        "--cap-height-mm", type=float, default=13.0,
+        help="Nominal bottle-cap height in mm used with --camera-height-mm parallax compensation (default: 13.0)",
+    )
+    parser.add_argument(
         "--out",
         help="Output .npz path (defaults to calibration_csi_imx219.npz or calibration_usb.npz)",
     )
@@ -288,6 +301,8 @@ def main():
         lens_model=args.lens_model,
         image_size=image_size,
         reprojection_error_px=rms,
+        camera_height_mm=args.camera_height_mm,
+        cap_height_mm=args.cap_height_mm,
     )
 
 

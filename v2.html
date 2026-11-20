@@ -426,8 +426,8 @@
               <canvas id="simulation-canvas" width="580" height="500" class="w-full h-full block cursor-crosshair"></canvas>
             </div>
             <div class="flex items-center justify-between w-full max-w-[580px] mt-3 text-xs text-slate-400 font-mono">
-              <span>Click grid to place cap</span>
-              <span class="text-cyan-400">Pi Zero 2 W OpenCV (640×480) • 10×10 Grid • 4 Bins</span>
+              <span>Click anywhere on board (Shift = snap)</span>
+              <span class="text-cyan-400">Pi Zero 2 W OpenCV (640×480) • Continuous 300×300 mm • Bin-Side Re-Imaging</span>
             </div>
           </div>
 
@@ -470,16 +470,24 @@
                   <button id="btn-preset-scatter" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
                     Scatter 8 Caps
                   </button>
-                  <button id="btn-reset-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
-                    Reset Defaults
+                  <button id="btn-preset-cluster" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-medium border border-cyan-500/35 transition-all">
+                    Tight Cluster
                   </button>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
+                  <button id="btn-toggle-bump" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-mono border border-amber-500/40 transition-all">
+                    Bump Physics: ON
+                  </button>
                   <button id="btn-sim-speed" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-mono border border-slate-700 transition-all">
                     Speed: 1x
                   </button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button id="btn-reset-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
+                    Reset Defaults
+                  </button>
                   <button id="btn-clear-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-medium border border-slate-700 transition-all">
-                    Clear Grid
+                    Clear Board
                   </button>
                 </div>
               </div>
@@ -527,9 +535,17 @@
                   <span class="text-slate-400">Pending Caps:</span>
                   <span id="telemetry-pending-count" class="text-amber-400 font-bold">6</span>
                 </div>
-                <div class="flex justify-between py-1">
+                <div class="flex justify-between py-1 border-b border-white/5">
                   <span class="text-slate-400">Sorted to Bins:</span>
                   <span id="telemetry-sorted-count" class="text-emerald-400 font-bold">0</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Camera Re-Scans:</span>
+                  <span id="telemetry-scan-count" class="text-cyan-400 font-bold">0</span>
+                </div>
+                <div class="flex justify-between py-1">
+                  <span class="text-slate-400">Bumps Re-Acquired:</span>
+                  <span id="telemetry-shift-count" class="text-amber-300 font-bold">0</span>
                 </div>
               </div>
             </div>
@@ -1926,19 +1942,19 @@
               </tr>
               <tr>
                 <td class="font-bold font-mono text-cyan-400">05</td>
-                <td class="font-semibold text-white">Travel to Bin</td>
-                <td>Rapid traverse to designated bin slot</td>
+                <td class="font-semibold text-white">Travel to Bin &amp; Scan Trigger</td>
+                <td>Rapid traverse to bin (X=355 mm); 120 ms stationary settle emits <code class="text-cyan-300">CMD_SCAN_WINDOW_OPEN</code></td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">Raised (0mm)</span></td>
                 <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/25">Closed</span></td>
-                <td>No Z travel while moving in XY</td>
+                <td>Vibration-free bin-side capture overlaps Steps 06–08</td>
               </tr>
               <tr>
                 <td class="font-bold font-mono text-cyan-400">06</td>
                 <td class="font-semibold text-white">Lower into Bin</td>
-                <td>Stationary over bin opening</td>
+                <td>Stationary over bin (Pi captures &amp; runs OpenCV + Watershed in ~45 ms in parallel)</td>
                 <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">Lower (~25mm)</span></td>
                 <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/25">Closed</span></td>
-                <td>Prevents cap bounce/ejection</td>
+                <td>Prevents cap bounce; bridge occlusion strip masked at BIN_Y</td>
               </tr>
               <tr>
                 <td class="font-bold font-mono text-cyan-400">07</td>
@@ -1950,11 +1966,11 @@
               </tr>
               <tr>
                 <td class="font-bold font-mono text-cyan-400">08</td>
-                <td class="font-semibold text-white">Retract &amp; Advance</td>
-                <td>Stationary ⟶ Advance to next cap</td>
+                <td class="font-semibold text-white">Retract &amp; Closed-Loop Handover</td>
+                <td>Stays at bin (<code class="text-cyan-300">CMD_AWAIT_NEXT</code>) ⟶ Next fresh cap, or Clear-FOV park at (0,0)</td>
                 <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Raise (0mm)</span></td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">Open (Ready)</span></td>
-                <td>Mega sends ACK to Pi Zero 2 W</td>
+                <td>Unobstructed verify scan confirms empty before <code class="text-emerald-300">STATE_IDLE</code></td>
               </tr>
             </tbody>
           </table>
@@ -2041,10 +2057,10 @@
         <div id="code-pizero" class="code-block p-5 bg-[#0b0e14] overflow-x-auto max-h-[520px]">
           <pre><code class="text-slate-200">#!/usr/bin/env python3
 # =========================================================================
-# Raspberry Pi Zero 2 W - Autonomous CapSorter Vision &amp; Plan Generator (V2)
+# Raspberry Pi Zero 2 W - Autonomous CapSorter Vision &amp; Closed-Loop Planner (V2)
 # Status: Pre-Validation Engineering Firmware (requires bench calibration)
 # Hardware: Quad-Core Cortex-A53 @ 1 GHz | 512 MB RAM | 16 GB microSD
-# Camera:   8MP Sony IMX219 160-deg CSI Camera (or separately calibrated USB Webcam)
+# Camera:   8MP Sony IMX219 160-deg CSI Camera (top-center, looking straight down)
 # Link:     UART0 (/dev/serial0 @ 115200 baud) &lt;-&gt; 3.3V/5V Shifter &lt;-&gt; Mega Serial1
 # =========================================================================
 import argparse
@@ -2069,34 +2085,60 @@ except ImportError:
     HAS_PICAMERA2 = False
 
 # Protocol Constants (must match firmware/common/packet_protocol.h identically)
-MAX_BATCH_CAPS      = 100
-PROTOCOL_MAGIC_BYTE = 0x5A
-CMD_BATCH_ACK       = 0xA1
-CMD_BATCH_NACK      = 0xA2
-CMD_BATCH_COMPLETE  = 0xA3
-CMD_CAP_PROGRESS    = 0xA4
-CMD_QUERY_STATUS    = 0xB0
-CMD_STATUS_READY    = 0xB1
-CMD_STATUS_BUSY     = 0xB2
-CMD_STATUS_FAULT    = 0xB3
-CMD_REARM_HOME      = 0xB4
-CMD_HEARTBEAT_PING  = 0xF0
-CMD_RECOVERY_HALT   = 0xEE
-CMD_HARD_FAULT      = 0xEF
+MAX_BATCH_CAPS        = 100
+PROTOCOL_MAGIC_BYTE   = 0x5A
+PROTOCOL_SINGLE_MAGIC = 0x5B
+CMD_BATCH_ACK         = 0xA1
+CMD_BATCH_NACK        = 0xA2
+CMD_BATCH_COMPLETE    = 0xA3
+CMD_CAP_PROGRESS      = 0xA4
+CMD_SCAN_WINDOW_OPEN  = 0xA5
+CMD_AWAIT_NEXT        = 0xA6
+CMD_QUERY_STATUS      = 0xB0
+CMD_STATUS_READY      = 0xB1
+CMD_STATUS_BUSY       = 0xB2
+CMD_STATUS_FAULT      = 0xB3
+CMD_REARM_HOME        = 0xB4
+CMD_PARK_FOR_SCAN     = 0xB5
+CMD_FINISH_SESSION    = 0xB6
+CMD_HEARTBEAT_PING    = 0xF0
+CMD_RECOVERY_HALT     = 0xEE
+CMD_HARD_FAULT        = 0xEF
 
 COLOR_RED, COLOR_YELLOW, COLOR_GREEN, COLOR_BLUE = 1, 2, 3, 4
-MIN_CAP_SEPARATION_MM = 24.0  # Physical caps are 28-32 mm diameter; prevents duplicate picks
+
+# Continuous 300x300 mm Open Flat Plywood Workspace &amp; Gripper Geometry (verify on bench)
+BOARD_SIZE_MM             = 300.0
+CAP_RADIUS_MM             = 15.0   # Nominal beverage cap radius (28-32 mm diameter)
+MIN_CAP_SEPARATION_MM     = 22.0   # Distinguishes touching 28 mm caps while merging split blobs
+SAFE_PICK_MIN_X_MM        = 18.0   # Keeps cap rim on plate &amp; carriage clear of X-home switch
+SAFE_PICK_MAX_X_MM        = 282.0
+SAFE_PICK_MIN_Y_MM        = 18.0   # Keeps cap rim on plate &amp; carriage clear of Y-home switch
+SAFE_PICK_MAX_Y_MM        = 282.0
+
+# Parallel Gripper Jaw Footprint (jaws open along X-axis; configurable to "Y")
+GRIPPER_JAW_AXIS          = "X"
+JAW_INNER_HALF_MM         = 18.0   # Open jaw inner gap = 36 mm (+/-18 mm from center)
+JAW_OUTER_HALF_MM         = 26.0   # Outer jaw finger face reaches +/-26 mm along jaw axis
+JAW_WIDTH_HALF_MM         = 10.0   # Finger pad half-width perpendicular to jaw axis
+JAW_CLEARANCE_PAD_MM      = 1.5    # Extra safety margin around neighboring cap rims
+
+# Overhead Camera Bridge Occlusion &amp; Closed-Loop Retry Protection
+BRIDGE_OCCLUSION_HALF_MM  = 35.0   # Masked horizontal Y strip when bridge sits at BIN_Y (0 disables)
+MISSED_PICK_RADIUS_MM     = 14.0   # Same-color cap still within 14 mm after pick =&gt; missed attempt
+MAX_PICK_RETRIES          = 3      # Quarantine stuck/ungraspable cap zone after 3 failed attempts
+MAX_SESSION_CYCLES        = 200    # Hard safety bound on closed-loop pick cycles per session
 
 # Supervision Timeouts (dynamic batch ceiling + per-cap stall timer)
 HEARTBEAT_INTERVAL_S  = 0.25
 READY_POLL_INTERVAL_S = 0.5
-MAX_SINGLE_CAP_S      = 25.0  # Reset whenever Mega emits CMD_CAP_PROGRESS
+MAX_SINGLE_CAP_S      = 25.0  # Reset whenever Mega emits CMD_CAP_PROGRESS / CMD_AWAIT_NEXT
 PER_CAP_BUDGET_S      = 18.0  # Worst-case cap cycle + margin
 BATCH_OVERHEAD_S      = 30.0  # Parking &amp; handshake margin
 
 DEFAULT_CALIB_PATHS = {
-    &quot;picamera2_imx219&quot;: &quot;/home/pi/capsorter/calibration_csi_imx219.npz&quot;,
-    &quot;usb_v4l2&quot;:         &quot;/home/pi/capsorter/calibration_usb.npz&quot;,
+    "picamera2_imx219": "/home/pi/capsorter/calibration_csi_imx219.npz",
+    "usb_v4l2":         "/home/pi/capsorter/calibration_usb.npz",
 }
 
 # Bin Coordinates (mm) outside 300x300 mm sorting board
@@ -2117,7 +2159,7 @@ HSV_RANGES = {
 
 
 class CalibrationError(RuntimeError):
-    &quot;&quot;&quot;Raised when camera calibration is missing, malformed, unverified, or mismatched.&quot;&quot;&quot;
+    """Raised when camera calibration is missing, malformed, unverified, or mismatched."""
 
 
 def crc16_ccitt(data: bytes) -&gt; int:
@@ -2134,104 +2176,135 @@ def load_and_validate_calibration(
     expected_camera_type: str,
     expected_size: tuple,
 ) -&gt; dict:
-    &quot;&quot;&quot;
+    """
     Fail-closed calibration loader. Refuses missing files, uncalibrated placeholders,
     mismatched camera types (e.g. CSI calibration on USB webcam), resolution mismatches,
     or malformed/non-finite matrices.
-    &quot;&quot;&quot;
+    """
     if not calib_file or not os.path.isfile(calib_file):
         raise CalibrationError(
-            f&quot;Calibration file not found: &#x27;{calib_file}&#x27;. &quot;
-            f&quot;Run fisheye_calibrate.py for camera_type=&#x27;{expected_camera_type}&#x27; before enabling motion.&quot;
+            f"Calibration file not found: '{calib_file}'. "
+            f"Run fisheye_calibrate.py for camera_type='{expected_camera_type}' before enabling motion."
         )
 
     try:
         cal = np.load(calib_file, allow_pickle=False)
     except Exception as exc:
-        raise CalibrationError(f&quot;Failed to read calibration archive &#x27;{calib_file}&#x27;: {exc}&quot;) from exc
+        raise CalibrationError(f"Failed to read calibration archive '{calib_file}': {exc}") from exc
 
-    required = (&quot;K&quot;, &quot;D&quot;, &quot;H&quot;, &quot;camera_type&quot;, &quot;lens_model&quot;, &quot;image_size&quot;, &quot;calibrated&quot;)
+    required = ("K", "D", "H", "camera_type", "lens_model", "image_size", "calibrated")
     missing = [k for k in required if k not in cal.files]
     if missing:
         raise CalibrationError(
-            f&quot;Calibration file &#x27;{calib_file}&#x27; is missing required keys {missing}. &quot;
-            &quot;Re-generate with fisheye_calibrate.py.&quot;
+            f"Calibration file '{calib_file}' is missing required keys {missing}. "
+            "Re-generate with fisheye_calibrate.py."
         )
 
-    is_calibrated = bool(np.asarray(cal[&quot;calibrated&quot;]).item())
+    is_calibrated = bool(np.asarray(cal["calibrated"]).item())
     if not is_calibrated:
         raise CalibrationError(
-            f&quot;Calibration file &#x27;{calib_file}&#x27; is marked uncalibrated (calibrated=False). &quot;
-            &quot;Motion inhibited until real checkerboard + fiducial calibration is completed.&quot;
+            f"Calibration file '{calib_file}' is marked uncalibrated (calibrated=False). "
+            "Motion inhibited until real checkerboard + fiducial calibration is completed."
         )
 
-    cal_camera_type = str(np.asarray(cal[&quot;camera_type&quot;]).item())
+    cal_camera_type = str(np.asarray(cal["camera_type"]).item())
     if cal_camera_type != expected_camera_type:
         raise CalibrationError(
-            f&quot;Calibration camera_type mismatch: file has &#x27;{cal_camera_type}&#x27;, &quot;
-            f&quot;but active camera is &#x27;{expected_camera_type}&#x27;. Use a calibration file &quot;
-            &quot;captured on this exact camera and lens.&quot;
+            f"Calibration camera_type mismatch: file has '{cal_camera_type}', "
+            f"but active camera is '{expected_camera_type}'. Use a calibration file "
+            "captured on this exact camera and lens."
         )
 
-    lens_model = str(np.asarray(cal[&quot;lens_model&quot;]).item())
-    if lens_model not in (&quot;fisheye&quot;, &quot;pinhole&quot;):
-        raise CalibrationError(f&quot;Unsupported lens_model &#x27;{lens_model}&#x27; in &#x27;{calib_file}&#x27;.&quot;)
+    lens_model = str(np.asarray(cal["lens_model"]).item())
+    if lens_model not in ("fisheye", "pinhole"):
+        raise CalibrationError(f"Unsupported lens_model '{lens_model}' in '{calib_file}'.")
 
-    cal_size = tuple(int(v) for v in np.asarray(cal[&quot;image_size&quot;]).reshape(-1))
+    cal_size = tuple(int(v) for v in np.asarray(cal["image_size"]).reshape(-1))
     if cal_size != tuple(expected_size):
         raise CalibrationError(
-            f&quot;Calibration image_size {cal_size} does not match configured capture size {tuple(expected_size)}.&quot;
+            f"Calibration image_size {cal_size} does not match configured capture size {tuple(expected_size)}."
         )
 
     try:
-        K = np.asarray(cal[&quot;K&quot;], dtype=np.float64).reshape((3, 3))
-        H = np.asarray(cal[&quot;H&quot;], dtype=np.float64).reshape((3, 3))
-        D = np.asarray(cal[&quot;D&quot;], dtype=np.float64).reshape((-1, 1))
+        K = np.asarray(cal["K"], dtype=np.float64).reshape((3, 3))
+        H = np.asarray(cal["H"], dtype=np.float64).reshape((3, 3))
+        D = np.asarray(cal["D"], dtype=np.float64).reshape((-1, 1))
     except ValueError as exc:
-        raise CalibrationError(f&quot;Invalid matrix dimensions in &#x27;{calib_file}&#x27;: {exc}&quot;) from exc
+        raise CalibrationError(f"Invalid matrix dimensions in '{calib_file}': {exc}") from exc
 
-    if lens_model == &quot;fisheye&quot; and D.shape != (4, 1):
-        raise CalibrationError(f&quot;Fisheye distortion vector D must have shape (4, 1), got {D.shape}.&quot;)
-    if lens_model == &quot;pinhole&quot; and D.shape[0] &lt; 4:
-        raise CalibrationError(f&quot;Pinhole distortion vector D must have &gt;=4 coefficients, got {D.shape}.&quot;)
+    if lens_model == "fisheye" and D.shape != (4, 1):
+        raise CalibrationError(f"Fisheye distortion vector D must have shape (4, 1), got {D.shape}.")
+    if lens_model == "pinhole" and D.shape[0] &lt; 4:
+        raise CalibrationError(f"Pinhole distortion vector D must have &gt;=4 coefficients, got {D.shape}.")
 
     if not (np.all(np.isfinite(K)) and np.all(np.isfinite(D)) and np.all(np.isfinite(H))):
-        raise CalibrationError(f&quot;Calibration matrices in &#x27;{calib_file}&#x27; contain NaN or Inf values.&quot;)
+        raise CalibrationError(f"Calibration matrices in '{calib_file}' contain NaN or Inf values.")
     if abs(np.linalg.det(H)) &lt; 1e-12:
-        raise CalibrationError(f&quot;Homography matrix H in &#x27;{calib_file}&#x27; is singular.&quot;)
+        raise CalibrationError(f"Homography matrix H in '{calib_file}' is singular.")
+
+    camera_height_mm = (
+        float(np.asarray(cal["camera_height_mm"]).item())
+        if "camera_height_mm" in cal.files else 0.0
+    )
+    cap_height_mm = (
+        float(np.asarray(cal["cap_height_mm"]).item())
+        if "cap_height_mm" in cal.files else 13.0
+    )
+    if not (math.isfinite(camera_height_mm) and math.isfinite(cap_height_mm)):
+        raise CalibrationError(f"Non-finite parallax heights in '{calib_file}'.")
 
     return {
-        &quot;K&quot;: K,
-        &quot;D&quot;: D,
-        &quot;H&quot;: H,
-        &quot;camera_type&quot;: cal_camera_type,
-        &quot;lens_model&quot;: lens_model,
-        &quot;image_size&quot;: cal_size,
+        "K": K,
+        "D": D,
+        "H": H,
+        "camera_type": cal_camera_type,
+        "lens_model": lens_model,
+        "image_size": cal_size,
+        "camera_height_mm": camera_height_mm,
+        "cap_height_mm": cap_height_mm,
     }
+
+
+def _circle_intersects_rect(cx: float, cy: float, radius: float, x0: float, y0: float, x1: float, y1: float) -&gt; bool:
+    """Exact 2D circle vs axis-aligned rectangle intersection check."""
+    nearest_x = min(max(cx, x0), x1)
+    nearest_y = min(max(cy, y0), y1)
+    dx = cx - nearest_x
+    dy = cy - nearest_y
+    return (dx * dx + dy * dy) &lt; (radius * radius)
 
 
 class PiZeroVisionController:
     def __init__(
         self,
         calib_file: str = None,
-        serial_port: str = &quot;/dev/serial0&quot;,
+        serial_port: str = "/dev/serial0",
         camera_type: str = None,
         width: int = 640,
         height: int = 480,
         init_hardware: bool = True,
+        bridge_occlusion_half_mm: float = BRIDGE_OCCLUSION_HALF_MM,
+        jaw_axis: str = GRIPPER_JAW_AXIS,
+        camera_height_mm: float = None,
+        cap_height_mm: float = None,
     ):
         self.width = int(width)
         self.height = int(height)
         self.batch_id = 1
+        self.bridge_occlusion_half_mm = max(0.0, float(bridge_occlusion_half_mm))
+        self.jaw_axis = str(jaw_axis).upper()
+        if self.jaw_axis not in ("X", "Y"):
+            raise ValueError(f"Unsupported jaw_axis '{jaw_axis}'; expected 'X' or 'Y'")
+
         self.kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        self.kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        self.kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 
         # Resolve active camera type explicitly before loading calibration
         if camera_type is None:
-            self.camera_type = &quot;picamera2_imx219&quot; if HAS_PICAMERA2 else &quot;usb_v4l2&quot;
+            self.camera_type = "picamera2_imx219" if HAS_PICAMERA2 else "usb_v4l2"
         else:
             if camera_type not in DEFAULT_CALIB_PATHS:
-                raise ValueError(f&quot;Unsupported camera_type &#x27;{camera_type}&#x27;&quot;)
+                raise ValueError(f"Unsupported camera_type '{camera_type}'")
             self.camera_type = camera_type
 
         resolved_calib = calib_file or DEFAULT_CALIB_PATHS[self.camera_type]
@@ -2242,13 +2315,25 @@ class PiZeroVisionController:
             expected_camera_type=self.camera_type,
             expected_size=(self.width, self.height),
         )
-        self.K = cal[&quot;K&quot;]
-        self.D = cal[&quot;D&quot;]
-        self.H = cal[&quot;H&quot;]
-        self.lens_model = cal[&quot;lens_model&quot;]
+        self.K = cal["K"]
+        self.D = cal["D"]
+        self.H = cal["H"]
+        self.H_inv = np.linalg.inv(self.H)
+        self.lens_model = cal["lens_model"]
+        self.camera_height_mm = (
+            float(camera_height_mm) if camera_height_mm is not None else cal["camera_height_mm"]
+        )
+        self.cap_height_mm = (
+            float(cap_height_mm) if cap_height_mm is not None else cal["cap_height_mm"]
+        )
 
-        # Precompute undistortion lookup maps using the validated camera&#x27;s lens model
-        if self.lens_model == &quot;fisheye&quot;:
+        # Derive scale (px/mm) and camera optical center on the board for parallax &amp; Watershed splitting
+        self.px_per_mm = self._estimate_px_per_mm()
+        self.expected_cap_radius_px = CAP_RADIUS_MM * self.px_per_mm
+        self.cam_center_board_mm = self._estimate_optical_center_board_mm()
+
+        # Precompute undistortion lookup maps using the validated camera's lens model
+        if self.lens_model == "fisheye":
             self.map1, self.map2 = cv2.fisheye.initUndistortRectifyMap(
                 self.K, self.D, np.eye(3, dtype=np.float64), self.K,
                 (self.width, self.height), cv2.CV_16SC2,
@@ -2266,143 +2351,426 @@ class PiZeroVisionController:
         if init_hardware:
             if HAS_PYSERIAL:
                 self.uart = serial.Serial(serial_port, baudrate=115200, timeout=0.5)
-            if self.camera_type == &quot;picamera2_imx219&quot;:
+            if self.camera_type == "picamera2_imx219":
                 if not HAS_PICAMERA2:
-                    raise RuntimeError(&quot;picamera2_imx219 requested, but Picamera2 is not installed.&quot;)
+                    raise RuntimeError("picamera2_imx219 requested, but Picamera2 is not installed.")
                 self.picam2 = Picamera2()
-                # raw={&quot;size&quot;: (1640, 1232)} forces full-sensor 2x2 binning on IMX219 before
+                # raw={"size": (1640, 1232)} forces full-sensor 2x2 binning on IMX219 before
                 # ISP downscaling to 640x480, preserving wide FOV.
-                # In Picamera2/DRM naming, &quot;RGB888&quot; outputs 24-bit [B, G, R] matching OpenCV BGR.
+                # In Picamera2/DRM naming, "RGB888" outputs 24-bit [B, G, R] matching OpenCV BGR.
                 cfg = self.picam2.create_still_configuration(
-                    main={&quot;size&quot;: (self.width, self.height), &quot;format&quot;: &quot;RGB888&quot;},
-                    raw={&quot;size&quot;: (1640, 1232)},
+                    main={"size": (self.width, self.height), "format": "RGB888"},
+                    raw={"size": (1640, 1232)},
                 )
                 self.picam2.configure(cfg)
                 self.picam2.start()
                 time.sleep(0.8)  # Warm up sensor under diffused LED light plate
-                self.picam2.set_controls({&quot;AeEnable&quot;: False, &quot;AwbEnable&quot;: False})
+                self.picam2.set_controls({"AeEnable": False, "AwbEnable": False})
             else:
                 self.usb_cam = cv2.VideoCapture(0)
                 if not self.usb_cam.isOpened():
-                    raise RuntimeError(&quot;Failed to open USB camera device 0.&quot;)
+                    raise RuntimeError("Failed to open USB camera device 0.")
                 self.usb_cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 self.usb_cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
                 self.usb_cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+
+    def _estimate_px_per_mm(self) -&gt; float:
+        pts_mm = np.array([[[150.0, 150.0]], [[170.0, 150.0]], [[150.0, 170.0]]], dtype=np.float32)
+        uv = cv2.perspectiveTransform(pts_mm, self.H_inv).reshape(3, 2)
+        dx = float(np.linalg.norm(uv[1] - uv[0])) / 20.0
+        dy = float(np.linalg.norm(uv[2] - uv[0])) / 20.0
+        scale = 0.5 * (dx + dy)
+        return scale if (math.isfinite(scale) and scale &gt; 0.2) else 1.5
+
+    def _estimate_optical_center_board_mm(self) -&gt; tuple:
+        cx_px, cy_px = float(self.K[0, 2]), float(self.K[1, 2])
+        pt = np.array([[[cx_px, cy_px]]], dtype=np.float32)
+        mapped = cv2.perspectiveTransform(pt, self.H)[0][0]
+        bx, by = float(mapped[0]), float(mapped[1])
+        if math.isfinite(bx) and math.isfinite(by) and -50.0 &lt;= bx &lt;= 350.0 and -50.0 &lt;= by &lt;= 350.0:
+            return (bx, by)
+        return (BOARD_SIZE_MM * 0.5, BOARD_SIZE_MM * 0.5)
+
+    def apply_parallax_correction(self, x_mm: float, y_mm: float) -&gt; tuple:
+        """
+        Compensates outward radial parallax caused by cap height (h_cap ~ 13 mm)
+        relative to the Z=0 calibrated board plane when viewed from overhead H_cam.
+        Disabled automatically if camera_height_mm &lt;= cap_height_mm or &lt;= 0.
+        """
+        if self.camera_height_mm &gt; self.cap_height_mm &gt; 0.0:
+            scale = 1.0 - (self.cap_height_mm / self.camera_height_mm)
+            cx, cy = self.cam_center_board_mm
+            return (cx + (x_mm - cx) * scale, cy + (y_mm - cy) * scale)
+        return (x_mm, y_mm)
 
     def undistort_frame(self, raw_bgr: np.ndarray) -&gt; np.ndarray:
         return cv2.remap(raw_bgr, self.map1, self.map2, interpolation=cv2.INTER_LINEAR)
 
     def capture_rectified_frame(self) -&gt; np.ndarray:
         if self.picam2 is not None:
-            raw = self.picam2.capture_array(&quot;main&quot;)
+            raw = self.picam2.capture_array("main")
         elif self.usb_cam is not None:
             for _ in range(4):
                 self.usb_cam.grab()
             ok, raw = self.usb_cam.read()
             if not ok:
-                raise RuntimeError(&quot;USB camera frame acquisition failed&quot;)
+                raise RuntimeError("USB camera frame acquisition failed")
         else:
-            raise RuntimeError(&quot;No active camera hardware initialized&quot;)
+            raise RuntimeError("No active camera hardware initialized")
         if raw.shape[1] != self.width or raw.shape[0] != self.height:
             raise CalibrationError(
-                f&quot;Captured frame size {(raw.shape[1], raw.shape[0])} does not match &quot;
-                f&quot;calibrated resolution {(self.width, self.height)}.&quot;
+                f"Captured frame size {(raw.shape[1], raw.shape[0])} does not match "
+                f"calibrated resolution {(self.width, self.height)}."
             )
         return self.undistort_frame(raw)
 
+    def _split_touching_cap_contour(self, cnt: np.ndarray, binary_mask: np.ndarray) -&gt; list:
+        """
+        Separates merged contours of 2+ touching same-color caps (pairs, triangles,
+        grids) using Euclidean distance transform + local peak extraction while
+        preserving interior plywood gaps between touching caps.
+        """
+        x, y, w, h = cv2.boundingRect(cnt)
+        pad = 2
+        contour_roi = np.zeros((h + 2 * pad, w + 2 * pad), dtype=np.uint8)
+        shifted = cnt - np.array([[[x - pad, y - pad]]], dtype=cnt.dtype)
+        cv2.drawContours(contour_roi, [shifted], -1, 255, cv2.FILLED)
+
+        # Intersect with actual binary_mask so interior gaps (e.g. center of 3 touching caps) remain 0
+        roi = np.zeros_like(contour_roi)
+        roi[pad:pad + h, pad:pad + w] = binary_mask[y:y + h, x:x + w]
+        roi = cv2.bitwise_and(roi, contour_roi)
+
+        dist = cv2.distanceTransform(roi, cv2.DIST_L2, 5)
+        dist_smooth = cv2.GaussianBlur(dist, (5, 5), 1.0)
+
+        min_peak_val = max(4.0, 0.45 * self.expected_cap_radius_px)
+        k_size = max(5, int(round(self.expected_cap_radius_px * 0.55)) | 1)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_size, k_size))
+        dilated = cv2.dilate(dist_smooth, kernel)
+
+        peak_mask = ((dist_smooth &gt;= dilated - 1e-4) &amp; (dist &gt;= min_peak_val)).astype(np.uint8)
+        num_labels, _, _, centroids = cv2.connectedComponentsWithStats(peak_mask)
+
+        peaks = []
+        for lbl in range(1, num_labels):
+            px, py = float(centroids[lbl][0]), float(centroids[lbl][1])
+            ix = min(max(int(round(px)), 0), dist.shape[1] - 1)
+            iy = min(max(int(round(py)), 0), dist.shape[0] - 1)
+            r_val = float(dist[iy, ix])
+            if r_val &gt;= min_peak_val:
+                peaks.append((px + x - pad, py + y - pad, r_val))
+
+        # Suppress secondary sub-peaks closer than 1.25 * expected_cap_radius_px
+        peaks.sort(key=lambda p: p[2], reverse=True)
+        min_sep_px = max(8.0, 1.25 * self.expected_cap_radius_px)
+        kept = []
+        for u, v, r_val in peaks:
+            if any(math.hypot(u - ku, v - kv) &lt; min_sep_px for ku, kv, _ in kept):
+                continue
+            kept.append((u, v, math.pi * r_val * r_val))
+        return kept
+
     def deduplicate_spatial_nms(self, candidates: list) -&gt; list:
-        sorted_cands = sorted(candidates, key=lambda c: c.get(&quot;_area&quot;, 0.0), reverse=True)
+        sorted_cands = sorted(candidates, key=lambda c: c.get("_area", 0.0), reverse=True)
         accepted = []
         for cand in sorted_cands:
             if any(
-                math.hypot(cand[&quot;boardX_mm&quot;] - a[&quot;boardX_mm&quot;],
-                           cand[&quot;boardY_mm&quot;] - a[&quot;boardY_mm&quot;]) &lt; MIN_CAP_SEPARATION_MM
+                math.hypot(cand["boardX_mm"] - a["boardX_mm"],
+                           cand["boardY_mm"] - a["boardY_mm"]) &lt; MIN_CAP_SEPARATION_MM
                 for a in accepted
             ):
                 continue
-            item = {k: v for k, v in cand.items() if k != &quot;_area&quot;}
-            item[&quot;capId&quot;] = len(accepted) + 1
+            item = {k: v for k, v in cand.items() if k != "_area"}
+            item["capId"] = len(accepted) + 1
             accepted.append(item)
         return accepted[:MAX_BATCH_CAPS]
 
-    def detect_caps(self, rectified_bgr: np.ndarray) -&gt; list:
+    def detect_caps(self, rectified_bgr: np.ndarray, occluded_y_mm: float = None) -&gt; list:
+        """
+        Detects bottle caps at arbitrary continuous (X, Y) coordinates on the 300x300 mm
+        board, splitting touching same-color clusters, compensating radial cap-height
+        parallax, masking the gantry bridge band during bin-side scans, and tagging
+        safe mechanical reachability (`in_safe_bounds`).
+        """
         hsv = cv2.cvtColor(rectified_bgr, cv2.COLOR_BGR2HSV)
         candidates = []
+
+        nominal_area = math.pi * (self.expected_cap_radius_px ** 2)
+        min_cap_area = max(350.0, 0.32 * nominal_area)
+        max_single_area = max(2400.0, 1.65 * nominal_area)
 
         for color_id, ranges in HSV_RANGES.items():
             mask = np.zeros((self.height, self.width), dtype=np.uint8)
             for lower, upper in ranges:
                 mask |= cv2.inRange(hsv, np.array(lower, dtype=np.uint8), np.array(upper, dtype=np.uint8))
 
-            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernel_open)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.kernel_close)
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            mask_opened = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernel_open)
+            mask_closed = cv2.morphologyEx(mask_opened, cv2.MORPH_CLOSE, self.kernel_close)
+            contours, _ = cv2.findContours(mask_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             for cnt in contours:
                 area = cv2.contourArea(cnt)
-                if not (500.0 &lt; area &lt; 6000.0):
+                if area &lt; min_cap_area:
                     continue
                 perim = cv2.arcLength(cnt, True)
                 circularity = (4.0 * math.pi * area) / (perim * perim + 1e-5)
-                if circularity &lt; 0.74:
-                    continue
 
-                M = cv2.moments(cnt)
-                if M[&quot;m00&quot;] == 0:
-                    continue
-                u = M[&quot;m10&quot;] / M[&quot;m00&quot;]
-                v = M[&quot;m01&quot;] / M[&quot;m00&quot;]
+                extracted = []
+                if area &lt;= max_single_area and circularity &gt;= 0.72:
+                    M = cv2.moments(cnt)
+                    if M["m00"] &gt; 0:
+                        extracted.append((M["m10"] / M["m00"], M["m01"] / M["m00"], area))
+                else:
+                    # Merged same-color cluster or distorted silhouette -&gt; distance-transform split
+                    extracted.extend(self._split_touching_cap_contour(cnt, mask_opened))
 
-                pt = np.array([[[u, v]]], dtype=np.float32)
-                board_pt = cv2.perspectiveTransform(pt, self.H)[0][0]
-                x_mm, y_mm = float(board_pt[0]), float(board_pt[1])
+                for u, v, est_area in extracted:
+                    pt = np.array([[[u, v]]], dtype=np.float32)
+                    board_pt = cv2.perspectiveTransform(pt, self.H)[0][0]
+                    x_mm, y_mm = self.apply_parallax_correction(float(board_pt[0]), float(board_pt[1]))
 
-                if 0.0 &lt;= x_mm &lt;= 300.0 and 0.0 &lt;= y_mm &lt;= 300.0:
+                    if not (0.0 &lt;= x_mm &lt;= BOARD_SIZE_MM and 0.0 &lt;= y_mm &lt;= BOARD_SIZE_MM):
+                        continue
+
+                    # Ignore detections inside horizontal gantry bridge occlusion strip at bin
+                    if (
+                        occluded_y_mm is not None
+                        and self.bridge_occlusion_half_mm &gt; 0.0
+                        and abs(y_mm - occluded_y_mm) &lt;= self.bridge_occlusion_half_mm
+                    ):
+                        continue
+
+                    in_safe = (
+                        SAFE_PICK_MIN_X_MM &lt;= x_mm &lt;= SAFE_PICK_MAX_X_MM
+                        and SAFE_PICK_MIN_Y_MM &lt;= y_mm &lt;= SAFE_PICK_MAX_Y_MM
+                    )
                     _, _, bin_id = BIN_COORDS[color_id]
                     candidates.append({
-                        &quot;capId&quot;: 0,
-                        &quot;color&quot;: color_id,
-                        &quot;pixelX&quot;: int(round(u)),
-                        &quot;pixelY&quot;: int(round(v)),
-                        &quot;boardX_mm&quot;: x_mm,
-                        &quot;boardY_mm&quot;: y_mm,
-                        &quot;targetBinId&quot;: bin_id,
-                        &quot;_area&quot;: area,
+                        "capId": 0,
+                        "color": color_id,
+                        "pixelX": int(round(u)),
+                        "pixelY": int(round(v)),
+                        "boardX_mm": x_mm,
+                        "boardY_mm": y_mm,
+                        "targetBinId": bin_id,
+                        "in_safe_bounds": in_safe,
+                        "_area": est_area,
                     })
         return self.deduplicate_spatial_nms(candidates)
 
+    def count_jaw_collisions(self, target_cap: dict, all_caps: list) -&gt; tuple:
+        """
+        Evaluates how many sides (0, 1, or 2) of the descending open parallel gripper
+        jaws collide with neighboring caps along `self.jaw_axis`.
+        Returns (blocked_sides, min_neighbor_dist_mm).
+        """
+        tx, ty = target_cap["boardX_mm"], target_cap["boardY_mm"]
+        r_check = CAP_RADIUS_MM + JAW_CLEARANCE_PAD_MM
+        neg_blocked = False
+        pos_blocked = False
+        min_dist = 1e9
+
+        for other in all_caps:
+            if other is target_cap:
+                continue
+            ox, oy = other["boardX_mm"], other["boardY_mm"]
+            d = math.hypot(ox - tx, oy - ty)
+            if d &lt; 1e-3:
+                continue
+            if d &lt; min_dist:
+                min_dist = d
+
+            if self.jaw_axis == "X":
+                if not neg_blocked and _circle_intersects_rect(
+                    ox, oy, r_check,
+                    tx - JAW_OUTER_HALF_MM, ty - JAW_WIDTH_HALF_MM,
+                    tx - JAW_INNER_HALF_MM, ty + JAW_WIDTH_HALF_MM,
+                ):
+                    neg_blocked = True
+                if not pos_blocked and _circle_intersects_rect(
+                    ox, oy, r_check,
+                    tx + JAW_INNER_HALF_MM, ty - JAW_WIDTH_HALF_MM,
+                    tx + JAW_OUTER_HALF_MM, ty + JAW_WIDTH_HALF_MM,
+                ):
+                    pos_blocked = True
+            else:
+                if not neg_blocked and _circle_intersects_rect(
+                    ox, oy, r_check,
+                    tx - JAW_WIDTH_HALF_MM, ty - JAW_OUTER_HALF_MM,
+                    tx + JAW_WIDTH_HALF_MM, ty - JAW_INNER_HALF_MM,
+                ):
+                    neg_blocked = True
+                if not pos_blocked and _circle_intersects_rect(
+                    ox, oy, r_check,
+                    tx - JAW_WIDTH_HALF_MM, ty + JAW_INNER_HALF_MM,
+                    tx + JAW_WIDTH_HALF_MM, ty + JAW_OUTER_HALF_MM,
+                ):
+                    pos_blocked = True
+
+        return (int(neg_blocked) + int(pos_blocked), min_dist)
+
+    def select_next_cap(
+        self,
+        detected_caps: list,
+        cur_xy: tuple = (0.0, 0.0),
+        retry_records: list = None,
+        quarantined_zones: list = None,
+    ):
+        """
+        Clearance-first / outermost-first pick selector:
+          1. Excludes caps outside safe mechanical reach (`in_safe_bounds == False`)
+             and quarantined unpickable spots, while STILL checking them as obstacles.
+          2. Priority order: (retry_penalty, blocked_sides, travel_dist, -min_neighbor_dist).
+             Picks completely clear caps first, peels clusters from outside in, and
+             minimizes Cartesian travel from the current bin.
+        """
+        retry_records = retry_records or []
+        quarantined_zones = quarantined_zones or []
+        cur_x, cur_y = float(cur_xy[0]), float(cur_xy[1])
+
+        scored = []
+        for cap in detected_caps:
+            if not cap.get("in_safe_bounds", True):
+                continue
+            cx, cy, col = cap["boardX_mm"], cap["boardY_mm"], cap["color"]
+            if any(
+                q["color"] == col and math.hypot(cx - q["x"], cy - q["y"]) &lt;= MISSED_PICK_RADIUS_MM
+                for q in quarantined_zones
+            ):
+                continue
+
+            retry_penalty = 1 if any(
+                r["color"] == col and r["count"] &gt; 0
+                and math.hypot(cx - r["x"], cy - r["y"]) &lt;= MISSED_PICK_RADIUS_MM
+                for r in retry_records
+            ) else 0
+
+            blocked_sides, min_neighbor = self.count_jaw_collisions(cap, detected_caps)
+            travel = math.hypot(cx - cur_x, cy - cur_y)
+            scored.append(((retry_penalty, blocked_sides, travel, -min_neighbor), blocked_sides, cap))
+
+        if not scored:
+            return None
+
+        scored.sort(key=lambda item: item[0])
+        _, blocked_sides, best = scored[0]
+        chosen = dict(best)
+        chosen["blocked_sides"] = blocked_sides
+        return chosen
+
+    def _update_retry_state(
+        self,
+        last_target: dict,
+        detected_caps: list,
+        retry_records: list,
+        quarantined_zones: list,
+        occluded_y_mm: float = None,
+    ) -&gt; bool:
+        """
+        Checks whether `last_target` is still sitting at its previous location on an
+        unoccluded region of the fresh scan. Quarantines spots after MAX_PICK_RETRIES.
+        Returns True if `last_target` was visibly evaluated (not occluded), False otherwise.
+        """
+        if last_target is None:
+            return False
+        tx, ty, col = last_target["boardX_mm"], last_target["boardY_mm"], last_target["color"]
+
+        # Do not judge pick outcome while last_target sits inside the masked bridge strip
+        if (
+            occluded_y_mm is not None
+            and self.bridge_occlusion_half_mm &gt; 0.0
+            and abs(ty - occluded_y_mm) &lt;= self.bridge_occlusion_half_mm
+        ):
+            return False
+
+        already_quarantined = any(
+            q["color"] == col and math.hypot(q["x"] - tx, q["y"] - ty) &lt;= MISSED_PICK_RADIUS_MM
+            for q in quarantined_zones
+        )
+        if already_quarantined:
+            return True
+
+        still_present = any(
+            c["color"] == col and math.hypot(c["boardX_mm"] - tx, c["boardY_mm"] - ty) &lt;= MISSED_PICK_RADIUS_MM
+            for c in detected_caps
+        )
+
+        rec = next(
+            (r for r in retry_records
+             if r["color"] == col and math.hypot(r["x"] - tx, r["y"] - ty) &lt;= MISSED_PICK_RADIUS_MM),
+            None,
+        )
+
+        if still_present:
+            if rec is None:
+                rec = {"x": tx, "y": ty, "color": col, "count": 1}
+                retry_records.append(rec)
+            else:
+                rec["x"], rec["y"] = tx, ty
+                rec["count"] += 1
+            if rec["count"] &gt;= MAX_PICK_RETRIES:
+                quarantined_zones.append({"x": tx, "y": ty, "color": col, "attempts": rec["count"]})
+                print(
+                    f"[WARN] Cap (color={col}) at ({tx:.1f}, {ty:.1f}) mm still present after "
+                    f"{rec['count']} attempts; quarantining spot for this session.",
+                    file=sys.stderr,
+                )
+        elif rec is not None:
+            retry_records.remove(rec)
+        return True
+
     def optimize_path(self, caps: list) -&gt; list:
+        """Legacy greedy path optimizer (retained for offline tools &amp; unit tests)."""
         ordered, remaining = [], [dict(c) for c in caps]
         cur_x, cur_y = 0.0, 0.0
         seq_id = 1
         while remaining:
-            remaining.sort(key=lambda c: math.hypot(c[&quot;boardX_mm&quot;] - cur_x, c[&quot;boardY_mm&quot;] - cur_y))
+            remaining.sort(key=lambda c: math.hypot(c["boardX_mm"] - cur_x, c["boardY_mm"] - cur_y))
             nxt = remaining.pop(0)
-            nxt[&quot;capId&quot;] = seq_id
+            nxt["capId"] = seq_id
             seq_id += 1
             ordered.append(nxt)
-            cur_x, cur_y, _ = BIN_COORDS[nxt[&quot;color&quot;]]
+            cur_x, cur_y, _ = BIN_COORDS[nxt["color"]]
         return ordered
+
+    def pack_single_target_packet(self, cap: dict) -&gt; bytes:
+        """
+        Packs an 18-byte CRC16-verified closed-loop single-target packet:
+          [0x5B][CapTarget: &lt;BBHHffB (15B)][CRC16: &lt;H (2B)]
+        """
+        payload = struct.pack(
+            "&lt;BBHHffB",
+            int(cap.get("capId", 1)) &amp; 0xFF,
+            int(cap["color"]) &amp; 0xFF,
+            int(cap["pixelX"]) &amp; 0xFFFF,
+            int(cap["pixelY"]) &amp; 0xFFFF,
+            float(cap["boardX_mm"]),
+            float(cap["boardY_mm"]),
+            int(cap["targetBinId"]) &amp; 0xFF,
+        )
+        crc = crc16_ccitt(payload)
+        return bytes([PROTOCOL_SINGLE_MAGIC]) + payload + struct.pack("&lt;H", crc)
 
     def pack_batch_packet(self, ordered_caps: list) -&gt; bytes:
         if not (1 &lt;= len(ordered_caps) &lt;= MAX_BATCH_CAPS):
-            raise ValueError(f&quot;Batch size must be in 1..{MAX_BATCH_CAPS}, got {len(ordered_caps)}&quot;)
+            raise ValueError(f"Batch size must be in 1..{MAX_BATCH_CAPS}, got {len(ordered_caps)}")
         payload = bytearray()
         for c in ordered_caps:
             # Matches struct CapTarget: &lt;BBHHffB (15 bytes packed)
             payload += struct.pack(
-                &quot;&lt;BBHHffB&quot;,
-                c[&quot;capId&quot;], c[&quot;color&quot;], c[&quot;pixelX&quot;], c[&quot;pixelY&quot;],
-                c[&quot;boardX_mm&quot;], c[&quot;boardY_mm&quot;], c[&quot;targetBinId&quot;],
+                "&lt;BBHHffB",
+                c["capId"], c["color"], c["pixelX"], c["pixelY"],
+                c["boardX_mm"], c["boardY_mm"], c["targetBinId"],
             )
         crc = crc16_ccitt(bytes(payload))
         # Matches struct BatchHeader: &lt;BHBH (6 bytes packed)
-        header = struct.pack(&quot;&lt;BHBH&quot;, PROTOCOL_MAGIC_BYTE, self.batch_id, len(ordered_caps), crc)
+        header = struct.pack("&lt;BHBH", PROTOCOL_MAGIC_BYTE, self.batch_id, len(ordered_caps), crc)
         self.batch_id = ((self.batch_id + 1) &amp; 0xFFFF) or 1
         return header + bytes(payload)
 
     def write_paced_uart(self, packet: bytes, chunk_size: int = 32, sleep_fn=time.sleep):
-        # Pace in 32-byte chunks with 2 ms pause so Mega&#x27;s 64-byte RX ring buffer never overflows
+        # Pace in 32-byte chunks with 2 ms pause so Mega's 64-byte RX ring buffer never overflows
         for offset in range(0, len(packet), chunk_size):
             self.uart.write(packet[offset:offset + chunk_size])
             self.uart.flush()
@@ -2416,10 +2784,10 @@ class PiZeroVisionController:
         clock=time.monotonic,
         sleep_fn=time.sleep,
     ) -&gt; bool:
-        &quot;&quot;&quot;
+        """
         Explicit READY/BUSY/FAULT startup handshake. Never transmits motion data
         until Mega reports CMD_STATUS_READY after homing finishes.
-        &quot;&quot;&quot;
+        """
         if self.uart is None:
             return False
 
@@ -2438,8 +2806,8 @@ class PiZeroVisionController:
                     return True
                 if resp in (CMD_STATUS_FAULT, CMD_HARD_FAULT, CMD_RECOVERY_HALT):
                     print(
-                        f&quot;[FAULT] Mega reported status 0x{resp:02X}; &quot;
-                        &quot;motion inhibited until operator clears fault &amp; re-arms.&quot;,
+                        f"[FAULT] Mega reported status 0x{resp:02X}; "
+                        "motion inhibited until operator clears fault &amp; re-arms.",
                         file=sys.stderr,
                     )
                     return False
@@ -2448,21 +2816,251 @@ class PiZeroVisionController:
             sleep_fn(0.02)
         return False
 
+    def _send_single_target_with_ack(self, cap: dict, sleep_fn=time.sleep) -&gt; str:
+        packet = self.pack_single_target_packet(cap)
+        for _ in range(3):
+            self.uart.reset_input_buffer()
+            self.uart.write(packet)
+            self.uart.flush()
+            ack = self.uart.read(1)
+            if ack:
+                code = ack[0]
+                if code == CMD_BATCH_ACK:
+                    return "ACK"
+                if code in (CMD_HARD_FAULT, CMD_RECOVERY_HALT, CMD_STATUS_FAULT):
+                    return "FAULT"
+            sleep_fn(0.05)
+        return "NACK"
+
+    def _await_opcode_with_heartbeat(
+        self,
+        target_opcode: int,
+        timeout_s: float = MAX_SINGLE_CAP_S,
+        clock=time.monotonic,
+        sleep_fn=time.sleep,
+    ) -&gt; str:
+        start_t = clock()
+        while True:
+            self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+            self.uart.flush()
+            sleep_fn(HEARTBEAT_INTERVAL_S)
+
+            while self.uart.in_waiting &gt; 0:
+                resp = self.uart.read(1)[0]
+                if resp == target_opcode:
+                    return "OK"
+                if resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
+                    return "FAULT"
+
+            if clock() - start_t &gt; timeout_s:
+                return "TIMEOUT"
+
+    def run_closed_loop_sort_session(
+        self,
+        capture_fn=None,
+        clock=time.monotonic,
+        sleep_fn=time.sleep,
+        max_cycles: int = MAX_SESSION_CYCLES,
+    ) -&gt; dict:
+        """
+        Executes a full closed-loop sorting session:
+          1. Captures Scan #0 at unobstructed (0, 0).
+          2. Sends one clearance-ranked CapTarget at a time via CMD_PICK_SINGLE (0x5B).
+          3. On Mega CMD_SCAN_WINDOW_OPEN (0xA5) at the color bin, captures &amp; analyzes
+             the fresh board IN PARALLEL with the bin drop, updating bumped coordinates
+             and missed-pick retry/quarantine state.
+          4. On CMD_AWAIT_NEXT (0xA6), immediately dispatches the next cap from the bin,
+             or executes CMD_PARK_FOR_SCAN (0xB5) for an unobstructed clear-FOV check
+             before terminating cleanly with CMD_FINISH_SESSION (0xB6).
+        """
+        if self.uart is None:
+            return {"status": "NACK", "picked": 0, "scans": 0, "quarantined": [], "out_of_bounds_seen": 0}
+
+        cap_source = capture_fn or self.capture_rectified_frame
+        retry_records = []
+        quarantined_zones = []
+        scans = 0
+        picked = 0
+        out_of_bounds_seen = 0
+
+        # Scan #0: Unobstructed full-board scan while parked at (0, 0)
+        frame = cap_source()
+        scans += 1
+        caps = self.detect_caps(frame, occluded_y_mm=None)
+        out_of_bounds_seen += sum(1 for c in caps if not c.get("in_safe_bounds", True))
+        next_cap = self.select_next_cap(caps, (0.0, 0.0), retry_records, quarantined_zones)
+
+        if next_cap is None:
+            return {
+                "status": "COMPLETE",
+                "picked": 0,
+                "scans": scans,
+                "quarantined": quarantined_zones,
+                "out_of_bounds_seen": out_of_bounds_seen,
+            }
+
+        for _ in range(max_cycles):
+            ack_status = self._send_single_target_with_ack(next_cap, sleep_fn=sleep_fn)
+            if ack_status != "ACK":
+                return {
+                    "status": ack_status,
+                    "picked": picked,
+                    "scans": scans,
+                    "quarantined": quarantined_zones,
+                    "out_of_bounds_seen": out_of_bounds_seen,
+                }
+
+            last_target = next_cap
+            bin_x, bin_y, _ = BIN_COORDS[last_target["color"]]
+            cycle_start = clock()
+            scanned_at_bin = False
+            retry_evaluated = False
+            await_received = False
+            candidate_next = None
+
+            while not await_received:
+                self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+                self.uart.flush()
+                sleep_fn(HEARTBEAT_INTERVAL_S)
+
+                while self.uart.in_waiting &gt; 0:
+                    resp = self.uart.read(1)[0]
+                    if resp == CMD_SCAN_WINDOW_OPEN and not scanned_at_bin:
+                        # Pipelined capture while Mega lowers/drops/retracts at color bin
+                        fresh = cap_source()
+                        scans += 1
+                        scanned_at_bin = True
+                        self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+                        self.uart.flush()
+
+                        fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
+                        out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
+                        retry_evaluated = self._update_retry_state(
+                            last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
+                        )
+                        candidate_next = self.select_next_cap(
+                            fresh_caps, (bin_x, bin_y), retry_records, quarantined_zones
+                        )
+                    elif resp == CMD_CAP_PROGRESS:
+                        cycle_start = clock()
+                    elif resp == CMD_AWAIT_NEXT:
+                        await_received = True
+                        break
+                    elif resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
+                        return {
+                            "status": "FAULT",
+                            "picked": picked,
+                            "scans": scans,
+                            "quarantined": quarantined_zones,
+                            "out_of_bounds_seen": out_of_bounds_seen,
+                        }
+
+                if not await_received and (clock() - cycle_start &gt; MAX_SINGLE_CAP_S):
+                    print("[TIMEOUT] Mega stopped responding during closed-loop cap cycle.", file=sys.stderr)
+                    return {
+                        "status": "TIMEOUT",
+                        "picked": picked,
+                        "scans": scans,
+                        "quarantined": quarantined_zones,
+                        "out_of_bounds_seen": out_of_bounds_seen,
+                    }
+
+            picked += 1
+
+            # Fallback capture if Mega signaled AWAIT_NEXT without prior SCAN_WINDOW_OPEN
+            if not scanned_at_bin:
+                fresh = cap_source()
+                scans += 1
+                self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+                self.uart.flush()
+                fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
+                out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
+                retry_evaluated = self._update_retry_state(
+                    last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
+                )
+                candidate_next = self.select_next_cap(
+                    fresh_caps, (bin_x, bin_y), retry_records, quarantined_zones
+                )
+
+            if candidate_next is not None:
+                next_cap = candidate_next
+                continue
+
+            # 0 graspable caps visible outside bridge band -&gt; clear-FOV verification park at (0,0)
+            self.uart.write(bytes([CMD_PARK_FOR_SCAN]))
+            self.uart.flush()
+            park_res = self._await_opcode_with_heartbeat(
+                CMD_AWAIT_NEXT, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
+            )
+            if park_res != "OK":
+                return {
+                    "status": park_res,
+                    "picked": picked,
+                    "scans": scans,
+                    "quarantined": quarantined_zones,
+                    "out_of_bounds_seen": out_of_bounds_seen,
+                }
+
+            verify_frame = cap_source()
+            scans += 1
+            self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+            self.uart.flush()
+            verify_caps = self.detect_caps(verify_frame, occluded_y_mm=None)
+            out_of_bounds_seen += sum(1 for c in verify_caps if not c.get("in_safe_bounds", True))
+            if not retry_evaluated:
+                self._update_retry_state(
+                    last_target, verify_caps, retry_records, quarantined_zones, occluded_y_mm=None
+                )
+            revealed = self.select_next_cap(
+                verify_caps, (0.0, 0.0), retry_records, quarantined_zones
+            )
+            if revealed is not None:
+                next_cap = revealed
+                continue
+
+            # Confirmed empty (or only quarantined/out-of-bounds caps remain) -&gt; finish cleanly
+            self.uart.write(bytes([CMD_FINISH_SESSION]))
+            self.uart.flush()
+            done_res = self._await_opcode_with_heartbeat(
+                CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
+            )
+            return {
+                "status": "COMPLETE" if done_res == "OK" else done_res,
+                "picked": picked,
+                "scans": scans,
+                "quarantined": quarantined_zones,
+                "out_of_bounds_seen": out_of_bounds_seen,
+            }
+
+        # Reached hard cycle limit -&gt; park safely
+        self.uart.write(bytes([CMD_FINISH_SESSION]))
+        self.uart.flush()
+        self._await_opcode_with_heartbeat(
+            CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
+        )
+        return {
+            "status": "MAX_CYCLES",
+            "picked": picked,
+            "scans": scans,
+            "quarantined": quarantined_zones,
+            "out_of_bounds_seen": out_of_bounds_seen,
+        }
+
     def transmit_batch_and_supervise(
         self,
         ordered_caps: list,
         clock=time.monotonic,
         sleep_fn=time.sleep,
     ) -&gt; str:
-        &quot;&quot;&quot;
+        """
+        Legacy open-loop batch transmitter (retained for offline tools &amp; protocol tests).
         Transmits a CRC16-verified batch and maintains 250 ms heartbeat pings
-        for the entire batch duration (bounded by per-cap progress and dynamic
-        worst-case total time rather than a fixed 180 s cutoff).
+        for the entire batch duration.
 
-        Returns one of: &quot;COMPLETE&quot;, &quot;NACK&quot;, &quot;FAULT&quot;, &quot;TIMEOUT&quot;.
-        &quot;&quot;&quot;
+        Returns one of: "COMPLETE", "NACK", "FAULT", "TIMEOUT".
+        """
         if not ordered_caps or self.uart is None:
-            return &quot;NACK&quot;
+            return "NACK"
         packet = self.pack_batch_packet(ordered_caps)
 
         ack_received = False
@@ -2476,11 +3074,11 @@ class PiZeroVisionController:
                     ack_received = True
                     break
                 if code in (CMD_HARD_FAULT, CMD_RECOVERY_HALT, CMD_STATUS_FAULT):
-                    return &quot;FAULT&quot;
+                    return "FAULT"
             sleep_fn(0.05)
 
         if not ack_received:
-            return &quot;NACK&quot;
+            return "NACK"
 
         start_t = clock()
         last_progress_t = start_t
@@ -2496,24 +3094,26 @@ class PiZeroVisionController:
                 if resp == CMD_CAP_PROGRESS:
                     last_progress_t = clock()
                 elif resp == CMD_BATCH_COMPLETE:
-                    return &quot;COMPLETE&quot;
+                    return "COMPLETE"
                 elif resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
-                    return &quot;FAULT&quot;
+                    return "FAULT"
 
             now = clock()
             if (now - last_progress_t &gt; MAX_SINGLE_CAP_S) or (now - start_t &gt; max_total_s):
                 print(
-                    &quot;[TIMEOUT] Mega stopped reporting progress or exceeded dynamic batch ceiling.&quot;,
+                    "[TIMEOUT] Mega stopped reporting progress or exceeded dynamic batch ceiling.",
                     file=sys.stderr,
                 )
-                return &quot;TIMEOUT&quot;
+                return "TIMEOUT"
 
 
 def main():
-    parser = argparse.ArgumentParser(description=&quot;CapSorter V2 Raspberry Pi Zero 2 W Vision Controller&quot;)
-    parser.add_argument(&quot;--calib&quot;, help=&quot;Path to validated camera calibration .npz file&quot;)
-    parser.add_argument(&quot;--camera-type&quot;, choices=(&quot;picamera2_imx219&quot;, &quot;usb_v4l2&quot;))
-    parser.add_argument(&quot;--serial-port&quot;, default=&quot;/dev/serial0&quot;)
+    parser = argparse.ArgumentParser(description="CapSorter V2 Raspberry Pi Zero 2 W Closed-Loop Vision Controller")
+    parser.add_argument("--calib", help="Path to validated camera calibration .npz file")
+    parser.add_argument("--camera-type", choices=("picamera2_imx219", "usb_v4l2"))
+    parser.add_argument("--serial-port", default="/dev/serial0")
+    parser.add_argument("--bridge-occlusion-mm", type=float, default=BRIDGE_OCCLUSION_HALF_MM)
+    parser.add_argument("--jaw-axis", choices=("X", "Y"), default=GRIPPER_JAW_AXIS)
     args = parser.parse_args()
 
     try:
@@ -2522,37 +3122,43 @@ def main():
             serial_port=args.serial_port,
             camera_type=args.camera_type,
             init_hardware=True,
+            bridge_occlusion_half_mm=args.bridge_occlusion_mm,
+            jaw_axis=args.jaw_axis,
         )
     except CalibrationError as exc:
-        print(f&quot;[FAIL-CLOSED CALIBRATION ERROR] {exc}&quot;, file=sys.stderr)
+        print(f"[FAIL-CLOSED CALIBRATION ERROR] {exc}", file=sys.stderr)
         sys.exit(2)
 
-    print(&quot;[V2] Waiting for Arduino Mega CMD_STATUS_READY handshake...&quot;)
+    print("[V2] Waiting for Arduino Mega CMD_STATUS_READY handshake...")
     while not controller.wait_for_mega_ready(timeout_s=5.0):
-        print(&quot;[V2] Mega not READY (homing or fault latched); retrying status query...&quot;)
+        print("[V2] Mega not READY (homing or fault latched); retrying status query...")
         time.sleep(1.0)
-    print(&quot;[V2] Mega READY. Starting vision loop.&quot;)
+    print("[V2] Mega READY. Starting closed-loop bin-side re-imaging vision loop.")
 
     while True:
         if not controller.wait_for_mega_ready(timeout_s=2.0):
-            print(&quot;[V2] Mega unavailable or faulted; waiting for operator re-arm &amp; READY...&quot;)
+            print("[V2] Mega unavailable or faulted; waiting for operator re-arm &amp; READY...")
             time.sleep(1.0)
             continue
 
-        frame = controller.capture_rectified_frame()
-        caps = controller.optimize_path(controller.detect_caps(frame))
-        if caps:
-            status = controller.transmit_batch_and_supervise(caps)
-            if status != &quot;COMPLETE&quot;:
-                print(
-                    f&quot;[V2] Batch ended with status={status}. Inhibiting new scans until Mega is READY.&quot;,
-                    file=sys.stderr,
-                )
-                time.sleep(1.0)
+        result = controller.run_closed_loop_sort_session()
+        if result["status"] != "COMPLETE":
+            print(
+                f"[V2] Session ended with status={result['status']} "
+                f"(picked={result['picked']}, scans={result['scans']}). "
+                "Inhibiting new scans until Mega is READY.",
+                file=sys.stderr,
+            )
+            time.sleep(1.0)
+        elif result["picked"] &gt; 0:
+            print(
+                f"[V2] Session COMPLETE: picked={result['picked']}, scans={result['scans']}, "
+                f"quarantined={len(result['quarantined'])}."
+            )
         time.sleep(0.5)
 
 
-if __name__ == &quot;__main__&quot;:
+if __name__ == "__main__":
     main()</code></pre>
         </div>
 
@@ -2579,8 +3185,8 @@ import os
 import cv2
 import numpy as np
 
-VALID_CAMERA_TYPES = (&quot;picamera2_imx219&quot;, &quot;usb_v4l2&quot;)
-VALID_LENS_MODELS = (&quot;fisheye&quot;, &quot;pinhole&quot;)
+VALID_CAMERA_TYPES = ("picamera2_imx219", "usb_v4l2")
+VALID_LENS_MODELS = ("fisheye", "pinhole")
 
 # Physical 300x300 mm Sorting Board Fiducial Corners (in millimeters)
 BOARD_CORNERS_MM = np.array([
@@ -2595,19 +3201,19 @@ def calibrate_intrinsics_from_checkerboards(
     image_paths: list,
     pattern_size: tuple = (9, 6),
     square_size_mm: float = 25.0,
-    lens_model: str = &quot;fisheye&quot;,
+    lens_model: str = "fisheye",
     min_images: int = 8,
     max_reproj_err: float = 1.0,
 ):
-    &quot;&quot;&quot;
+    """
     Computes camera intrinsic matrix K and distortion coefficients D from
-    real checkerboard images using either OpenCV&#x27;s fisheye or pinhole model.
+    real checkerboard images using either OpenCV's fisheye or pinhole model.
     Returns (K, D, image_size, rms_error_px).
-    &quot;&quot;&quot;
+    """
     if lens_model not in VALID_LENS_MODELS:
-        raise ValueError(f&quot;Unsupported lens_model &#x27;{lens_model}&#x27;; expected one of {VALID_LENS_MODELS}&quot;)
+        raise ValueError(f"Unsupported lens_model '{lens_model}'; expected one of {VALID_LENS_MODELS}")
     if not image_paths:
-        raise ValueError(&quot;No checkerboard images provided for intrinsic calibration.&quot;)
+        raise ValueError("No checkerboard images provided for intrinsic calibration.")
 
     cols, rows = int(pattern_size[0]), int(pattern_size[1])
     objp = np.zeros((1, cols * rows, 3), np.float32)
@@ -2628,7 +3234,7 @@ def calibrate_intrinsics_from_checkerboards(
             image_size = (w, h)
         elif image_size != (w, h):
             raise ValueError(
-                f&quot;Inconsistent image resolution in {path}: got {(w, h)}, expected {image_size}&quot;
+                f"Inconsistent image resolution in {path}: got {(w, h)}, expected {image_size}"
             )
 
         found, corners = cv2.findChessboardCorners(
@@ -2639,7 +3245,7 @@ def calibrate_intrinsics_from_checkerboards(
             continue
 
         refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), subpix_criteria)
-        if lens_model == &quot;fisheye&quot;:
+        if lens_model == "fisheye":
             objpoints.append(objp.astype(np.float64))
             imgpoints.append(refined.reshape(1, -1, 2).astype(np.float64))
         else:
@@ -2648,10 +3254,10 @@ def calibrate_intrinsics_from_checkerboards(
 
     if len(objpoints) &lt; min_images:
         raise RuntimeError(
-            f&quot;Only {len(objpoints)} valid checkerboard images found; need at least {min_images}.&quot;
+            f"Only {len(objpoints)} valid checkerboard images found; need at least {min_images}."
         )
 
-    if lens_model == &quot;fisheye&quot;:
+    if lens_model == "fisheye":
         K = np.zeros((3, 3), dtype=np.float64)
         D = np.zeros((4, 1), dtype=np.float64)
         rvecs = [np.zeros((1, 1, 3), dtype=np.float64) for _ in objpoints]
@@ -2674,7 +3280,7 @@ def calibrate_intrinsics_from_checkerboards(
 
     if not np.isfinite(rms) or rms &gt; max_reproj_err:
         raise RuntimeError(
-            f&quot;Intrinsic calibration RMS reprojection error {rms:.4f} px exceeds limit {max_reproj_err:.4f} px.&quot;
+            f"Intrinsic calibration RMS reprojection error {rms:.4f} px exceeds limit {max_reproj_err:.4f} px."
         )
 
     return K, D, image_size, float(rms)
@@ -2684,25 +3290,25 @@ def compute_homography_from_fiducials(
     rectified_pixel_corners: np.ndarray,
     max_corner_err_mm: float = 1.0,
 ) -&gt; np.ndarray:
-    &quot;&quot;&quot;
+    """
     Computes 3x3 planar homography matrix H mapping rectified image pixels
     (u, v) to physical sorting board coordinates (X_mm, Y_mm) and validates
     corner round-trip accuracy.
-    &quot;&quot;&quot;
+    """
     rect_pts = np.asarray(rectified_pixel_corners, dtype=np.float32).reshape((4, 2))
     if not np.all(np.isfinite(rect_pts)):
-        raise ValueError(&quot;Rectified fiducial pixel corners contain non-finite values.&quot;)
+        raise ValueError("Rectified fiducial pixel corners contain non-finite values.")
 
     H, _ = cv2.findHomography(rect_pts, BOARD_CORNERS_MM, method=0)
     if H is None or not np.all(np.isfinite(H)) or abs(np.linalg.det(H)) &lt; 1e-12:
-        raise ValueError(&quot;Degenerate fiducial corners produced a singular homography matrix.&quot;)
+        raise ValueError("Degenerate fiducial corners produced a singular homography matrix.")
 
     H = H.astype(np.float64)
     mapped = cv2.perspectiveTransform(rect_pts.reshape(1, 4, 2), H).reshape(4, 2)
     max_err = float(np.max(np.linalg.norm(mapped - BOARD_CORNERS_MM, axis=1)))
     if max_err &gt; max_corner_err_mm:
         raise RuntimeError(
-            f&quot;Homography corner mapping error {max_err:.4f} mm exceeds limit {max_corner_err_mm:.4f} mm.&quot;
+            f"Homography corner mapping error {max_err:.4f} mm exceeds limit {max_corner_err_mm:.4f} mm."
         )
     return H
 
@@ -2716,11 +3322,13 @@ def save_validated_calibration(
     lens_model: str,
     image_size: tuple,
     reprojection_error_px: float,
+    camera_height_mm: float = 0.0,
+    cap_height_mm: float = 13.0,
 ):
     if camera_type not in VALID_CAMERA_TYPES:
-        raise ValueError(f&quot;Unsupported camera_type &#x27;{camera_type}&#x27;&quot;)
+        raise ValueError(f"Unsupported camera_type '{camera_type}'")
     if lens_model not in VALID_LENS_MODELS:
-        raise ValueError(f&quot;Unsupported lens_model &#x27;{lens_model}&#x27;&quot;)
+        raise ValueError(f"Unsupported lens_model '{lens_model}'")
 
     out_dir = os.path.dirname(out_path)
     if out_dir:
@@ -2736,17 +3344,20 @@ def save_validated_calibration(
         lens_model=np.array(lens_model),
         image_size=np.array([int(image_size[0]), int(image_size[1])], dtype=np.int32),
         reprojection_error_px=np.array(float(reprojection_error_px), dtype=np.float64),
+        camera_height_mm=np.array(float(camera_height_mm), dtype=np.float64),
+        cap_height_mm=np.array(float(cap_height_mm), dtype=np.float64),
         calibrated=np.array(True, dtype=bool),
         calibrated_utc=np.array(timestamp),
     )
     print(
-        f&quot;[OK] Saved validated calibration ({camera_type}, {lens_model}, &quot;
-        f&quot;{image_size[0]}x{image_size[1]}, RMS={reprojection_error_px:.4f} px) -&gt; {out_path}&quot;
+        f"[OK] Saved validated calibration ({camera_type}, {lens_model}, "
+        f"{image_size[0]}x{image_size[1]}, RMS={reprojection_error_px:.4f} px, "
+        f"H_cam={camera_height_mm:.1f} mm, h_cap={cap_height_mm:.1f} mm) -&gt; {out_path}"
     )
 
 
 def save_uncalibrated_placeholder(out_path: str):
-    &quot;&quot;&quot;Writes an explicitly uncalibrated placeholder so runtime fails closed until bench calibrated.&quot;&quot;&quot;
+    """Writes an explicitly uncalibrated placeholder so runtime fails closed until bench calibrated."""
     out_dir = os.path.dirname(out_path)
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
@@ -2755,70 +3366,78 @@ def save_uncalibrated_placeholder(out_path: str):
         K=np.eye(3, dtype=np.float64),
         D=np.zeros((4, 1), dtype=np.float64),
         H=np.eye(3, dtype=np.float64),
-        camera_type=np.array(&quot;uncalibrated_placeholder&quot;),
-        lens_model=np.array(&quot;uncalibrated&quot;),
+        camera_type=np.array("uncalibrated_placeholder"),
+        lens_model=np.array("uncalibrated"),
         image_size=np.array([0, 0], dtype=np.int32),
-        reprojection_error_px=np.array(float(&quot;nan&quot;), dtype=np.float64),
+        reprojection_error_px=np.array(float("nan"), dtype=np.float64),
         calibrated=np.array(False, dtype=bool),
-        calibrated_utc=np.array(&quot;&quot;),
+        calibrated_utc=np.array(""),
     )
 
 
 def _parse_corners_arg(corners_str: str) -&gt; np.ndarray:
-    pairs = [p.strip() for p in corners_str.split(&quot;;&quot;) if p.strip()]
+    pairs = [p.strip() for p in corners_str.split(";") if p.strip()]
     if len(pairs) != 4:
-        raise ValueError(&quot;Expected 4 semicolon-separated &#x27;u,v&#x27; corners (TL;TR;BR;BL).&quot;)
+        raise ValueError("Expected 4 semicolon-separated 'u,v' corners (TL;TR;BR;BL).")
     pts = []
     for p in pairs:
-        u_str, v_str = p.split(&quot;,&quot;)
+        u_str, v_str = p.split(",")
         pts.append([float(u_str.strip()), float(v_str.strip())])
     return np.array(pts, dtype=np.float32)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description=&quot;Calibrate V2 camera intrinsics (checkerboard) and 4-corner board homography.&quot;
+        description="Calibrate V2 camera intrinsics (checkerboard) and 4-corner board homography."
     )
-    parser.add_argument(&quot;--camera-type&quot;, required=True, choices=VALID_CAMERA_TYPES)
-    parser.add_argument(&quot;--lens-model&quot;, required=True, choices=VALID_LENS_MODELS)
+    parser.add_argument("--camera-type", required=True, choices=VALID_CAMERA_TYPES)
+    parser.add_argument("--lens-model", required=True, choices=VALID_LENS_MODELS)
     parser.add_argument(
-        &quot;--checkerboard-glob&quot;, required=True,
-        help=&quot;Glob pattern of checkerboard calibration images (e.g. &#x27;calib_imgs/*.png&#x27;)&quot;,
-    )
-    parser.add_argument(
-        &quot;--pattern&quot;, default=&quot;9x6&quot;,
-        help=&quot;Inner checkerboard corner counts as COLSxROWS (default: 9x6)&quot;,
+        "--checkerboard-glob", required=True,
+        help="Glob pattern of checkerboard calibration images (e.g. 'calib_imgs/*.png')",
     )
     parser.add_argument(
-        &quot;--square-mm&quot;, type=float, default=25.0,
-        help=&quot;Physical checkerboard square edge length in mm (default: 25.0)&quot;,
+        "--pattern", default="9x6",
+        help="Inner checkerboard corner counts as COLSxROWS (default: 9x6)",
     )
     parser.add_argument(
-        &quot;--corners&quot;,
-        help=&quot;Rectified board fiducial corners as &#x27;u0,v0;u1,v1;u2,v2;u3,v3&#x27; (TL;TR;BR;BL)&quot;,
+        "--square-mm", type=float, default=25.0,
+        help="Physical checkerboard square edge length in mm (default: 25.0)",
     )
     parser.add_argument(
-        &quot;--corners-json&quot;,
-        help=&quot;Path to JSON file containing a 4x2 list of rectified fiducial pixel corners&quot;,
+        "--corners",
+        help="Rectified board fiducial corners as 'u0,v0;u1,v1;u2,v2;u3,v3' (TL;TR;BR;BL)",
     )
     parser.add_argument(
-        &quot;--min-images&quot;, type=int, default=8,
-        help=&quot;Minimum valid checkerboard images required (default: 8)&quot;,
+        "--corners-json",
+        help="Path to JSON file containing a 4x2 list of rectified fiducial pixel corners",
     )
     parser.add_argument(
-        &quot;--max-reproj-err&quot;, type=float, default=1.0,
-        help=&quot;Maximum allowed RMS reprojection error in pixels (default: 1.0)&quot;,
+        "--min-images", type=int, default=8,
+        help="Minimum valid checkerboard images required (default: 8)",
     )
     parser.add_argument(
-        &quot;--out&quot;,
-        help=&quot;Output .npz path (defaults to calibration_csi_imx219.npz or calibration_usb.npz)&quot;,
+        "--max-reproj-err", type=float, default=1.0,
+        help="Maximum allowed RMS reprojection error in pixels (default: 1.0)",
+    )
+    parser.add_argument(
+        "--camera-height-mm", type=float, default=0.0,
+        help="Measured overhead camera lens height above board plane in mm for radial parallax correction (0 disables)",
+    )
+    parser.add_argument(
+        "--cap-height-mm", type=float, default=13.0,
+        help="Nominal bottle-cap height in mm used with --camera-height-mm parallax compensation (default: 13.0)",
+    )
+    parser.add_argument(
+        "--out",
+        help="Output .npz path (defaults to calibration_csi_imx219.npz or calibration_usb.npz)",
     )
     args = parser.parse_args()
 
     if bool(args.corners) == bool(args.corners_json):
-        parser.error(&quot;Provide exactly one of --corners or --corners-json with measured fiducials.&quot;)
+        parser.error("Provide exactly one of --corners or --corners-json with measured fiducials.")
 
-    cols, rows = (int(x) for x in args.pattern.lower().split(&quot;x&quot;))
+    cols, rows = (int(x) for x in args.pattern.lower().split("x"))
     image_paths = sorted(glob.glob(args.checkerboard_glob))
     K, D, image_size, rms = calibrate_intrinsics_from_checkerboards(
         image_paths=image_paths,
@@ -2832,14 +3451,14 @@ def main():
     if args.corners:
         corners_px = _parse_corners_arg(args.corners)
     else:
-        with open(args.corners_json, &quot;r&quot;, encoding=&quot;utf-8&quot;) as fh:
+        with open(args.corners_json, "r", encoding="utf-8") as fh:
             corners_px = np.array(json.load(fh), dtype=np.float32)
 
     H = compute_homography_from_fiducials(corners_px)
     default_out = (
-        &quot;calibration_csi_imx219.npz&quot;
-        if args.camera_type == &quot;picamera2_imx219&quot;
-        else &quot;calibration_usb.npz&quot;
+        "calibration_csi_imx219.npz"
+        if args.camera_type == "picamera2_imx219"
+        else "calibration_usb.npz"
     )
     save_validated_calibration(
         out_path=args.out or default_out,
@@ -2848,10 +3467,12 @@ def main():
         lens_model=args.lens_model,
         image_size=image_size,
         reprojection_error_px=rms,
+        camera_height_mm=args.camera_height_mm,
+        cap_height_mm=args.cap_height_mm,
     )
 
 
-if __name__ == &quot;__main__&quot;:
+if __name__ == "__main__":
     main()</code></pre>
         </div>
 
@@ -2873,10 +3494,11 @@ if __name__ == &quot;__main__&quot;:
 //     unexpected motion on E-stop release until explicit re-arm + re-home.
 //   PCA9685 Servo Driver (I2C 0x40): SDA = Pin 20, SCL = Pin 21, OE = Pin 9
 // =========================================================================
+#include &lt;math.h&gt;
 #include &lt;Wire.h&gt;
 #include &lt;Adafruit_PWMServoDriver.h&gt;
 #include &lt;AccelStepper.h&gt;
-#include &quot;packet_protocol.h&quot;
+#include "packet_protocol.h"
 
 // Pin Definitions
 #define PIN_X_STEP          2
@@ -2929,8 +3551,9 @@ if __name__ == &quot;__main__&quot;:
 #define PWM_GRIP_OPEN     210    // ~36 mm jaw gap (open)
 #define PWM_GRIP_CLOSE    385    // ~26 mm jaw gap (clamped on 28-32mm cap)
 
-// Safety &amp; Watchdog Timeouts
+// Safety, Settle &amp; Watchdog Timeouts
 // Worst-case X homing: 370 mm / (800 / 40 = 20 mm/s) = 18.5 s -&gt; 30 s timeout (~1.6x margin).
+#define BIN_SETTLE_MS        120UL  // Stationary XY settle at bin (Z raised) before bin-side camera shutter
 #define COMMS_TIMEOUT_MS    1200UL  // 1.2 s without 0xF0 heartbeat triggers fail-safe halt
 #define HOMING_TIMEOUT_MS  30000UL  // 30.0 s max homing seek duration
 #define BACKOFF_TIMEOUT_MS  3000UL  // 3.0 s max duration for pre-check / switch-release backoff
@@ -2951,9 +3574,12 @@ enum RobotState : uint8_t {
   STATE_GRIP_CAP,
   STATE_LIFT_Z,
   STATE_TRAVERSE_BIN,
+  STATE_BIN_SETTLE,
   STATE_LOWER_BIN,
   STATE_RELEASE_CAP,
   STATE_RETRACT_Z,
+  STATE_AWAIT_NEXT_TARGET,
+  STATE_PARKING_FOR_SCAN,
   STATE_PARKING_HOME,
   STATE_FAILSAFE_PARKING,
   STATE_FAILSAFE_HALT,
@@ -2965,6 +3591,7 @@ CapTarget     batchQueue[MAX_BATCH_CAPS];
 CapTarget     currentCap;
 uint8_t       batchTotal        = 0;
 uint8_t       currentIdx        = 0;
+bool          closedLoopMode    = false;
 bool          isHomed           = false;
 bool          hasInFlightCap    = false;
 bool          commsFaultLatched = false;
@@ -3016,6 +3643,14 @@ bool isCapVerifiedHeld() {
 #endif
 }
 
+bool isValidSingleTarget(const CapTarget &amp;cap) {
+  if (!isfinite(cap.boardX_mm) || !isfinite(cap.boardY_mm)) return false;
+  if (cap.boardX_mm &lt; SAFE_PICK_MIN_X_MM || cap.boardX_mm &gt; SAFE_PICK_MAX_X_MM) return false;
+  if (cap.boardY_mm &lt; SAFE_PICK_MIN_Y_MM || cap.boardY_mm &gt; SAFE_PICK_MAX_Y_MM) return false;
+  if (cap.targetBinId &lt; 1 || cap.targetBinId &gt; 4) return false;
+  return true;
+}
+
 void moveGantryToMm(float boardX_mm, float boardY_mm) {
   float targetX = constrain(boardX_mm + TOOL_OFFSET_X_MM, 0.0f, MAX_TRAVEL_X_MM);
   float targetY = constrain(boardY_mm + TOOL_OFFSET_Y_MM, 0.0f, MAX_TRAVEL_Y_MM);
@@ -3043,7 +3678,7 @@ void serviceSerialDuringHoming() {
     uint8_t b = (uint8_t)Serial1.read();
     if (b == CMD_QUERY_STATUS) {
       Serial1.write(CMD_STATUS_BUSY);
-    } else if (b == PROTOCOL_MAGIC_BYTE) {
+    } else if (b == PROTOCOL_MAGIC_BYTE || b == PROTOCOL_SINGLE_MAGIC) {
       Serial1.write(CMD_BATCH_NACK);
     }
   }
@@ -3056,13 +3691,14 @@ void triggerHardFault(const __FlashStringHelper *reason) {
   stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Disable stepper coils immediately
   digitalWrite(PIN_SERVO_OE, HIGH);   // Disable PCA9685 PWM outputs (no commanded fault motion)
+  closedLoopMode    = false;
   isHomed           = false;
   hasInFlightCap    = false;
   batchTotal        = 0;
   currentIdx        = 0;
   currentState      = STATE_HARD_FAULT;
   Serial1.write(CMD_HARD_FAULT);
-  Serial.print(F(&quot;[HARD_FAULT] &quot;));
+  Serial.print(F("[HARD_FAULT] "));
   Serial.println(reason);
 }
 
@@ -3070,7 +3706,7 @@ bool waitServicedDelayMs(unsigned long durationMs) {
   unsigned long start = millis();
   while (millis() - start &lt; durationMs) {
     if (isEstopActive()) {
-      triggerHardFault(F(&quot;E-Stop active during servo settle&quot;));
+      triggerHardFault(F("E-Stop active during servo settle"));
       return false;
     }
     serviceSerialDuringHoming();
@@ -3080,6 +3716,7 @@ bool waitServicedDelayMs(unsigned long durationMs) {
 
 void homeAxes() {
   currentState      = STATE_HOMING;
+  closedLoopMode    = false;
   isHomed           = false;
   hasInFlightCap    = false;
   commsFaultLatched = false;
@@ -3090,12 +3727,12 @@ void homeAxes() {
 
   // 0. Refuse homing if hardwired E-stop auxiliary contact is active or Z overtravel is open
   if (isEstopActive()) {
-    triggerHardFault(F(&quot;E-Stop active at homing start&quot;));
+    triggerHardFault(F("E-Stop active at homing start"));
     return;
   }
 #if Z_LIMIT_IS_OVERTRAVEL
   if (isAxisLimitOpen(PIN_Z_HOME)) {
-    triggerHardFault(F(&quot;Z overtravel switch open or broken wire at homing start&quot;));
+    triggerHardFault(F("Z overtravel switch open or broken wire at homing start"));
     return;
   }
 #endif
@@ -3107,7 +3744,7 @@ void homeAxes() {
   if (!waitServicedDelayMs(450UL)) return;
 
   if (!isZRetractedSafeForXY()) {
-    triggerHardFault(F(&quot;Z-axis did not confirm retracted safe state before XY homing&quot;));
+    triggerHardFault(F("Z-axis did not confirm retracted safe state before XY homing"));
     return;
   }
 
@@ -3130,11 +3767,11 @@ void homeAxes() {
     unsigned long preStart = millis();
     while (!isGantryAtTarget()) {
       if (isEstopActive()) {
-        triggerHardFault(F(&quot;E-Stop triggered during pre-homing backoff&quot;));
+        triggerHardFault(F("E-Stop triggered during pre-homing backoff"));
         return;
       }
       if (millis() - preStart &gt; BACKOFF_TIMEOUT_MS) {
-        triggerHardFault(F(&quot;Pre-homing backoff timeout&quot;));
+        triggerHardFault(F("Pre-homing backoff timeout"));
         return;
       }
       stepperX.run();
@@ -3143,7 +3780,7 @@ void homeAxes() {
     }
     // If switch STILL reads HIGH after +10 mm backoff, NC wire is broken/unplugged or stuck!
     if (isAxisLimitOpen(PIN_X_HOME) || isAxisLimitOpen(PIN_Y_HOME)) {
-      triggerHardFault(F(&quot;X/Y NC home switch stuck open or wire broken&quot;));
+      triggerHardFault(F("X/Y NC home switch stuck open or wire broken"));
       return;
     }
   }
@@ -3152,17 +3789,17 @@ void homeAxes() {
   unsigned long homeStartMs = millis();
   while (!isAxisLimitOpen(PIN_X_HOME) || !isAxisLimitOpen(PIN_Y_HOME)) {
     if (isEstopActive()) {
-      triggerHardFault(F(&quot;E-Stop triggered during homing seek&quot;));
+      triggerHardFault(F("E-Stop triggered during homing seek"));
       return;
     }
 #if Z_LIMIT_IS_OVERTRAVEL
     if (isAxisLimitOpen(PIN_Z_HOME)) {
-      triggerHardFault(F(&quot;Z overtravel limit tripped during homing seek&quot;));
+      triggerHardFault(F("Z overtravel limit tripped during homing seek"));
       return;
     }
 #endif
     if (millis() - homeStartMs &gt; HOMING_TIMEOUT_MS) {
-      triggerHardFault(F(&quot;Homing seek timeout (&gt;30s): stall, belt slip, or switch failure&quot;));
+      triggerHardFault(F("Homing seek timeout (&gt;30s): stall, belt slip, or switch failure"));
       return;
     }
     if (!isAxisLimitOpen(PIN_X_HOME)) {
@@ -3184,11 +3821,11 @@ void homeAxes() {
   unsigned long releaseStartMs = millis();
   while (!isGantryAtTarget()) {
     if (isEstopActive()) {
-      triggerHardFault(F(&quot;E-Stop triggered during homing switch release&quot;));
+      triggerHardFault(F("E-Stop triggered during homing switch release"));
       return;
     }
     if (millis() - releaseStartMs &gt; BACKOFF_TIMEOUT_MS) {
-      triggerHardFault(F(&quot;Homing switch release backoff timeout&quot;));
+      triggerHardFault(F("Homing switch release backoff timeout"));
       return;
     }
     stepperX.run();
@@ -3196,7 +3833,7 @@ void homeAxes() {
     serviceSerialDuringHoming();
   }
   if (isAxisLimitOpen(PIN_X_HOME) || isAxisLimitOpen(PIN_Y_HOME)) {
-    triggerHardFault(F(&quot;X/Y home switch did not re-close after 3mm backoff&quot;));
+    triggerHardFault(F("X/Y home switch did not re-close after 3mm backoff"));
     return;
   }
 
@@ -3218,7 +3855,7 @@ void homeAxes() {
   lastHeartbeatMs = millis();
   currentState    = STATE_IDLE;
   Serial1.write(CMD_STATUS_READY);
-  Serial.println(F(&quot;[READY] Homing complete. Gantry at (0, 0).&quot;));
+  Serial.println(F("[READY] Homing complete. Gantry at (0, 0)."));
 }
 
 bool readSerial1Bytes(uint8_t *dest, uint16_t len, unsigned long timeoutMs) {
@@ -3227,7 +3864,7 @@ bool readSerial1Bytes(uint8_t *dest, uint16_t len, unsigned long timeoutMs) {
   uint16_t idx = 0;
   while (idx &lt; len) {
     if (isEstopActive()) {
-      triggerHardFault(F(&quot;E-Stop triggered during batch receive&quot;));
+      triggerHardFault(F("E-Stop triggered during batch receive"));
       return false;
     }
     if (Serial1.available() &gt; 0) {
@@ -3259,11 +3896,11 @@ void pollVisionHostPackets() {
     if (peekByte == CMD_REARM_HOME) {
       if (currentState == STATE_FAILSAFE_HALT || currentState == STATE_HARD_FAULT) {
         if (isEstopActive()) {
-          Serial.println(F(&quot;[REARM_REJECTED] Release physical E-Stop before re-arming.&quot;));
+          Serial.println(F("[REARM_REJECTED] Release physical E-Stop before re-arming."));
           Serial1.write(CMD_STATUS_FAULT);
           continue;
         }
-        Serial.println(F(&quot;[REARM] Explicit re-arm accepted; starting full re-home.&quot;));
+        Serial.println(F("[REARM] Explicit re-arm accepted; starting full re-home."));
         homeAxes();
       } else {
         replyStatusQuery();
@@ -3271,7 +3908,88 @@ void pollVisionHostPackets() {
       continue;
     }
 
-    // 4. New Batch Header (ONLY accepted when homed, fault-free, and IDLE)
+    // 4. Closed-Loop Clear-FOV Park Command (move gantry to (0,0) for unobstructed verification scan)
+    if (peekByte == CMD_PARK_FOR_SCAN) {
+      if ((currentState != STATE_AWAIT_NEXT_TARGET &amp;&amp; currentState != STATE_IDLE) ||
+          !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F("Z-axis not retracted before clear-FOV park"));
+        return;
+      }
+      closedLoopMode  = true;
+      lastHeartbeatMs = millis();
+      moveGantryToMm(0.0f, 0.0f);
+      currentState    = STATE_PARKING_FOR_SCAN;
+      continue;
+    }
+
+    // 5. Closed-Loop Session Finish Command (park at (0,0) if needed, emit COMPLETE -&gt; IDLE)
+    if (peekByte == CMD_FINISH_SESSION) {
+      if ((currentState != STATE_AWAIT_NEXT_TARGET &amp;&amp; currentState != STATE_IDLE) ||
+          !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F("Z-axis not retracted before session finish park"));
+        return;
+      }
+      closedLoopMode  = false;
+      lastHeartbeatMs = millis();
+      moveGantryToMm(0.0f, 0.0f);
+      currentState    = STATE_PARKING_HOME;
+      continue;
+    }
+
+    // 6. Closed-Loop Single-Target Pick Packet: [0x5B][CapTarget 15B][CRC16 2B] (18B total)
+    if (peekByte == PROTOCOL_SINGLE_MAGIC) {
+      bool canAccept = (currentState == STATE_IDLE || currentState == STATE_AWAIT_NEXT_TARGET);
+      if (!canAccept || !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+
+      CapTarget rxCap;
+      uint8_t crcBuf[2];
+      if (!readSerial1Bytes((uint8_t*)&amp;rxCap, sizeof(CapTarget), 250) ||
+          !readSerial1Bytes(crcBuf, 2, 100)) {
+        if (currentState == STATE_IDLE || currentState == STATE_AWAIT_NEXT_TARGET) {
+          Serial1.write(CMD_BATCH_NACK);
+        }
+        return;
+      }
+
+      uint16_t rxCrc   = (uint16_t)crcBuf[0] | ((uint16_t)crcBuf[1] &lt;&lt; 8);
+      uint16_t calcCrc = computeCRC16((const uint8_t*)&amp;rxCap, sizeof(CapTarget));
+      if (calcCrc != rxCrc || !isValidSingleTarget(rxCap)) {
+        Serial1.write(CMD_BATCH_NACK);
+        return;
+      }
+
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F("Z-axis not retracted before single-target start"));
+        return;
+      }
+
+      // Valid closed-loop target! Move directly from current pose (0,0 or bin) to cap
+      closedLoopMode    = true;
+      batchTotal        = 1;
+      currentIdx        = 0;
+      currentCap        = rxCap;
+      hasInFlightCap    = false;
+      commsFaultLatched = false;
+      lastHeartbeatMs   = millis();
+      Serial1.write(CMD_BATCH_ACK);
+
+      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      currentState = STATE_MOVING_TO_CAP;
+      return;
+    }
+
+    // 7. Legacy Multi-Cap Batch Header (ONLY accepted when homed, fault-free, and IDLE)
     if (peekByte == PROTOCOL_MAGIC_BYTE) {
       if (currentState != STATE_IDLE || !isHomed || commsFaultLatched || isEstopActive()) {
         Serial1.write(CMD_BATCH_NACK);
@@ -3300,13 +4018,20 @@ void pollVisionHostPackets() {
         Serial1.write(CMD_BATCH_NACK);
         return;
       }
+      for (uint8_t i = 0; i &lt; hdr.totalCaps; i++) {
+        if (!isValidSingleTarget(batchQueue[i])) {
+          Serial1.write(CMD_BATCH_NACK);
+          return;
+        }
+      }
 
       if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F(&quot;Z-axis not retracted before batch start&quot;));
+        triggerHardFault(F("Z-axis not retracted before batch start"));
         return;
       }
 
-      // Valid batch received! Store locally &amp; acknowledge
+      // Valid legacy batch received! Store locally &amp; acknowledge
+      closedLoopMode    = false;
       batchTotal        = hdr.totalCaps;
       currentIdx        = 0;
       hasInFlightCap    = false;
@@ -3329,7 +4054,7 @@ void checkRuntimeSafetyInputs() {
   if (isEstopActive()) {
     estopFaultCount++;
     if (estopFaultCount &gt;= 2) {
-      triggerHardFault(F(&quot;Physical E-Stop auxiliary contact open&quot;));
+      triggerHardFault(F("Physical E-Stop auxiliary contact open"));
       return;
     }
   } else {
@@ -3340,7 +4065,7 @@ void checkRuntimeSafetyInputs() {
   if (isAnyOvertravelLimitOpen()) {
     limitFaultCount++;
     if (limitFaultCount &gt;= 3) {
-      triggerHardFault(F(&quot;Runtime X/Y/Z NC limit switch open or broken wire&quot;));
+      triggerHardFault(F("Runtime X/Y/Z NC limit switch open or broken wire"));
     }
   } else {
     limitFaultCount = 0;
@@ -3362,10 +4087,11 @@ void executeSafeCommsLossPolicy() {
   // Only continue bin deposit if a physical grip sensor verifies a cap is held
   // AND Z has already lifted the cap clear of the workspace.
   bool inCarryStage = (currentState == STATE_TRAVERSE_BIN ||
+                       currentState == STATE_BIN_SETTLE ||
                        currentState == STATE_LOWER_BIN ||
                        currentState == STATE_RELEASE_CAP);
   if (inCarryStage &amp;&amp; isCapVerifiedHeld()) {
-    Serial.println(F(&quot;[COMMS_LOSS] Verified held cap in transit; completing deposit then halting.&quot;));
+    Serial.println(F("[COMMS_LOSS] Verified held cap in transit; completing deposit then halting."));
     return;
   }
 
@@ -3379,19 +4105,21 @@ void executeSafeCommsLossPolicy() {
   stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Remove stepper drive torque safely
   pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED); // Retract Z clear of board; preserve jaw state
+  closedLoopMode = false;
   isHomed        = false;
   hasInFlightCap = false;
   batchTotal     = 0;
   currentIdx     = 0;
   currentState   = STATE_FAILSAFE_HALT;
   Serial1.write(CMD_RECOVERY_HALT);
-  Serial.println(F(&quot;[COMMS_LOSS] Fail-safe halt latched. Explicit re-arm &amp; re-home required.&quot;));
+  Serial.println(F("[COMMS_LOSS] Fail-safe halt latched. Explicit re-arm &amp; re-home required."));
 }
 
 void executeMotionStateMachine() {
   switch (currentState) {
     case STATE_IDLE:
     case STATE_HOMING:
+    case STATE_AWAIT_NEXT_TARGET:
     case STATE_FAILSAFE_HALT:
     case STATE_HARD_FAULT:
       break;
@@ -3428,7 +4156,7 @@ void executeMotionStateMachine() {
     case STATE_LIFT_Z:
       if (millis() - stateTimerMs &gt;= 350) {
         if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F(&quot;Z-axis failed retracted check before bin traverse&quot;));
+          triggerHardFault(F("Z-axis failed retracted check before bin traverse"));
           return;
         }
         uint8_t binId = constrain(currentCap.targetBinId, 1, 4);
@@ -3437,16 +4165,31 @@ void executeMotionStateMachine() {
       }
       break;
 
-    // Step 05: Traverse to designated color bin
+    // Step 05: Traverse to designated color bin; pause briefly to settle before bin-side capture
     case STATE_TRAVERSE_BIN:
       if (isGantryAtTarget()) {
+        if (closedLoopMode) {
+          stateTimerMs = millis();
+          currentState = STATE_BIN_SETTLE;
+        } else {
+          pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN);
+          stateTimerMs = millis();
+          currentState = STATE_LOWER_BIN;
+        }
+      }
+      break;
+
+    // Step 05b: Stationary 120 ms XY settle at bin (Z raised) -&gt; trigger pipelined camera scan
+    case STATE_BIN_SETTLE:
+      if (millis() - stateTimerMs &gt;= BIN_SETTLE_MS) {
+        Serial1.write(CMD_SCAN_WINDOW_OPEN);
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN);
         stateTimerMs = millis();
         currentState = STATE_LOWER_BIN;
       }
       break;
 
-    // Step 06: Lower Z partially (~25 mm) into bin opening
+    // Step 06: Lower Z partially (~25 mm) into bin opening (in parallel with vision analysis!)
     case STATE_LOWER_BIN:
       if (millis() - stateTimerMs &gt;= 250) {
         pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
@@ -3465,11 +4208,11 @@ void executeMotionStateMachine() {
       }
       break;
 
-    // Step 08: Retract Z to 0 mm, emit progress pulse, advance or halt
+    // Step 08: Retract Z to 0 mm, emit progress pulse, await next closed-loop target or finish
     case STATE_RETRACT_Z:
       if (millis() - stateTimerMs &gt;= 300) {
         if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F(&quot;Z-axis failed retracted check after bin release&quot;));
+          triggerHardFault(F("Z-axis failed retracted check after bin release"));
           return;
         }
 
@@ -3483,23 +4226,40 @@ void executeMotionStateMachine() {
           return;
         }
 
+        if (closedLoopMode) {
+          batchTotal = 0;
+          currentIdx = 0;
+          Serial1.write(CMD_AWAIT_NEXT);
+          currentState = STATE_AWAIT_NEXT_TARGET;
+          return;
+        }
+
         currentIdx++;
         if (currentIdx &lt; batchTotal) {
           currentCap = batchQueue[currentIdx];
           moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
           currentState = STATE_MOVING_TO_CAP;
         } else {
-          // Batch finished! Return gantry to (0,0) clear of camera FOV
+          // Legacy batch finished! Return gantry to (0,0) clear of camera FOV
           moveGantryToMm(0.0f, 0.0f);
           currentState = STATE_PARKING_HOME;
         }
       }
       break;
 
+    // Clear-FOV verification park (gantry clears bridge off board, stays in active session)
+    case STATE_PARKING_FOR_SCAN:
+      if (isGantryAtTarget()) {
+        Serial1.write(CMD_AWAIT_NEXT);
+        currentState = STATE_AWAIT_NEXT_TARGET;
+      }
+      break;
+
     case STATE_PARKING_HOME:
       if (isGantryAtTarget()) {
-        batchTotal = 0;
-        currentIdx = 0;
+        closedLoopMode = false;
+        batchTotal     = 0;
+        currentIdx     = 0;
         Serial1.write(CMD_BATCH_COMPLETE);
         currentState = STATE_IDLE;
       }
@@ -3508,10 +4268,11 @@ void executeMotionStateMachine() {
     case STATE_FAILSAFE_PARKING:
       if (isGantryAtTarget()) {
         digitalWrite(PIN_STEPPER_EN, HIGH);
-        isHomed    = false;
-        batchTotal = 0;
-        currentIdx = 0;
-        currentState = STATE_FAILSAFE_HALT;
+        closedLoopMode = false;
+        isHomed        = false;
+        batchTotal     = 0;
+        currentIdx     = 0;
+        currentState   = STATE_FAILSAFE_HALT;
       }
       break;
   }
@@ -3541,13 +4302,13 @@ void setup() {
   Serial.begin(115200);   // USB Debug
   Serial1.begin(115200);  // Vision Host UART (Bidirectional 5V &lt;-&gt; 3.3V Level Shifter)
 
-  Serial.println(F(&quot;=== CapSorter Mega Motion Controller (Pre-Validation) ===&quot;));
-  Serial.print(F(&quot;Nominal Scale (steps/mm): X=&quot;)); Serial.print(STEPS_PER_MM_X);
-  Serial.print(F(&quot; Y=&quot;)); Serial.println(STEPS_PER_MM_Y);
-  Serial.print(F(&quot;Tool Offset (mm): dX=&quot;)); Serial.print(TOOL_OFFSET_X_MM);
-  Serial.print(F(&quot; dY=&quot;)); Serial.println(TOOL_OFFSET_Y_MM);
+  Serial.println(F("=== CapSorter Mega Motion Controller (Pre-Validation) ==="));
+  Serial.print(F("Nominal Scale (steps/mm): X=")); Serial.print(STEPS_PER_MM_X);
+  Serial.print(F(" Y=")); Serial.println(STEPS_PER_MM_Y);
+  Serial.print(F("Tool Offset (mm): dX=")); Serial.print(TOOL_OFFSET_X_MM);
+  Serial.print(F(" dY=")); Serial.println(TOOL_OFFSET_Y_MM);
   if (TOOL_OFFSET_X_MM == 0.0f &amp;&amp; TOOL_OFFSET_Y_MM == 0.0f) {
-    Serial.println(F(&quot;[WARN] TOOL_OFFSET is (0,0) placeholder; measure physical alignment on bench.&quot;));
+    Serial.println(F("[WARN] TOOL_OFFSET is (0,0) placeholder; measure physical alignment on bench."));
   }
 
   Wire.begin();
@@ -3586,37 +4347,49 @@ void loop() {
           <pre><code class="text-slate-200">// =========================================================================
 // packet_protocol.h - Shared Inter-Controller Wire Definitions (V1 &amp; V2)
 // Ensures Type Safety, CRC16-CCITT Checking, Explicit Handshake &amp; Supervision
-// Python Packing Format:
-//   BatchHeader : struct.pack(&#x27;&lt;BHBH&#x27;, magic, batchId, totalCaps, crc16) [6B]
-//   CapTarget   : struct.pack(&#x27;&lt;BBHHffB&#x27;, id, color, pxX, pxY, x_mm, y_mm, bin) [15B]
+// Python Packing Formats:
+//   SingleTarget: struct.pack('&lt;B', 0x5B) + CapTarget[15B] + struct.pack('&lt;H', crc16) [18B]
+//   BatchHeader : struct.pack('&lt;BHBH', magic, batchId, totalCaps, crc16) [6B]
+//   CapTarget   : struct.pack('&lt;BBHHffB', id, color, pxX, pxY, x_mm, y_mm, bin) [15B]
 // =========================================================================
 #ifndef PACKET_PROTOCOL_H
 #define PACKET_PROTOCOL_H
 
 #include &lt;stdint.h&gt;
 
-// Shared Batch Capacity Limit
-#define MAX_BATCH_CAPS        100   // Maximum CapTarget entries accepted in one batch
+// Shared Batch Capacity &amp; Continuous Board Reachability Limits
+#define MAX_BATCH_CAPS        100   // Maximum CapTarget entries accepted in one legacy batch
+#define BOARD_SIZE_MM         300.0f // Continuous 300x300 mm open flat plywood sorting plate
+#define CAP_DIAMETER_NOM_MM    30.0f // Nominal beverage bottle cap outer diameter (28-32 mm)
+#define SAFE_PICK_MIN_X_MM     18.0f // Min safe cap center X (keeps rim inside plate &amp; clear of X-home)
+#define SAFE_PICK_MAX_X_MM    282.0f // Max safe cap center X (keeps rim inside 300 mm plate)
+#define SAFE_PICK_MIN_Y_MM     18.0f // Min safe cap center Y (keeps rim inside plate &amp; clear of Y-home)
+#define SAFE_PICK_MAX_Y_MM    282.0f // Max safe cap center Y (keeps rim inside 300 mm plate)
 
-// Frame &amp; Batch Magic Bytes
+// Frame, Legacy Batch &amp; Closed-Loop Single-Target Magic Bytes
 #define FRAME_SYNC_BYTE_1     0x55
 #define FRAME_SYNC_BYTE_2     0xAA
-#define PROTOCOL_MAGIC_BYTE   0x5A
+#define PROTOCOL_MAGIC_BYTE   0x5A  // Legacy multi-cap batch packet header
+#define PROTOCOL_SINGLE_MAGIC 0x5B  // Closed-loop single-cap target: [0x5B][CapTarget 15B][CRC16 2B]
 
 // Inter-Controller Command, Handshake &amp; Supervision Opcodes
-#define CMD_CAPTURE_FRAME     0xAA  // Teensy -&gt; ESP32-CAM: Trigger QVGA capture
-#define CMD_BATCH_ACK         0xA1  // Mega -&gt; Vision Host: Batch CRC16 valid, starting motion
-#define CMD_BATCH_NACK        0xA2  // Mega -&gt; Vision Host: CRC16 mismatch, invalid length, or busy
-#define CMD_BATCH_COMPLETE    0xA3  // Mega -&gt; Vision Host: All caps sorted &amp; gantry parked at (0,0)
+#define CMD_CAPTURE_FRAME     0xAA  // Teensy -&gt; ESP32-CAM: Trigger fresh QVGA capture
+#define CMD_BATCH_ACK         0xA1  // Mega -&gt; Vision Host: Packet CRC16 &amp; bounds valid, starting motion
+#define CMD_BATCH_NACK        0xA2  // Mega -&gt; Vision Host: CRC16 mismatch, out-of-bounds target, or busy
+#define CMD_BATCH_COMPLETE    0xA3  // Mega -&gt; Vision Host: Session/batch finished &amp; gantry parked at (0,0)
 #define CMD_CAP_PROGRESS      0xA4  // Mega -&gt; Vision Host: One cap cycle completed (resets stall timer)
+#define CMD_SCAN_WINDOW_OPEN  0xA5  // Mega -&gt; Vision Host: Stationary at bin (Z raised, settled); capture fresh frame now
+#define CMD_AWAIT_NEXT        0xA6  // Mega -&gt; Vision Host: Bin retract (or clear-FOV park) complete; ready for next command
 
 #define CMD_QUERY_STATUS      0xB0  // Vision Host -&gt; Mega: Query readiness/fault state
 #define CMD_STATUS_READY      0xB1  // Mega -&gt; Vision Host: Homed, fault-free, ready in STATE_IDLE
-#define CMD_STATUS_BUSY       0xB2  // Mega -&gt; Vision Host: Homing or actively executing a batch
+#define CMD_STATUS_BUSY       0xB2  // Mega -&gt; Vision Host: Homing or actively executing a session/batch
 #define CMD_STATUS_FAULT      0xB3  // Mega -&gt; Vision Host: Fail-safe halt or hard fault latched
 #define CMD_REARM_HOME        0xB4  // Vision Host -&gt; Mega: Explicit operator re-arm &amp; re-home request
+#define CMD_PARK_FOR_SCAN     0xB5  // Vision Host -&gt; Mega: Move to clear-FOV (0,0) and emit CMD_AWAIT_NEXT
+#define CMD_FINISH_SESSION    0xB6  // Vision Host -&gt; Mega: Park at (0,0) if needed, emit CMD_BATCH_COMPLETE -&gt; STATE_IDLE
 
-#define CMD_HEARTBEAT_PING    0xF0  // Vision Host -&gt; Mega: 250ms keep-alive pulse during active batch
+#define CMD_HEARTBEAT_PING    0xF0  // Vision Host -&gt; Mega: 250ms keep-alive pulse during active session/batch
 #define CMD_RECOVERY_HALT     0xEE  // Mega -&gt; Vision Host: Comms-loss fail-safe halt latched
 #define CMD_HARD_FAULT        0xEF  // Mega -&gt; Vision Host: E-stop, NC limit trip, or homing fault
 

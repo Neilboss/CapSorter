@@ -388,8 +388,8 @@
               <canvas id="simulation-canvas" width="580" height="500" class="w-full h-full block cursor-crosshair"></canvas>
             </div>
             <div class="flex items-center justify-between w-full max-w-[580px] mt-3 text-xs text-slate-400 font-mono">
-              <span>Click grid to place cap</span>
-              <span class="text-orange-400">10×10 Grid (30mm cells) • 4 Output Bins</span>
+              <span>Click anywhere on board (Shift = snap)</span>
+              <span class="text-orange-400">Continuous 300×300 mm Plate • Bin-Side Re-Imaging</span>
             </div>
           </div>
 
@@ -432,16 +432,24 @@
                   <button id="btn-preset-scatter" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
                     Scatter 8 Caps
                   </button>
-                  <button id="btn-reset-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
-                    Reset Defaults
+                  <button id="btn-preset-cluster" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-orange-300 text-xs font-medium border border-orange-500/35 transition-all">
+                    Tight Cluster
                   </button>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
+                  <button id="btn-toggle-bump" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-mono border border-amber-500/40 transition-all">
+                    Bump Physics: ON
+                  </button>
                   <button id="btn-sim-speed" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-mono border border-slate-700 transition-all">
                     Speed: 1x
                   </button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button id="btn-reset-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-all">
+                    Reset Defaults
+                  </button>
                   <button id="btn-clear-sim" class="py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs font-medium border border-slate-700 transition-all">
-                    Clear Grid
+                    Clear Board
                   </button>
                 </div>
               </div>
@@ -485,9 +493,17 @@
                   <span class="text-slate-400">Pending Caps:</span>
                   <span id="telemetry-pending-count" class="text-amber-400 font-bold">6</span>
                 </div>
-                <div class="flex justify-between py-1">
+                <div class="flex justify-between py-1 border-b border-white/5">
                   <span class="text-slate-400">Sorted to Bins:</span>
                   <span id="telemetry-sorted-count" class="text-emerald-400 font-bold">0</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-white/5">
+                  <span class="text-slate-400">Camera Re-Scans:</span>
+                  <span id="telemetry-scan-count" class="text-cyan-400 font-bold">0</span>
+                </div>
+                <div class="flex justify-between py-1">
+                  <span class="text-slate-400">Bumps Re-Acquired:</span>
+                  <span id="telemetry-shift-count" class="text-amber-300 font-bold">0</span>
                 </div>
               </div>
             </div>
@@ -1877,19 +1893,19 @@
               </tr>
               <tr>
                 <td class="font-bold font-mono text-orange-400">05</td>
-                <td class="font-semibold text-white">Travel to Bin</td>
-                <td>Rapid traverse to designated bin slot</td>
+                <td class="font-semibold text-white">Travel to Bin &amp; Scan Trigger</td>
+                <td>Rapid traverse to bin (X=355 mm); 120 ms stationary settle emits <code class="text-cyan-300">CMD_SCAN_WINDOW_OPEN</code></td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">Raised (0mm)</span></td>
                 <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/25">Closed</span></td>
-                <td>No Z travel while moving in XY</td>
+                <td>Vibration-free bin-side capture overlaps Steps 06–08</td>
               </tr>
               <tr>
                 <td class="font-bold font-mono text-orange-400">06</td>
                 <td class="font-semibold text-white">Lower into Bin</td>
-                <td>Stationary over bin opening</td>
+                <td>Stationary over bin (Teensy streams &amp; analyses fresh frame in parallel)</td>
                 <td><span class="badge-pill bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">Lower (~25mm)</span></td>
                 <td><span class="badge-pill bg-orange-500/10 text-orange-300 border border-orange-500/25">Closed</span></td>
-                <td>Prevents cap bounce/ejection</td>
+                <td>Prevents cap bounce; heartbeats stay active every 250 ms</td>
               </tr>
               <tr>
                 <td class="font-bold font-mono text-orange-400">07</td>
@@ -1901,11 +1917,11 @@
               </tr>
               <tr>
                 <td class="font-bold font-mono text-orange-400">08</td>
-                <td class="font-semibold text-white">Retract & Advance</td>
-                <td>Stationary ⟶ Advance to next cap</td>
+                <td class="font-semibold text-white">Retract &amp; Closed-Loop Handover</td>
+                <td>Stays at bin (<code class="text-cyan-300">CMD_AWAIT_NEXT</code>) ⟶ Next fresh cap, or Clear-FOV park at (0,0)</td>
                 <td><span class="badge-pill bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Raise (0mm)</span></td>
                 <td><span class="badge-pill bg-slate-800 text-slate-300 border border-slate-700">Open (Ready)</span></td>
-                <td>Mega increments completed cap counter</td>
+                <td>Unobstructed verify scan confirms empty before <code class="text-emerald-300">STATE_IDLE</code></td>
               </tr>
             </tbody>
           </table>
@@ -1991,7 +2007,7 @@
         <!-- Code Block 1: Teensy Vision -->
         <div id="code-teensy" class="code-block p-5 bg-[#0b0e14] overflow-x-auto max-h-[480px]">
           <pre><code class="text-slate-200">// =========================================================================
-// Teensy 4.1 - Embedded Vision &amp; Plan Generator (V1)
+// Teensy 4.1 - Embedded Vision &amp; Closed-Loop Bin-Side Planner (V1)
 // Status: Pre-Validation Engineering Firmware (requires bench calibration)
 // Hardware: ARM Cortex-M7 @ 600 MHz | RAM: 1024 KB | 3.3V ONLY (NOT 5V tolerant)
 // Wiring:
@@ -2001,21 +2017,39 @@
 #include &lt;Arduino.h&gt;
 #include &lt;math.h&gt;
 #include &lt;string.h&gt;
-#include &quot;packet_protocol.h&quot;
+#include "packet_protocol.h"
 
-#define FRAME_WIDTH        320
-#define FRAME_HEIGHT       240
-#define FRAME_PIXELS       (FRAME_WIDTH * FRAME_HEIGHT)
-#define FRAME_BYTES        (FRAME_PIXELS * 2) // 153,600 bytes RGB565
-#define BFS_QUEUE_SIZE     4096
-#define MIN_CAP_SEP_MM     24.0f              // Spatial NMS radius (caps are 28-32 mm)
+#define FRAME_WIDTH               320
+#define FRAME_HEIGHT              240
+#define FRAME_PIXELS              (FRAME_WIDTH * FRAME_HEIGHT)
+#define FRAME_BYTES               (FRAME_PIXELS * 2) // 153,600 bytes RGB565
+#define BFS_QUEUE_SIZE            4096
+#define SPLIT_ROI_MAX             112                // Max ROI dim for merged same-color split
+
+// Continuous 300x300 mm Open Flat Plywood Workspace &amp; X-Axis Gripper Geometry
+#define CAP_RADIUS_MM             15.0f   // Nominal cap radius (28-32 mm diameter)
+#define MIN_CAP_SEP_MM            22.0f   // Spatial NMS radius (distinguishes touching 28 mm caps)
+#define GRIPPER_JAW_AXIS_X        1       // 1 = jaws open along X-axis, 0 = Y-axis
+#define JAW_INNER_HALF_MM         18.0f   // Open jaw inner gap = 36 mm (+/-18 mm)
+#define JAW_OUTER_HALF_MM         26.0f   // Outer jaw finger reach (+/-26 mm along jaw axis)
+#define JAW_WIDTH_HALF_MM         10.0f   // Jaw pad half-width perpendicular to jaw axis
+#define JAW_CLEARANCE_PAD_MM      1.5f    // Extra collision clearance margin around neighbor caps
+
+// Overhead Camera Bridge Occlusion, Parallax &amp; Retry Quarantine Guard
+#define BRIDGE_OCCLUSION_HALF_MM  35.0f   // Masked horizontal Y band around BIN_Y (0 disables)
+#define CAMERA_HEIGHT_MM          0.0f    // Set measured overhead lens height in mm (0 disables parallax)
+#define CAP_HEIGHT_MM             13.0f   // Nominal cap top height above board plane (mm)
+#define MISSED_PICK_RADIUS_MM     14.0f   // Same-color cap still within 14 mm =&gt; missed attempt
+#define MAX_PICK_RETRIES          3       // Quarantine stuck/unpickable spot after 3 failed attempts
+#define MAX_RETRY_RECORDS         16
+#define MAX_SESSION_CYCLES        200
 
 // Supervision &amp; Handshake Timeouts
-#define READY_POLL_INTERVAL_MS   500UL
-#define HEARTBEAT_INTERVAL_MS    250UL
-#define MAX_SINGLE_CAP_MS      25000UL  // Per-cap stall watchdog (reset by CMD_CAP_PROGRESS)
-#define PER_CAP_BUDGET_MS      18000UL  // Worst-case cap cycle + margin for dynamic total ceiling
-#define BATCH_OVERHEAD_MS      30000UL  // Homing/parking &amp; handshake margin
+#define READY_POLL_INTERVAL_MS    500UL
+#define HEARTBEAT_INTERVAL_MS     250UL
+#define MAX_SINGLE_CAP_MS       25000UL  // Per-cap stall watchdog (reset on progress/await)
+#define PER_CAP_BUDGET_MS       18000UL  // Worst-case cap cycle + margin for legacy batch mode
+#define BATCH_OVERHEAD_MS       30000UL  // Homing/parking &amp; handshake margin
 
 // FAIL-CLOSED CALIBRATION GUARD:
 // Measure the 4 board corner fiducials (Top-Left, Top-Right, Bottom-Right, Bottom-Left)
@@ -2044,14 +2078,35 @@ DMAMEM uint8_t  imageBuffer[FRAME_BYTES];
 DMAMEM uint8_t  rawMask[FRAME_PIXELS];
 DMAMEM uint8_t  colorMask[FRAME_PIXELS];
 DMAMEM uint32_t bfsQueue[BFS_QUEUE_SIZE];
+DMAMEM uint8_t  splitDistMap[SPLIT_ROI_MAX * SPLIT_ROI_MAX];
+
+struct RetryZone {
+  float   x_mm;
+  float   y_mm;
+  uint8_t color;
+  uint8_t attempts;
+  bool    quarantined;
+};
+
+struct MegaLinkFlags {
+  bool     active;
+  bool     gotProgress;
+  bool     gotAwaitNext;
+  bool     gotFault;
+  uint32_t lastPingMs;
+};
 
 CapTarget detectedCaps[MAX_BATCH_CAPS];
 uint32_t  detectedAreas[MAX_BATCH_CAPS];
+bool      detectedSafe[MAX_BATCH_CAPS];
 uint8_t   capCount       = 0;
 uint16_t  currentBatchId = 1;
 float     H[9]           = {0};
 bool      homographyOk   = false;
 bool      megaFaulted    = false;
+
+RetryZone retryZones[MAX_RETRY_RECORDS];
+uint8_t   retryZoneCount = 0;
 
 // External Sorting Bin Coordinates (mm)
 const float BIN_X_MM[5] = { 0.0f, 355.0f, 355.0f, 355.0f, 355.0f };
@@ -2115,10 +2170,38 @@ bool computeHomography4Pt(const float srcPx[4][2], const float dstMm[4][2], floa
   return true;
 }
 
-bool readBytesWithTimeout(HardwareSerial &amp;port, uint8_t *dest, uint32_t len, uint32_t timeoutMs) {
+void serviceMegaLinkDuringStream(MegaLinkFlags *flags) {
+  if (!flags || !flags-&gt;active) return;
+  uint32_t now = millis();
+  if (now - flags-&gt;lastPingMs &gt;= HEARTBEAT_INTERVAL_MS) {
+    Serial1.write(CMD_HEARTBEAT_PING);
+    flags-&gt;lastPingMs = now;
+  }
+  while (Serial1.available() &gt; 0) {
+    uint8_t resp = (uint8_t)Serial1.read();
+    if (resp == CMD_CAP_PROGRESS) {
+      flags-&gt;gotProgress = true;
+    } else if (resp == CMD_AWAIT_NEXT) {
+      flags-&gt;gotAwaitNext = true;
+    } else if (resp == CMD_RECOVERY_HALT || resp == CMD_HARD_FAULT || resp == CMD_STATUS_FAULT) {
+      flags-&gt;gotFault = true;
+      megaFaulted = true;
+    }
+  }
+}
+
+bool readBytesWithTimeout(
+  HardwareSerial &amp;port,
+  uint8_t *dest,
+  uint32_t len,
+  uint32_t timeoutMs,
+  MegaLinkFlags *linkFlags = nullptr
+) {
   uint32_t startMs = millis();
   uint32_t idx = 0;
   while (idx &lt; len) {
+    serviceMegaLinkDuringStream(linkFlags);
+    if (linkFlags &amp;&amp; linkFlags-&gt;gotFault) return false;
     if (port.available() &gt; 0) {
       dest[idx++] = (uint8_t)port.read();
     } else if (millis() - startMs &gt; timeoutMs) {
@@ -2145,7 +2228,7 @@ bool waitForMegaReady(uint32_t timeoutMs) {
       }
       if (resp == CMD_STATUS_FAULT || resp == CMD_HARD_FAULT || resp == CMD_RECOVERY_HALT) {
         megaFaulted = true;
-        Serial.println(F(&quot;[TEENSY] Mega reports FAULT/HALT; motion inhibited until operator re-arm.&quot;));
+        Serial.println(F("[TEENSY] Mega reports FAULT/HALT; motion inhibited until operator re-arm."));
         return false;
       }
     }
@@ -2154,11 +2237,13 @@ bool waitForMegaReady(uint32_t timeoutMs) {
   return false;
 }
 
-bool receiveFrame(uint8_t *buf, uint32_t expectedBytes) {
+bool receiveFrameWithHeartbeat(uint8_t *buf, uint32_t expectedBytes, MegaLinkFlags *linkFlags) {
   uint32_t startMs = millis();
   uint8_t prev = 0;
   bool synced = false;
   while (millis() - startMs &lt; 2500) {
+    serviceMegaLinkDuringStream(linkFlags);
+    if (linkFlags &amp;&amp; linkFlags-&gt;gotFault) return false;
     if (Serial2.available() &gt; 0) {
       uint8_t b = (uint8_t)Serial2.read();
       if (prev == FRAME_SYNC_BYTE_1 &amp;&amp; b == FRAME_SYNC_BYTE_2) {
@@ -2171,18 +2256,18 @@ bool receiveFrame(uint8_t *buf, uint32_t expectedBytes) {
   if (!synced) return false;
 
   uint8_t lenBytes[4];
-  if (!readBytesWithTimeout(Serial2, lenBytes, 4, 500)) return false;
+  if (!readBytesWithTimeout(Serial2, lenBytes, 4, 500, linkFlags)) return false;
   uint32_t frameLen = ((uint32_t)lenBytes[0] &lt;&lt; 24) |
                       ((uint32_t)lenBytes[1] &lt;&lt; 16) |
                       ((uint32_t)lenBytes[2] &lt;&lt; 8)  |
                       ((uint32_t)lenBytes[3]);
   if (frameLen != expectedBytes) return false;
 
-  // Read full RGB565 payload (153,600 bytes @ 921,600 baud ~ 1.67 s)
-  if (!readBytesWithTimeout(Serial2, buf, expectedBytes, 3000)) return false;
+  // Read full RGB565 payload (153,600 B @ 921,600 baud ~ 1.67 s) while heartbeating Mega!
+  if (!readBytesWithTimeout(Serial2, buf, expectedBytes, 3000, linkFlags)) return false;
 
   uint8_t crcBytes[2];
-  if (!readBytesWithTimeout(Serial2, crcBytes, 2, 500)) return false;
+  if (!readBytesWithTimeout(Serial2, crcBytes, 2, 500, linkFlags)) return false;
   uint16_t rxCrc = ((uint16_t)crcBytes[0] &lt;&lt; 8) | crcBytes[1];
   return (computeCRC16(buf, expectedBytes) == rxCrc);
 }
@@ -2219,6 +2304,7 @@ uint8_t classifyRgb565Pixel(uint16_t pixel) {
 }
 
 void cleanColorMask3x3() {
+  // Pass 1: Speckle removal &amp; glare-hole fill (3x3 majority + 5-neighbor close)
   memset(colorMask, COLOR_NONE, FRAME_PIXELS);
   for (uint16_t y = 1; y &lt; FRAME_HEIGHT - 1; y++) {
     for (uint16_t x = 1; x &lt; FRAME_WIDTH - 1; x++) {
@@ -2231,17 +2317,27 @@ void cleanColorMask3x3() {
           if (c &lt;= 4) counts[c]++;
         }
       }
-      if (center != COLOR_NONE &amp;&amp; counts[center] &gt;= 5) {
+      if (center != COLOR_NONE &amp;&amp; counts[center] &gt;= 4) {
         colorMask[idx] = center;
       } else if (center == COLOR_NONE) {
         for (uint8_t col = 1; col &lt;= 4; col++) {
-          if (counts[col] &gt;= 6) {
+          if (counts[col] &gt;= 5) {
             colorMask[idx] = col;
             break;
           }
         }
       }
     }
+  }
+}
+
+void applyParallaxCorrection(float *x_mm, float *y_mm) {
+  if (CAMERA_HEIGHT_MM &gt; CAP_HEIGHT_MM &amp;&amp; CAP_HEIGHT_MM &gt; 0.0f) {
+    float scale = 1.0f - (CAP_HEIGHT_MM / CAMERA_HEIGHT_MM);
+    const float cx = BOARD_SIZE_MM * 0.5f;
+    const float cy = BOARD_SIZE_MM * 0.5f;
+    *x_mm = cx + (*x_mm - cx) * scale;
+    *y_mm = cy + (*y_mm - cy) * scale;
   }
 }
 
@@ -2252,30 +2348,144 @@ bool transformToMillimeters(CapTarget *cap) {
   if (fabsf(w) &lt; 1e-6f) return false;
   cap-&gt;boardX_mm = (H[0] * u + H[1] * v + H[2]) / w;
   cap-&gt;boardY_mm = (H[3] * u + H[4] * v + H[5]) / w;
-  return isfinite(cap-&gt;boardX_mm) &amp;&amp; isfinite(cap-&gt;boardY_mm);
+  if (!isfinite(cap-&gt;boardX_mm) || !isfinite(cap-&gt;boardY_mm)) return false;
+  applyParallaxCorrection(&amp;cap-&gt;boardX_mm, &amp;cap-&gt;boardY_mm);
+  return true;
+}
+
+bool isInSafePickBounds(float x_mm, float y_mm) {
+  return (x_mm &gt;= SAFE_PICK_MIN_X_MM &amp;&amp; x_mm &lt;= SAFE_PICK_MAX_X_MM &amp;&amp;
+          y_mm &gt;= SAFE_PICK_MIN_Y_MM &amp;&amp; y_mm &lt;= SAFE_PICK_MAX_Y_MM);
+}
+
+void tryAddDetectedCandidate(
+  uint8_t targetColor,
+  uint16_t u,
+  uint16_t v,
+  uint32_t estArea,
+  bool hasOccludedY,
+  float occludedY_mm,
+  CapTarget *outCaps,
+  uint8_t *outCount
+) {
+  if (*outCount &gt;= MAX_BATCH_CAPS) return;
+  CapTarget cap;
+  cap.capId       = *outCount + 1;
+  cap.color       = targetColor;
+  cap.pixelX      = u;
+  cap.pixelY      = v;
+  cap.targetBinId = targetColor;
+
+  if (!transformToMillimeters(&amp;cap)) return;
+  if (cap.boardX_mm &lt; 0.0f || cap.boardX_mm &gt; BOARD_SIZE_MM ||
+      cap.boardY_mm &lt; 0.0f || cap.boardY_mm &gt; BOARD_SIZE_MM) {
+    return;
+  }
+  if (hasOccludedY &amp;&amp; BRIDGE_OCCLUSION_HALF_MM &gt; 0.0f &amp;&amp;
+      fabsf(cap.boardY_mm - occludedY_mm) &lt;= BRIDGE_OCCLUSION_HALF_MM) {
+    return;
+  }
+
+  outCaps[*outCount]       = cap;
+  detectedAreas[*outCount] = estArea;
+  detectedSafe[*outCount]  = isInSafePickBounds(cap.boardX_mm, cap.boardY_mm);
+  (*outCount)++;
+}
+
+// Two-pass chamfer distance peak splitter for touching same-color cap clusters on QVGA
+void splitMergedSameColorBlob(
+  uint8_t targetColor,
+  uint16_t minX, uint16_t minY, uint16_t maxX, uint16_t maxY,
+  bool hasOccludedY, float occludedY_mm,
+  CapTarget *outCaps, uint8_t *outCount
+) {
+  uint16_t roiW = (maxX - minX) + 3;
+  uint16_t roiH = (maxY - minY) + 3;
+  if (roiW &gt; SPLIT_ROI_MAX || roiH &gt; SPLIT_ROI_MAX) return;
+
+  for (uint16_t ry = 0; ry &lt; roiH; ry++) {
+    for (uint16_t rx = 0; rx &lt; roiW; rx++) {
+      int16_t fx = (int16_t)minX - 1 + (int16_t)rx;
+      int16_t fy = (int16_t)minY - 1 + (int16_t)ry;
+      bool inside = false;
+      if (fx &gt;= 0 &amp;&amp; fx &lt; FRAME_WIDTH &amp;&amp; fy &gt;= 0 &amp;&amp; fy &lt; FRAME_HEIGHT) {
+        inside = ((colorMask[(uint32_t)fy * FRAME_WIDTH + fx] &amp; 0x7F) == targetColor);
+      }
+      splitDistMap[ry * roiW + rx] = inside ? 255 : 0;
+    }
+  }
+
+  // Forward pass (3x3 chessboard chamfer)
+  for (uint16_t ry = 1; ry &lt; roiH - 1; ry++) {
+    for (uint16_t rx = 1; rx &lt; roiW - 1; rx++) {
+      uint8_t v = splitDistMap[ry * roiW + rx];
+      if (v == 0) continue;
+      uint8_t mn = min(splitDistMap[(ry - 1) * roiW + rx], splitDistMap[ry * roiW + (rx - 1)]);
+      mn = min(mn, splitDistMap[(ry - 1) * roiW + (rx - 1)]);
+      mn = min(mn, splitDistMap[(ry - 1) * roiW + (rx + 1)]);
+      splitDistMap[ry * roiW + rx] = (mn &lt; 254) ? (mn + 1) : 254;
+    }
+  }
+  // Backward pass
+  for (int16_t ry = (int16_t)roiH - 2; ry &gt;= 1; ry--) {
+    for (int16_t rx = (int16_t)roiW - 2; rx &gt;= 1; rx--) {
+      uint8_t v = splitDistMap[ry * roiW + rx];
+      if (v == 0) continue;
+      uint8_t mn = min(splitDistMap[(ry + 1) * roiW + rx], splitDistMap[ry * roiW + (rx + 1)]);
+      mn = min(mn, splitDistMap[(ry + 1) * roiW + (rx + 1)]);
+      mn = min(mn, splitDistMap[(ry + 1) * roiW + (rx - 1)]);
+      uint8_t cand = (mn &lt; 254) ? (mn + 1) : 254;
+      if (cand &lt; v) splitDistMap[ry * roiW + rx] = cand;
+    }
+  }
+
+  // Local peaks (radius &gt;= 6 px on 320x240 ~ 6+ mm) -&gt; NMS deduplicates merged caps
+  for (uint16_t ry = 3; ry &lt; roiH - 3; ry++) {
+    for (uint16_t rx = 3; rx &lt; roiW - 3; rx++) {
+      uint8_t val = splitDistMap[ry * roiW + rx];
+      if (val &lt; 6) continue;
+      bool isPeak = true;
+      for (int8_t dy = -3; dy &lt;= 3 &amp;&amp; isPeak; dy++) {
+        for (int8_t dx = -3; dx &lt;= 3; dx++) {
+          uint8_t nb = splitDistMap[(ry + dy) * roiW + (rx + dx)];
+          if (nb &gt; val || (nb == val &amp;&amp; (dy &lt; 0 || (dy == 0 &amp;&amp; dx &lt; 0)))) {
+            isPeak = false;
+            break;
+          }
+        }
+      }
+      if (isPeak) {
+        uint16_t u = (uint16_t)((int16_t)minX - 1 + (int16_t)rx);
+        uint16_t v = (uint16_t)((int16_t)minY - 1 + (int16_t)ry);
+        uint32_t estArea = (uint32_t)(3.14159f * (float)val * (float)val);
+        tryAddDetectedCandidate(targetColor, u, v, estArea, hasOccludedY, occludedY_mm, outCaps, outCount);
+      }
+    }
+  }
 }
 
 // Greedy spatial NMS sorted strictly by descending contour area so metadata &amp; areas
 // stay synchronized and a smaller overlapping blob can never overwrite a larger one.
-void deduplicateTargetsNMS(CapTarget *caps, uint32_t *areas, uint8_t *count) {
+void deduplicateTargetsNMS(CapTarget *caps, uint32_t *areas, bool *safeFlags, uint8_t *count) {
   uint8_t n = *count;
   if (n &lt;= 1) return;
 
-  // 1. Insertion-sort caps[] and areas[] together by area descending
   for (uint8_t i = 1; i &lt; n; i++) {
     CapTarget keyCap  = caps[i];
     uint32_t  keyArea = areas[i];
+    bool      keySafe = safeFlags[i];
     int16_t j = (int16_t)i - 1;
     while (j &gt;= 0 &amp;&amp; areas[j] &lt; keyArea) {
-      caps[j + 1]  = caps[j];
-      areas[j + 1] = areas[j];
+      caps[j + 1]      = caps[j];
+      areas[j + 1]     = areas[j];
+      safeFlags[j + 1] = safeFlags[j];
       j--;
     }
-    caps[j + 1]  = keyCap;
-    areas[j + 1] = keyArea;
+    caps[j + 1]      = keyCap;
+    areas[j + 1]     = keyArea;
+    safeFlags[j + 1] = keySafe;
   }
 
-  // 2. Greedily retain highest-area candidates separated by &gt;= MIN_CAP_SEP_MM
   uint8_t kept = 0;
   for (uint8_t i = 0; i &lt; n; i++) {
     bool overlap = false;
@@ -2290,6 +2500,7 @@ void deduplicateTargetsNMS(CapTarget *caps, uint32_t *areas, uint8_t *count) {
     if (!overlap) {
       caps[kept]       = caps[i];
       areas[kept]      = areas[i];
+      safeFlags[kept]  = safeFlags[i];
       caps[kept].capId = kept + 1;
       kept++;
     }
@@ -2297,7 +2508,13 @@ void deduplicateTargetsNMS(CapTarget *caps, uint32_t *areas, uint8_t *count) {
   *count = kept;
 }
 
-void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCount) {
+void segmentCapsHSV(
+  const uint8_t *frameBuf,
+  CapTarget *outCaps,
+  uint8_t *outCount,
+  bool hasOccludedY = false,
+  float occludedY_mm = 0.0f
+) {
   *outCount = 0;
   if (!homographyOk) return;
 
@@ -2318,6 +2535,7 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
       if (targetColor == COLOR_NONE || (targetColor &amp; 0x80)) continue;
 
       uint32_t area = 0, perimeter = 0, sumX = 0, sumY = 0;
+      uint16_t minX = x, maxX = x, minY = y, maxY = y;
       uint16_t qHead = 0, qTail = 0;
 
       colorMask[seedIdx] |= 0x80;
@@ -2332,6 +2550,10 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
         area++;
         sumX += cx;
         sumY += cy;
+        if (cx &lt; minX) minX = cx;
+        if (cx &gt; maxX) maxX = cx;
+        if (cy &lt; minY) minY = cy;
+        if (cy &gt; maxY) maxY = cy;
         bool isBoundary = false;
 
         for (uint8_t d = 0; d &lt; 4; d++) {
@@ -2357,82 +2579,216 @@ void segmentCapsHSV(const uint8_t *frameBuf, CapTarget *outCaps, uint8_t *outCou
         if (isBoundary) perimeter++;
       }
 
-      if (area &gt;= 220 &amp;&amp; area &lt;= 1800 &amp;&amp; perimeter &gt; 0 &amp;&amp; *outCount &lt; MAX_BATCH_CAPS) {
+      if (area &gt;= 220 &amp;&amp; perimeter &gt; 0 &amp;&amp; *outCount &lt; MAX_BATCH_CAPS) {
         float circularity = (4.0f * 3.1415926f * (float)area) / ((float)perimeter * (float)perimeter);
-        if (circularity &gt;= 0.72f) {
-          CapTarget &amp;cap = outCaps[*outCount];
-          cap.capId       = *outCount + 1;
-          cap.color       = targetColor;
-          cap.pixelX      = (uint16_t)(sumX / area);
-          cap.pixelY      = (uint16_t)(sumY / area);
-          cap.targetBinId = targetColor;
-
-          if (transformToMillimeters(&amp;cap) &amp;&amp;
-              cap.boardX_mm &gt;= 0.0f &amp;&amp; cap.boardX_mm &lt;= 300.0f &amp;&amp;
-              cap.boardY_mm &gt;= 0.0f &amp;&amp; cap.boardY_mm &lt;= 300.0f) {
-            detectedAreas[*outCount] = area;
-            (*outCount)++;
-          }
+        if (area &lt;= 1800 &amp;&amp; circularity &gt;= 0.70f) {
+          tryAddDetectedCandidate(
+            targetColor,
+            (uint16_t)(sumX / area),
+            (uint16_t)(sumY / area),
+            area,
+            hasOccludedY, occludedY_mm,
+            outCaps, outCount
+          );
+        } else {
+          // Oversized merged same-color cluster or glare-distorted blob -&gt; chamfer peak split
+          splitMergedSameColorBlob(
+            targetColor, minX, minY, maxX, maxY,
+            hasOccludedY, occludedY_mm,
+            outCaps, outCount
+          );
         }
       }
     }
   }
 
-  deduplicateTargetsNMS(outCaps, detectedAreas, outCount);
+  deduplicateTargetsNMS(outCaps, detectedAreas, detectedSafe, outCount);
 }
 
-void optimizeSortingPath(CapTarget *caps, uint8_t count) {
-  float curX = 0.0f, curY = 0.0f;
+bool circleIntersectsRect(float cx, float cy, float r, float x0, float y0, float x1, float y1) {
+  float nx = constrain(cx, x0, x1);
+  float ny = constrain(cy, y0, y1);
+  float dx = cx - nx;
+  float dy = cy - ny;
+  return (dx * dx + dy * dy) &lt; (r * r);
+}
+
+uint8_t countJawCollisions(uint8_t idx, const CapTarget *caps, uint8_t count, float *outMinDist) {
+  float tx = caps[idx].boardX_mm;
+  float ty = caps[idx].boardY_mm;
+  float rCheck = CAP_RADIUS_MM + JAW_CLEARANCE_PAD_MM;
+  bool negBlocked = false, posBlocked = false;
+  float minDist = 1e9f;
+
+  for (uint8_t j = 0; j &lt; count; j++) {
+    if (j == idx) continue;
+    float ox = caps[j].boardX_mm;
+    float oy = caps[j].boardY_mm;
+    float d = hypotf(ox - tx, oy - ty);
+    if (d &lt; minDist) minDist = d;
+
+#if GRIPPER_JAW_AXIS_X
+    if (!negBlocked &amp;&amp; circleIntersectsRect(ox, oy, rCheck,
+        tx - JAW_OUTER_HALF_MM, ty - JAW_WIDTH_HALF_MM,
+        tx - JAW_INNER_HALF_MM, ty + JAW_WIDTH_HALF_MM)) {
+      negBlocked = true;
+    }
+    if (!posBlocked &amp;&amp; circleIntersectsRect(ox, oy, rCheck,
+        tx + JAW_INNER_HALF_MM, ty - JAW_WIDTH_HALF_MM,
+        tx + JAW_OUTER_HALF_MM, ty + JAW_WIDTH_HALF_MM)) {
+      posBlocked = true;
+    }
+#else
+    if (!negBlocked &amp;&amp; circleIntersectsRect(ox, oy, rCheck,
+        tx - JAW_WIDTH_HALF_MM, ty - JAW_OUTER_HALF_MM,
+        tx + JAW_WIDTH_HALF_MM, ty - JAW_INNER_HALF_MM)) {
+      negBlocked = true;
+    }
+    if (!posBlocked &amp;&amp; circleIntersectsRect(ox, oy, rCheck,
+        tx - JAW_WIDTH_HALF_MM, ty + JAW_INNER_HALF_MM,
+        tx + JAW_WIDTH_HALF_MM, ty + JAW_OUTER_HALF_MM)) {
+      posBlocked = true;
+    }
+#endif
+  }
+
+  *outMinDist = minDist;
+  return (uint8_t)(negBlocked ? 1 : 0) + (uint8_t)(posBlocked ? 1 : 0);
+}
+
+bool isCapQuarantined(const CapTarget &amp;cap) {
+  for (uint8_t i = 0; i &lt; retryZoneCount; i++) {
+    if (retryZones[i].quarantined &amp;&amp; retryZones[i].color == cap.color &amp;&amp;
+        hypotf(cap.boardX_mm - retryZones[i].x_mm, cap.boardY_mm - retryZones[i].y_mm) &lt;= MISSED_PICK_RADIUS_MM) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool hasCapRetryPenalty(const CapTarget &amp;cap) {
+  for (uint8_t i = 0; i &lt; retryZoneCount; i++) {
+    if (!retryZones[i].quarantined &amp;&amp; retryZones[i].attempts &gt; 0 &amp;&amp; retryZones[i].color == cap.color &amp;&amp;
+        hypotf(cap.boardX_mm - retryZones[i].x_mm, cap.boardY_mm - retryZones[i].y_mm) &lt;= MISSED_PICK_RADIUS_MM) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool updateRetryState(
+  const CapTarget *lastTarget,
+  const CapTarget *caps,
+  uint8_t count,
+  bool hasOccludedY,
+  float occludedY_mm
+) {
+  if (!lastTarget) return false;
+  if (hasOccludedY &amp;&amp; BRIDGE_OCCLUSION_HALF_MM &gt; 0.0f &amp;&amp;
+      fabsf(lastTarget-&gt;boardY_mm - occludedY_mm) &lt;= BRIDGE_OCCLUSION_HALF_MM) {
+    return false;
+  }
+
+  bool stillPresent = false;
   for (uint8_t i = 0; i &lt; count; i++) {
-    uint8_t bestIdx = i;
-    float bestDist = 1e9f;
-    for (uint8_t j = i; j &lt; count; j++) {
-      float dist = hypotf(caps[j].boardX_mm - curX, caps[j].boardY_mm - curY);
-      if (dist &lt; bestDist) {
-        bestDist = dist;
-        bestIdx = j;
+    if (caps[i].color == lastTarget-&gt;color &amp;&amp;
+        hypotf(caps[i].boardX_mm - lastTarget-&gt;boardX_mm,
+               caps[i].boardY_mm - lastTarget-&gt;boardY_mm) &lt;= MISSED_PICK_RADIUS_MM) {
+      stillPresent = true;
+      break;
+    }
+  }
+
+  int8_t foundIdx = -1;
+  for (uint8_t i = 0; i &lt; retryZoneCount; i++) {
+    if (retryZones[i].color == lastTarget-&gt;color &amp;&amp;
+        hypotf(retryZones[i].x_mm - lastTarget-&gt;boardX_mm,
+               retryZones[i].y_mm - lastTarget-&gt;boardY_mm) &lt;= MISSED_PICK_RADIUS_MM) {
+      foundIdx = (int8_t)i;
+      break;
+    }
+  }
+
+  if (foundIdx &gt;= 0 &amp;&amp; retryZones[foundIdx].quarantined) {
+    return true;
+  }
+
+  if (stillPresent) {
+    if (foundIdx &lt; 0 &amp;&amp; retryZoneCount &lt; MAX_RETRY_RECORDS) {
+      foundIdx = (int8_t)retryZoneCount++;
+      retryZones[foundIdx].attempts    = 0;
+      retryZones[foundIdx].quarantined = false;
+    }
+    if (foundIdx &gt;= 0) {
+      retryZones[foundIdx].x_mm  = lastTarget-&gt;boardX_mm;
+      retryZones[foundIdx].y_mm  = lastTarget-&gt;boardY_mm;
+      retryZones[foundIdx].color = lastTarget-&gt;color;
+      retryZones[foundIdx].attempts++;
+      if (retryZones[foundIdx].attempts &gt;= MAX_PICK_RETRIES) {
+        retryZones[foundIdx].quarantined = true;
+        Serial.println(F("[TEENSY WARN] Stuck/unpickable cap quarantined after 3 failed attempts."));
       }
     }
-    if (bestIdx != i) {
-      CapTarget tmp = caps[i];
-      caps[i] = caps[bestIdx];
-      caps[bestIdx] = tmp;
+  } else if (foundIdx &gt;= 0 &amp;&amp; !retryZones[foundIdx].quarantined) {
+    retryZones[foundIdx].attempts = 0;
+  }
+  return true;
+}
+
+bool selectNextCapClearanceAware(
+  const CapTarget *caps,
+  const bool *safeFlags,
+  uint8_t count,
+  float curX,
+  float curY,
+  CapTarget *outSelected
+) {
+  int16_t bestIdx      = -1;
+  uint8_t bestPenalty  = 255;
+  uint8_t bestBlocked  = 255;
+  float   bestTravel   = 1e9f;
+  float   bestMinNeigh = -1.0f;
+
+  for (uint8_t i = 0; i &lt; count; i++) {
+    if (!safeFlags[i] || isCapQuarantined(caps[i])) continue;
+
+    uint8_t penalty = hasCapRetryPenalty(caps[i]) ? 1 : 0;
+    float minNeigh = 1e9f;
+    uint8_t blocked = countJawCollisions(i, caps, count, &amp;minNeigh);
+    float travel = hypotf(caps[i].boardX_mm - curX, caps[i].boardY_mm - curY);
+
+    bool better = (bestIdx &lt; 0) ||
+                  (penalty &lt; bestPenalty) ||
+                  (penalty == bestPenalty &amp;&amp; blocked &lt; bestBlocked) ||
+                  (penalty == bestPenalty &amp;&amp; blocked == bestBlocked &amp;&amp; travel &lt; bestTravel - 0.5f) ||
+                  (penalty == bestPenalty &amp;&amp; blocked == bestBlocked &amp;&amp;
+                   fabsf(travel - bestTravel) &lt;= 0.5f &amp;&amp; minNeigh &gt; bestMinNeigh);
+    if (better) {
+      bestIdx      = i;
+      bestPenalty  = penalty;
+      bestBlocked  = blocked;
+      bestTravel   = travel;
+      bestMinNeigh = minNeigh;
     }
-    caps[i].capId = i + 1;
-    uint8_t binId = caps[i].targetBinId;
-    curX = BIN_X_MM[binId];
-    curY = BIN_Y_MM[binId];
   }
+
+  if (bestIdx &lt; 0) return false;
+  *outSelected = caps[bestIdx];
+  return true;
 }
 
-void writePacedSerial1(const uint8_t *data, uint32_t len) {
-  // Pace transmissions in 32-byte chunks with 2 ms pause so Mega&#x27;s 64B RX FIFO never overflows
-  uint32_t offset = 0;
-  while (offset &lt; len) {
-    uint32_t chunk = min((uint32_t)32, len - offset);
-    Serial1.write(data + offset, chunk);
-    Serial1.flush();
-    offset += chunk;
-    if (offset &lt; len) delay(2);
-  }
-}
-
-bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
-  if (count == 0 || count &gt; MAX_BATCH_CAPS) return false;
-  uint32_t payloadBytes = (uint32_t)count * sizeof(CapTarget);
-
-  BatchHeader hdr;
-  hdr.magic     = PROTOCOL_MAGIC_BYTE;
-  hdr.batchId   = currentBatchId++;
-  hdr.totalCaps = count;
-  hdr.crc16     = computeCRC16((const uint8_t*)caps, payloadBytes);
+bool sendSingleTargetToMega(const CapTarget &amp;cap) {
+  uint8_t pkt[18];
+  pkt[0] = PROTOCOL_SINGLE_MAGIC;
+  memcpy(pkt + 1, &amp;cap, sizeof(CapTarget));
+  uint16_t crc = computeCRC16(pkt + 1, sizeof(CapTarget));
+  pkt[16] = (uint8_t)(crc &amp; 0xFF);
+  pkt[17] = (uint8_t)((crc &gt;&gt; 8) &amp; 0xFF);
 
   for (uint8_t attempt = 0; attempt &lt; 3; attempt++) {
     while (Serial1.available() &gt; 0) Serial1.read();
-    Serial1.write((const uint8_t*)&amp;hdr, sizeof(BatchHeader));
+    Serial1.write(pkt, sizeof(pkt));
     Serial1.flush();
-    delay(2);
-    writePacedSerial1((const uint8_t*)caps, payloadBytes);
 
     uint32_t waitStart = millis();
     while (millis() - waitStart &lt; 1000) {
@@ -2451,40 +2807,156 @@ bool sendPlanBatchToMega(const CapTarget *caps, uint8_t count) {
   return false;
 }
 
-BatchExecResult superviseMegaExecutionWithHeartbeat(uint8_t count) {
-  // Maintain 250 ms heartbeat for the full batch duration, bounded by per-cap progress
-  // and dynamic worst-case total duration (never a fixed 180 s cutoff).
-  uint32_t batchStartMs   = millis();
-  uint32_t lastPingMs     = batchStartMs;
-  uint32_t lastProgressMs = batchStartMs;
-  uint32_t maxTotalMs     = (uint32_t)count * PER_CAP_BUDGET_MS + BATCH_OVERHEAD_MS;
-
+BatchExecResult awaitMegaOpcodeWithHeartbeat(uint8_t targetOpcode, uint32_t timeoutMs) {
+  uint32_t startMs    = millis();
+  uint32_t lastPingMs = startMs;
   while (true) {
     uint32_t now = millis();
     if (now - lastPingMs &gt;= HEARTBEAT_INTERVAL_MS) {
       Serial1.write(CMD_HEARTBEAT_PING);
       lastPingMs = now;
     }
-
     while (Serial1.available() &gt; 0) {
-      uint8_t status = (uint8_t)Serial1.read();
-      if (status == CMD_CAP_PROGRESS) {
-        lastProgressMs = millis();
-      } else if (status == CMD_BATCH_COMPLETE) {
-        return EXEC_COMPLETE;
-      } else if (status == CMD_RECOVERY_HALT || status == CMD_HARD_FAULT || status == CMD_STATUS_FAULT) {
+      uint8_t resp = (uint8_t)Serial1.read();
+      if (resp == targetOpcode) return EXEC_COMPLETE;
+      if (resp == CMD_RECOVERY_HALT || resp == CMD_HARD_FAULT || resp == CMD_STATUS_FAULT) {
         megaFaulted = true;
         return EXEC_FAULT_HALT;
       }
     }
-
-    if ((now - lastProgressMs &gt; MAX_SINGLE_CAP_MS) || (now - batchStartMs &gt; maxTotalMs)) {
-      Serial.println(F(&quot;[TEENSY] Batch supervision stall/timeout detected.&quot;));
+    if (now - startMs &gt; timeoutMs) {
       megaFaulted = true;
       return EXEC_TIMEOUT;
     }
     delay(5);
   }
+}
+
+bool captureAndSegmentBoard(
+  bool hasOccludedY,
+  float occludedY_mm,
+  MegaLinkFlags *linkFlags
+) {
+  while (Serial2.available() &gt; 0) Serial2.read();
+  Serial2.write(CMD_CAPTURE_FRAME);
+  if (!receiveFrameWithHeartbeat(imageBuffer, FRAME_BYTES, linkFlags)) {
+    return false;
+  }
+  segmentCapsHSV(imageBuffer, detectedCaps, &amp;capCount, hasOccludedY, occludedY_mm);
+  serviceMegaLinkDuringStream(linkFlags);
+  return true;
+}
+
+BatchExecResult runClosedLoopSortSession() {
+  retryZoneCount = 0;
+
+  // Scan #0: Unobstructed full-board scan while parked at (0, 0)
+  if (!captureAndSegmentBoard(false, 0.0f, nullptr)) {
+    return EXEC_COMPLETE;
+  }
+
+  CapTarget nextCap;
+  if (!selectNextCapClearanceAware(detectedCaps, detectedSafe, capCount, 0.0f, 0.0f, &amp;nextCap)) {
+    return EXEC_COMPLETE;
+  }
+
+  for (uint16_t cycle = 0; cycle &lt; MAX_SESSION_CYCLES; cycle++) {
+    if (!sendSingleTargetToMega(nextCap)) {
+      return megaFaulted ? EXEC_FAULT_HALT : EXEC_TIMEOUT;
+    }
+
+    CapTarget lastTarget = nextCap;
+    uint8_t binId = constrain(lastTarget.targetBinId, 1, 4);
+    float binX = BIN_X_MM[binId];
+    float binY = BIN_Y_MM[binId];
+
+    uint32_t cycleStartMs = millis();
+    MegaLinkFlags flags = { true, false, false, false, cycleStartMs };
+    bool scannedAtBin = false;
+    bool retryEvaluated = false;
+    bool hasCandidateNext = false;
+    CapTarget candidateNext;
+
+    while (!flags.gotAwaitNext) {
+      uint32_t now = millis();
+      if (now - flags.lastPingMs &gt;= HEARTBEAT_INTERVAL_MS) {
+        Serial1.write(CMD_HEARTBEAT_PING);
+        flags.lastPingMs = now;
+      }
+      while (Serial1.available() &gt; 0) {
+        uint8_t resp = (uint8_t)Serial1.read();
+        if (resp == CMD_SCAN_WINDOW_OPEN &amp;&amp; !scannedAtBin) {
+          // Capture &amp; stream fresh image in parallel with bin drop while heartbeating Mega!
+          scannedAtBin = true;
+          if (captureAndSegmentBoard(true, binY, &amp;flags)) {
+            retryEvaluated = updateRetryState(&amp;lastTarget, detectedCaps, capCount, true, binY);
+            hasCandidateNext = selectNextCapClearanceAware(
+              detectedCaps, detectedSafe, capCount, binX, binY, &amp;candidateNext
+            );
+          }
+          if (flags.gotFault) return EXEC_FAULT_HALT;
+          if (flags.gotAwaitNext) break;
+        } else if (resp == CMD_CAP_PROGRESS) {
+          flags.gotProgress = true;
+          cycleStartMs = millis();
+        } else if (resp == CMD_AWAIT_NEXT) {
+          flags.gotAwaitNext = true;
+          break;
+        } else if (resp == CMD_RECOVERY_HALT || resp == CMD_HARD_FAULT || resp == CMD_STATUS_FAULT) {
+          megaFaulted = true;
+          return EXEC_FAULT_HALT;
+        }
+      }
+      if (!flags.gotAwaitNext &amp;&amp; (millis() - cycleStartMs &gt; MAX_SINGLE_CAP_MS)) {
+        megaFaulted = true;
+        return EXEC_TIMEOUT;
+      }
+      delay(5);
+    }
+
+    if (!scannedAtBin) {
+      if (captureAndSegmentBoard(true, binY, &amp;flags)) {
+        retryEvaluated = updateRetryState(&amp;lastTarget, detectedCaps, capCount, true, binY);
+        hasCandidateNext = selectNextCapClearanceAware(
+          detectedCaps, detectedSafe, capCount, binX, binY, &amp;candidateNext
+        );
+      }
+      if (flags.gotFault) return EXEC_FAULT_HALT;
+    }
+
+    if (hasCandidateNext) {
+      nextCap = candidateNext;
+      continue;
+    }
+
+    // 0 graspable caps visible outside bridge occlusion band -&gt; clear-FOV verification park
+    Serial1.write(CMD_PARK_FOR_SCAN);
+    Serial1.flush();
+    BatchExecResult parkRes = awaitMegaOpcodeWithHeartbeat(CMD_AWAIT_NEXT, MAX_SINGLE_CAP_MS);
+    if (parkRes != EXEC_COMPLETE) return parkRes;
+
+    MegaLinkFlags verifyFlags = { true, false, false, false, millis() };
+    if (captureAndSegmentBoard(false, 0.0f, &amp;verifyFlags)) {
+      if (verifyFlags.gotFault) return EXEC_FAULT_HALT;
+      if (!retryEvaluated) {
+        updateRetryState(&amp;lastTarget, detectedCaps, capCount, false, 0.0f);
+      }
+      if (selectNextCapClearanceAware(detectedCaps, detectedSafe, capCount, 0.0f, 0.0f, &amp;nextCap)) {
+        continue;
+      }
+    } else if (verifyFlags.gotFault) {
+      return EXEC_FAULT_HALT;
+    }
+
+    // Verified empty -&gt; finish cleanly and return Mega to STATE_IDLE
+    Serial1.write(CMD_FINISH_SESSION);
+    Serial1.flush();
+    return awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
+  }
+
+  Serial1.write(CMD_FINISH_SESSION);
+  Serial1.flush();
+  return awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
 }
 
 void setup() {
@@ -2496,14 +2968,14 @@ void setup() {
 
   homographyOk = computeHomography4Pt(BOARD_FIDUCIALS_PX, BOARD_FIDUCIALS_MM, H);
   if (!homographyOk) {
-    Serial.println(F(&quot;[TEENSY ERROR] Fiducial homography matrix is singular; motion inhibited.&quot;));
+    Serial.println(F("[TEENSY ERROR] Fiducial homography matrix is singular; motion inhibited."));
   }
 #if !V1_CALIBRATION_VERIFIED
-  Serial.println(F(&quot;[TEENSY FAIL-CLOSED] V1_CALIBRATION_VERIFIED == 0.&quot;));
-  Serial.println(F(&quot;Measure 4 board fiducial corners, update BOARD_FIDUCIALS_PX, and set V1_CALIBRATION_VERIFIED 1.&quot;));
+  Serial.println(F("[TEENSY FAIL-CLOSED] V1_CALIBRATION_VERIFIED == 0."));
+  Serial.println(F("Measure 4 board fiducial corners, update BOARD_FIDUCIALS_PX, and set V1_CALIBRATION_VERIFIED 1."));
 #endif
 
-  Serial.println(F(&quot;[TEENSY] Waiting for Mega CMD_STATUS_READY handshake...&quot;));
+  Serial.println(F("[TEENSY] Waiting for Mega CMD_STATUS_READY handshake..."));
   waitForMegaReady(0); // Wait indefinitely for Mega homing completion or fault report
 }
 
@@ -2516,35 +2988,24 @@ void loop() {
   if (!homographyOk || megaFaulted) {
     // Poll Mega status passively; operator must explicitly re-arm Mega before resuming
     if (waitForMegaReady(1000)) {
-      Serial.println(F(&quot;[TEENSY] Mega re-armed and READY.&quot;));
+      Serial.println(F("[TEENSY] Mega re-armed and READY."));
     }
     delay(500);
     return;
   }
 
-  // Confirm Mega is READY &amp; parked at (0,0) before triggering camera capture
+  // Confirm Mega is READY &amp; parked at (0,0) before triggering Scan #0
   if (!waitForMegaReady(2000)) {
     delay(500);
     return;
   }
 
-  while (Serial2.available() &gt; 0) Serial2.read();
-  Serial2.write(CMD_CAPTURE_FRAME);
+  digitalWrite(LED_BUILTIN, HIGH);
+  BatchExecResult res = runClosedLoopSortSession();
+  digitalWrite(LED_BUILTIN, LOW);
 
-  if (receiveFrame(imageBuffer, FRAME_BYTES)) {
-    digitalWrite(LED_BUILTIN, HIGH);
-    segmentCapsHSV(imageBuffer, detectedCaps, &amp;capCount);
-
-    if (capCount &gt; 0) {
-      optimizeSortingPath(detectedCaps, capCount);
-      if (sendPlanBatchToMega(detectedCaps, capCount)) {
-        BatchExecResult res = superviseMegaExecutionWithHeartbeat(capCount);
-        if (res != EXEC_COMPLETE) {
-          Serial.println(F(&quot;[TEENSY] Halting cycle until Mega is re-armed and READY.&quot;));
-        }
-      }
-    }
-    digitalWrite(LED_BUILTIN, LOW);
+  if (res != EXEC_COMPLETE) {
+    Serial.println(F("[TEENSY] Halting closed-loop session until Mega is re-armed and READY."));
   }
   delay(500);
 }</code></pre>
@@ -2568,10 +3029,11 @@ void loop() {
 //     unexpected motion on E-stop release until explicit re-arm + re-home.
 //   PCA9685 Servo Driver (I2C 0x40): SDA = Pin 20, SCL = Pin 21, OE = Pin 9
 // =========================================================================
+#include &lt;math.h&gt;
 #include &lt;Wire.h&gt;
 #include &lt;Adafruit_PWMServoDriver.h&gt;
 #include &lt;AccelStepper.h&gt;
-#include &quot;packet_protocol.h&quot;
+#include "packet_protocol.h"
 
 // Pin Definitions
 #define PIN_X_STEP          2
@@ -2624,8 +3086,9 @@ void loop() {
 #define PWM_GRIP_OPEN     210    // ~36 mm jaw gap (open)
 #define PWM_GRIP_CLOSE    385    // ~26 mm jaw gap (clamped on 28-32mm cap)
 
-// Safety &amp; Watchdog Timeouts
+// Safety, Settle &amp; Watchdog Timeouts
 // Worst-case X homing: 370 mm / (800 / 40 = 20 mm/s) = 18.5 s -&gt; 30 s timeout (~1.6x margin).
+#define BIN_SETTLE_MS        120UL  // Stationary XY settle at bin (Z raised) before bin-side camera shutter
 #define COMMS_TIMEOUT_MS    1200UL  // 1.2 s without 0xF0 heartbeat triggers fail-safe halt
 #define HOMING_TIMEOUT_MS  30000UL  // 30.0 s max homing seek duration
 #define BACKOFF_TIMEOUT_MS  3000UL  // 3.0 s max duration for pre-check / switch-release backoff
@@ -2646,9 +3109,12 @@ enum RobotState : uint8_t {
   STATE_GRIP_CAP,
   STATE_LIFT_Z,
   STATE_TRAVERSE_BIN,
+  STATE_BIN_SETTLE,
   STATE_LOWER_BIN,
   STATE_RELEASE_CAP,
   STATE_RETRACT_Z,
+  STATE_AWAIT_NEXT_TARGET,
+  STATE_PARKING_FOR_SCAN,
   STATE_PARKING_HOME,
   STATE_FAILSAFE_PARKING,
   STATE_FAILSAFE_HALT,
@@ -2660,6 +3126,7 @@ CapTarget     batchQueue[MAX_BATCH_CAPS];
 CapTarget     currentCap;
 uint8_t       batchTotal        = 0;
 uint8_t       currentIdx        = 0;
+bool          closedLoopMode    = false;
 bool          isHomed           = false;
 bool          hasInFlightCap    = false;
 bool          commsFaultLatched = false;
@@ -2711,6 +3178,14 @@ bool isCapVerifiedHeld() {
 #endif
 }
 
+bool isValidSingleTarget(const CapTarget &amp;cap) {
+  if (!isfinite(cap.boardX_mm) || !isfinite(cap.boardY_mm)) return false;
+  if (cap.boardX_mm &lt; SAFE_PICK_MIN_X_MM || cap.boardX_mm &gt; SAFE_PICK_MAX_X_MM) return false;
+  if (cap.boardY_mm &lt; SAFE_PICK_MIN_Y_MM || cap.boardY_mm &gt; SAFE_PICK_MAX_Y_MM) return false;
+  if (cap.targetBinId &lt; 1 || cap.targetBinId &gt; 4) return false;
+  return true;
+}
+
 void moveGantryToMm(float boardX_mm, float boardY_mm) {
   float targetX = constrain(boardX_mm + TOOL_OFFSET_X_MM, 0.0f, MAX_TRAVEL_X_MM);
   float targetY = constrain(boardY_mm + TOOL_OFFSET_Y_MM, 0.0f, MAX_TRAVEL_Y_MM);
@@ -2738,7 +3213,7 @@ void serviceSerialDuringHoming() {
     uint8_t b = (uint8_t)Serial1.read();
     if (b == CMD_QUERY_STATUS) {
       Serial1.write(CMD_STATUS_BUSY);
-    } else if (b == PROTOCOL_MAGIC_BYTE) {
+    } else if (b == PROTOCOL_MAGIC_BYTE || b == PROTOCOL_SINGLE_MAGIC) {
       Serial1.write(CMD_BATCH_NACK);
     }
   }
@@ -2751,13 +3226,14 @@ void triggerHardFault(const __FlashStringHelper *reason) {
   stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Disable stepper coils immediately
   digitalWrite(PIN_SERVO_OE, HIGH);   // Disable PCA9685 PWM outputs (no commanded fault motion)
+  closedLoopMode    = false;
   isHomed           = false;
   hasInFlightCap    = false;
   batchTotal        = 0;
   currentIdx        = 0;
   currentState      = STATE_HARD_FAULT;
   Serial1.write(CMD_HARD_FAULT);
-  Serial.print(F(&quot;[HARD_FAULT] &quot;));
+  Serial.print(F("[HARD_FAULT] "));
   Serial.println(reason);
 }
 
@@ -2765,7 +3241,7 @@ bool waitServicedDelayMs(unsigned long durationMs) {
   unsigned long start = millis();
   while (millis() - start &lt; durationMs) {
     if (isEstopActive()) {
-      triggerHardFault(F(&quot;E-Stop active during servo settle&quot;));
+      triggerHardFault(F("E-Stop active during servo settle"));
       return false;
     }
     serviceSerialDuringHoming();
@@ -2775,6 +3251,7 @@ bool waitServicedDelayMs(unsigned long durationMs) {
 
 void homeAxes() {
   currentState      = STATE_HOMING;
+  closedLoopMode    = false;
   isHomed           = false;
   hasInFlightCap    = false;
   commsFaultLatched = false;
@@ -2785,12 +3262,12 @@ void homeAxes() {
 
   // 0. Refuse homing if hardwired E-stop auxiliary contact is active or Z overtravel is open
   if (isEstopActive()) {
-    triggerHardFault(F(&quot;E-Stop active at homing start&quot;));
+    triggerHardFault(F("E-Stop active at homing start"));
     return;
   }
 #if Z_LIMIT_IS_OVERTRAVEL
   if (isAxisLimitOpen(PIN_Z_HOME)) {
-    triggerHardFault(F(&quot;Z overtravel switch open or broken wire at homing start&quot;));
+    triggerHardFault(F("Z overtravel switch open or broken wire at homing start"));
     return;
   }
 #endif
@@ -2802,7 +3279,7 @@ void homeAxes() {
   if (!waitServicedDelayMs(450UL)) return;
 
   if (!isZRetractedSafeForXY()) {
-    triggerHardFault(F(&quot;Z-axis did not confirm retracted safe state before XY homing&quot;));
+    triggerHardFault(F("Z-axis did not confirm retracted safe state before XY homing"));
     return;
   }
 
@@ -2825,11 +3302,11 @@ void homeAxes() {
     unsigned long preStart = millis();
     while (!isGantryAtTarget()) {
       if (isEstopActive()) {
-        triggerHardFault(F(&quot;E-Stop triggered during pre-homing backoff&quot;));
+        triggerHardFault(F("E-Stop triggered during pre-homing backoff"));
         return;
       }
       if (millis() - preStart &gt; BACKOFF_TIMEOUT_MS) {
-        triggerHardFault(F(&quot;Pre-homing backoff timeout&quot;));
+        triggerHardFault(F("Pre-homing backoff timeout"));
         return;
       }
       stepperX.run();
@@ -2838,7 +3315,7 @@ void homeAxes() {
     }
     // If switch STILL reads HIGH after +10 mm backoff, NC wire is broken/unplugged or stuck!
     if (isAxisLimitOpen(PIN_X_HOME) || isAxisLimitOpen(PIN_Y_HOME)) {
-      triggerHardFault(F(&quot;X/Y NC home switch stuck open or wire broken&quot;));
+      triggerHardFault(F("X/Y NC home switch stuck open or wire broken"));
       return;
     }
   }
@@ -2847,17 +3324,17 @@ void homeAxes() {
   unsigned long homeStartMs = millis();
   while (!isAxisLimitOpen(PIN_X_HOME) || !isAxisLimitOpen(PIN_Y_HOME)) {
     if (isEstopActive()) {
-      triggerHardFault(F(&quot;E-Stop triggered during homing seek&quot;));
+      triggerHardFault(F("E-Stop triggered during homing seek"));
       return;
     }
 #if Z_LIMIT_IS_OVERTRAVEL
     if (isAxisLimitOpen(PIN_Z_HOME)) {
-      triggerHardFault(F(&quot;Z overtravel limit tripped during homing seek&quot;));
+      triggerHardFault(F("Z overtravel limit tripped during homing seek"));
       return;
     }
 #endif
     if (millis() - homeStartMs &gt; HOMING_TIMEOUT_MS) {
-      triggerHardFault(F(&quot;Homing seek timeout (&gt;30s): stall, belt slip, or switch failure&quot;));
+      triggerHardFault(F("Homing seek timeout (&gt;30s): stall, belt slip, or switch failure"));
       return;
     }
     if (!isAxisLimitOpen(PIN_X_HOME)) {
@@ -2879,11 +3356,11 @@ void homeAxes() {
   unsigned long releaseStartMs = millis();
   while (!isGantryAtTarget()) {
     if (isEstopActive()) {
-      triggerHardFault(F(&quot;E-Stop triggered during homing switch release&quot;));
+      triggerHardFault(F("E-Stop triggered during homing switch release"));
       return;
     }
     if (millis() - releaseStartMs &gt; BACKOFF_TIMEOUT_MS) {
-      triggerHardFault(F(&quot;Homing switch release backoff timeout&quot;));
+      triggerHardFault(F("Homing switch release backoff timeout"));
       return;
     }
     stepperX.run();
@@ -2891,7 +3368,7 @@ void homeAxes() {
     serviceSerialDuringHoming();
   }
   if (isAxisLimitOpen(PIN_X_HOME) || isAxisLimitOpen(PIN_Y_HOME)) {
-    triggerHardFault(F(&quot;X/Y home switch did not re-close after 3mm backoff&quot;));
+    triggerHardFault(F("X/Y home switch did not re-close after 3mm backoff"));
     return;
   }
 
@@ -2913,7 +3390,7 @@ void homeAxes() {
   lastHeartbeatMs = millis();
   currentState    = STATE_IDLE;
   Serial1.write(CMD_STATUS_READY);
-  Serial.println(F(&quot;[READY] Homing complete. Gantry at (0, 0).&quot;));
+  Serial.println(F("[READY] Homing complete. Gantry at (0, 0)."));
 }
 
 bool readSerial1Bytes(uint8_t *dest, uint16_t len, unsigned long timeoutMs) {
@@ -2922,7 +3399,7 @@ bool readSerial1Bytes(uint8_t *dest, uint16_t len, unsigned long timeoutMs) {
   uint16_t idx = 0;
   while (idx &lt; len) {
     if (isEstopActive()) {
-      triggerHardFault(F(&quot;E-Stop triggered during batch receive&quot;));
+      triggerHardFault(F("E-Stop triggered during batch receive"));
       return false;
     }
     if (Serial1.available() &gt; 0) {
@@ -2954,11 +3431,11 @@ void pollVisionHostPackets() {
     if (peekByte == CMD_REARM_HOME) {
       if (currentState == STATE_FAILSAFE_HALT || currentState == STATE_HARD_FAULT) {
         if (isEstopActive()) {
-          Serial.println(F(&quot;[REARM_REJECTED] Release physical E-Stop before re-arming.&quot;));
+          Serial.println(F("[REARM_REJECTED] Release physical E-Stop before re-arming."));
           Serial1.write(CMD_STATUS_FAULT);
           continue;
         }
-        Serial.println(F(&quot;[REARM] Explicit re-arm accepted; starting full re-home.&quot;));
+        Serial.println(F("[REARM] Explicit re-arm accepted; starting full re-home."));
         homeAxes();
       } else {
         replyStatusQuery();
@@ -2966,7 +3443,88 @@ void pollVisionHostPackets() {
       continue;
     }
 
-    // 4. New Batch Header (ONLY accepted when homed, fault-free, and IDLE)
+    // 4. Closed-Loop Clear-FOV Park Command (move gantry to (0,0) for unobstructed verification scan)
+    if (peekByte == CMD_PARK_FOR_SCAN) {
+      if ((currentState != STATE_AWAIT_NEXT_TARGET &amp;&amp; currentState != STATE_IDLE) ||
+          !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F("Z-axis not retracted before clear-FOV park"));
+        return;
+      }
+      closedLoopMode  = true;
+      lastHeartbeatMs = millis();
+      moveGantryToMm(0.0f, 0.0f);
+      currentState    = STATE_PARKING_FOR_SCAN;
+      continue;
+    }
+
+    // 5. Closed-Loop Session Finish Command (park at (0,0) if needed, emit COMPLETE -&gt; IDLE)
+    if (peekByte == CMD_FINISH_SESSION) {
+      if ((currentState != STATE_AWAIT_NEXT_TARGET &amp;&amp; currentState != STATE_IDLE) ||
+          !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F("Z-axis not retracted before session finish park"));
+        return;
+      }
+      closedLoopMode  = false;
+      lastHeartbeatMs = millis();
+      moveGantryToMm(0.0f, 0.0f);
+      currentState    = STATE_PARKING_HOME;
+      continue;
+    }
+
+    // 6. Closed-Loop Single-Target Pick Packet: [0x5B][CapTarget 15B][CRC16 2B] (18B total)
+    if (peekByte == PROTOCOL_SINGLE_MAGIC) {
+      bool canAccept = (currentState == STATE_IDLE || currentState == STATE_AWAIT_NEXT_TARGET);
+      if (!canAccept || !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+
+      CapTarget rxCap;
+      uint8_t crcBuf[2];
+      if (!readSerial1Bytes((uint8_t*)&amp;rxCap, sizeof(CapTarget), 250) ||
+          !readSerial1Bytes(crcBuf, 2, 100)) {
+        if (currentState == STATE_IDLE || currentState == STATE_AWAIT_NEXT_TARGET) {
+          Serial1.write(CMD_BATCH_NACK);
+        }
+        return;
+      }
+
+      uint16_t rxCrc   = (uint16_t)crcBuf[0] | ((uint16_t)crcBuf[1] &lt;&lt; 8);
+      uint16_t calcCrc = computeCRC16((const uint8_t*)&amp;rxCap, sizeof(CapTarget));
+      if (calcCrc != rxCrc || !isValidSingleTarget(rxCap)) {
+        Serial1.write(CMD_BATCH_NACK);
+        return;
+      }
+
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F("Z-axis not retracted before single-target start"));
+        return;
+      }
+
+      // Valid closed-loop target! Move directly from current pose (0,0 or bin) to cap
+      closedLoopMode    = true;
+      batchTotal        = 1;
+      currentIdx        = 0;
+      currentCap        = rxCap;
+      hasInFlightCap    = false;
+      commsFaultLatched = false;
+      lastHeartbeatMs   = millis();
+      Serial1.write(CMD_BATCH_ACK);
+
+      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      currentState = STATE_MOVING_TO_CAP;
+      return;
+    }
+
+    // 7. Legacy Multi-Cap Batch Header (ONLY accepted when homed, fault-free, and IDLE)
     if (peekByte == PROTOCOL_MAGIC_BYTE) {
       if (currentState != STATE_IDLE || !isHomed || commsFaultLatched || isEstopActive()) {
         Serial1.write(CMD_BATCH_NACK);
@@ -2995,13 +3553,20 @@ void pollVisionHostPackets() {
         Serial1.write(CMD_BATCH_NACK);
         return;
       }
+      for (uint8_t i = 0; i &lt; hdr.totalCaps; i++) {
+        if (!isValidSingleTarget(batchQueue[i])) {
+          Serial1.write(CMD_BATCH_NACK);
+          return;
+        }
+      }
 
       if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F(&quot;Z-axis not retracted before batch start&quot;));
+        triggerHardFault(F("Z-axis not retracted before batch start"));
         return;
       }
 
-      // Valid batch received! Store locally &amp; acknowledge
+      // Valid legacy batch received! Store locally &amp; acknowledge
+      closedLoopMode    = false;
       batchTotal        = hdr.totalCaps;
       currentIdx        = 0;
       hasInFlightCap    = false;
@@ -3024,7 +3589,7 @@ void checkRuntimeSafetyInputs() {
   if (isEstopActive()) {
     estopFaultCount++;
     if (estopFaultCount &gt;= 2) {
-      triggerHardFault(F(&quot;Physical E-Stop auxiliary contact open&quot;));
+      triggerHardFault(F("Physical E-Stop auxiliary contact open"));
       return;
     }
   } else {
@@ -3035,7 +3600,7 @@ void checkRuntimeSafetyInputs() {
   if (isAnyOvertravelLimitOpen()) {
     limitFaultCount++;
     if (limitFaultCount &gt;= 3) {
-      triggerHardFault(F(&quot;Runtime X/Y/Z NC limit switch open or broken wire&quot;));
+      triggerHardFault(F("Runtime X/Y/Z NC limit switch open or broken wire"));
     }
   } else {
     limitFaultCount = 0;
@@ -3057,10 +3622,11 @@ void executeSafeCommsLossPolicy() {
   // Only continue bin deposit if a physical grip sensor verifies a cap is held
   // AND Z has already lifted the cap clear of the workspace.
   bool inCarryStage = (currentState == STATE_TRAVERSE_BIN ||
+                       currentState == STATE_BIN_SETTLE ||
                        currentState == STATE_LOWER_BIN ||
                        currentState == STATE_RELEASE_CAP);
   if (inCarryStage &amp;&amp; isCapVerifiedHeld()) {
-    Serial.println(F(&quot;[COMMS_LOSS] Verified held cap in transit; completing deposit then halting.&quot;));
+    Serial.println(F("[COMMS_LOSS] Verified held cap in transit; completing deposit then halting."));
     return;
   }
 
@@ -3074,19 +3640,21 @@ void executeSafeCommsLossPolicy() {
   stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Remove stepper drive torque safely
   pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED); // Retract Z clear of board; preserve jaw state
+  closedLoopMode = false;
   isHomed        = false;
   hasInFlightCap = false;
   batchTotal     = 0;
   currentIdx     = 0;
   currentState   = STATE_FAILSAFE_HALT;
   Serial1.write(CMD_RECOVERY_HALT);
-  Serial.println(F(&quot;[COMMS_LOSS] Fail-safe halt latched. Explicit re-arm &amp; re-home required.&quot;));
+  Serial.println(F("[COMMS_LOSS] Fail-safe halt latched. Explicit re-arm &amp; re-home required."));
 }
 
 void executeMotionStateMachine() {
   switch (currentState) {
     case STATE_IDLE:
     case STATE_HOMING:
+    case STATE_AWAIT_NEXT_TARGET:
     case STATE_FAILSAFE_HALT:
     case STATE_HARD_FAULT:
       break;
@@ -3123,7 +3691,7 @@ void executeMotionStateMachine() {
     case STATE_LIFT_Z:
       if (millis() - stateTimerMs &gt;= 350) {
         if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F(&quot;Z-axis failed retracted check before bin traverse&quot;));
+          triggerHardFault(F("Z-axis failed retracted check before bin traverse"));
           return;
         }
         uint8_t binId = constrain(currentCap.targetBinId, 1, 4);
@@ -3132,16 +3700,31 @@ void executeMotionStateMachine() {
       }
       break;
 
-    // Step 05: Traverse to designated color bin
+    // Step 05: Traverse to designated color bin; pause briefly to settle before bin-side capture
     case STATE_TRAVERSE_BIN:
       if (isGantryAtTarget()) {
+        if (closedLoopMode) {
+          stateTimerMs = millis();
+          currentState = STATE_BIN_SETTLE;
+        } else {
+          pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN);
+          stateTimerMs = millis();
+          currentState = STATE_LOWER_BIN;
+        }
+      }
+      break;
+
+    // Step 05b: Stationary 120 ms XY settle at bin (Z raised) -&gt; trigger pipelined camera scan
+    case STATE_BIN_SETTLE:
+      if (millis() - stateTimerMs &gt;= BIN_SETTLE_MS) {
+        Serial1.write(CMD_SCAN_WINDOW_OPEN);
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN);
         stateTimerMs = millis();
         currentState = STATE_LOWER_BIN;
       }
       break;
 
-    // Step 06: Lower Z partially (~25 mm) into bin opening
+    // Step 06: Lower Z partially (~25 mm) into bin opening (in parallel with vision analysis!)
     case STATE_LOWER_BIN:
       if (millis() - stateTimerMs &gt;= 250) {
         pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
@@ -3160,11 +3743,11 @@ void executeMotionStateMachine() {
       }
       break;
 
-    // Step 08: Retract Z to 0 mm, emit progress pulse, advance or halt
+    // Step 08: Retract Z to 0 mm, emit progress pulse, await next closed-loop target or finish
     case STATE_RETRACT_Z:
       if (millis() - stateTimerMs &gt;= 300) {
         if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F(&quot;Z-axis failed retracted check after bin release&quot;));
+          triggerHardFault(F("Z-axis failed retracted check after bin release"));
           return;
         }
 
@@ -3178,23 +3761,40 @@ void executeMotionStateMachine() {
           return;
         }
 
+        if (closedLoopMode) {
+          batchTotal = 0;
+          currentIdx = 0;
+          Serial1.write(CMD_AWAIT_NEXT);
+          currentState = STATE_AWAIT_NEXT_TARGET;
+          return;
+        }
+
         currentIdx++;
         if (currentIdx &lt; batchTotal) {
           currentCap = batchQueue[currentIdx];
           moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
           currentState = STATE_MOVING_TO_CAP;
         } else {
-          // Batch finished! Return gantry to (0,0) clear of camera FOV
+          // Legacy batch finished! Return gantry to (0,0) clear of camera FOV
           moveGantryToMm(0.0f, 0.0f);
           currentState = STATE_PARKING_HOME;
         }
       }
       break;
 
+    // Clear-FOV verification park (gantry clears bridge off board, stays in active session)
+    case STATE_PARKING_FOR_SCAN:
+      if (isGantryAtTarget()) {
+        Serial1.write(CMD_AWAIT_NEXT);
+        currentState = STATE_AWAIT_NEXT_TARGET;
+      }
+      break;
+
     case STATE_PARKING_HOME:
       if (isGantryAtTarget()) {
-        batchTotal = 0;
-        currentIdx = 0;
+        closedLoopMode = false;
+        batchTotal     = 0;
+        currentIdx     = 0;
         Serial1.write(CMD_BATCH_COMPLETE);
         currentState = STATE_IDLE;
       }
@@ -3203,10 +3803,11 @@ void executeMotionStateMachine() {
     case STATE_FAILSAFE_PARKING:
       if (isGantryAtTarget()) {
         digitalWrite(PIN_STEPPER_EN, HIGH);
-        isHomed    = false;
-        batchTotal = 0;
-        currentIdx = 0;
-        currentState = STATE_FAILSAFE_HALT;
+        closedLoopMode = false;
+        isHomed        = false;
+        batchTotal     = 0;
+        currentIdx     = 0;
+        currentState   = STATE_FAILSAFE_HALT;
       }
       break;
   }
@@ -3236,13 +3837,13 @@ void setup() {
   Serial.begin(115200);   // USB Debug
   Serial1.begin(115200);  // Vision Host UART (Bidirectional 5V &lt;-&gt; 3.3V Level Shifter)
 
-  Serial.println(F(&quot;=== CapSorter Mega Motion Controller (Pre-Validation) ===&quot;));
-  Serial.print(F(&quot;Nominal Scale (steps/mm): X=&quot;)); Serial.print(STEPS_PER_MM_X);
-  Serial.print(F(&quot; Y=&quot;)); Serial.println(STEPS_PER_MM_Y);
-  Serial.print(F(&quot;Tool Offset (mm): dX=&quot;)); Serial.print(TOOL_OFFSET_X_MM);
-  Serial.print(F(&quot; dY=&quot;)); Serial.println(TOOL_OFFSET_Y_MM);
+  Serial.println(F("=== CapSorter Mega Motion Controller (Pre-Validation) ==="));
+  Serial.print(F("Nominal Scale (steps/mm): X=")); Serial.print(STEPS_PER_MM_X);
+  Serial.print(F(" Y=")); Serial.println(STEPS_PER_MM_Y);
+  Serial.print(F("Tool Offset (mm): dX=")); Serial.print(TOOL_OFFSET_X_MM);
+  Serial.print(F(" dY=")); Serial.println(TOOL_OFFSET_Y_MM);
   if (TOOL_OFFSET_X_MM == 0.0f &amp;&amp; TOOL_OFFSET_Y_MM == 0.0f) {
-    Serial.println(F(&quot;[WARN] TOOL_OFFSET is (0,0) placeholder; measure physical alignment on bench.&quot;));
+    Serial.println(F("[WARN] TOOL_OFFSET is (0,0) placeholder; measure physical alignment on bench."));
   }
 
   Wire.begin();
@@ -3286,14 +3887,14 @@ void loop() {
 // Wiring: GPIO13 (TX2) -&gt; Teensy Pin 7 (RX2) | GPIO14 (RX2) &lt;- Teensy Pin 8 (TX2)
 // =========================================================================
 #include &lt;Arduino.h&gt;
-#include &quot;esp_camera.h&quot;
+#include "esp_camera.h"
 #include &lt;HardwareSerial.h&gt;
-#include &quot;packet_protocol.h&quot;
+#include "packet_protocol.h"
 
 HardwareSerial TeensySerial(2); // UART2 (RX=GPIO14, TX=GPIO13)
 
 void haltCameraInitFault(const char *msg) {
-  Serial.print(F(&quot;[ESP32-CAM ERROR] &quot;));
+  Serial.print(F("[ESP32-CAM ERROR] "));
   Serial.println(msg);
   while (true) {
     delay(1000);
@@ -3306,7 +3907,7 @@ void setup() {
   // RGB565 QVGA uses 320 * 240 * 2 = 153,600 bytes/frame (307,200 bytes for 2 FBs).
   // AI-Thinker ESP32-CAM requires external PSRAM for double-buffered RGB565 capture.
   if (!psramFound()) {
-    haltCameraInitFault(&quot;PSRAM not detected; enable PSRAM in Board Tools for RGB565 fb_count=2.&quot;);
+    haltCameraInitFault("PSRAM not detected; enable PSRAM in Board Tools for RGB565 fb_count=2.");
   }
 
   // Zero-initialize full camera_config_t so no driver field holds stack garbage
@@ -3340,8 +3941,8 @@ void setup() {
 
   esp_err_t err = esp_camera_init(&amp;config);
   if (err != ESP_OK) {
-    Serial.printf(&quot;[ESP32-CAM ERROR] esp_camera_init failed: 0x%x\n&quot;, (unsigned int)err);
-    haltCameraInitFault(&quot;Camera initialization failed.&quot;);
+    Serial.printf("[ESP32-CAM ERROR] esp_camera_init failed: 0x%x\n", (unsigned int)err);
+    haltCameraInitFault("Camera initialization failed.");
   }
 
   // 1. Allow AWB, AEC, and AGC to converge under diffused LED light plate for 800 ms
@@ -3368,13 +3969,18 @@ void setup() {
   }
 
   TeensySerial.begin(921600, SERIAL_8N1, 14, 13);
-  Serial.println(F(&quot;[ESP32-CAM READY] Streaming QVGA RGB565 on UART2 @ 921600 baud.&quot;));
+  Serial.println(F("[ESP32-CAM READY] Streaming QVGA RGB565 on UART2 @ 921600 baud."));
 }
 
 void loop() {
   if (TeensySerial.available() &gt; 0) {
     uint8_t cmd = (uint8_t)TeensySerial.read();
     if (cmd == CMD_CAPTURE_FRAME) {
+      // Flush 1 buffered frame (fb_count=2) so bin-side scans never return a stale
+      // exposure captured while the gantry carriage was still crossing the board.
+      camera_fb_t *staleFb = esp_camera_fb_get();
+      if (staleFb) esp_camera_fb_return(staleFb);
+
       camera_fb_t *fb = esp_camera_fb_get();
       if (fb) {
         uint32_t frameLen = (uint32_t)fb-&gt;len; // Expected 153,600 bytes (32-bit length)
@@ -3411,37 +4017,49 @@ void loop() {
           <pre><code class="text-slate-200">// =========================================================================
 // packet_protocol.h - Shared Inter-Controller Wire Definitions (V1 &amp; V2)
 // Ensures Type Safety, CRC16-CCITT Checking, Explicit Handshake &amp; Supervision
-// Python Packing Format:
-//   BatchHeader : struct.pack(&#x27;&lt;BHBH&#x27;, magic, batchId, totalCaps, crc16) [6B]
-//   CapTarget   : struct.pack(&#x27;&lt;BBHHffB&#x27;, id, color, pxX, pxY, x_mm, y_mm, bin) [15B]
+// Python Packing Formats:
+//   SingleTarget: struct.pack('&lt;B', 0x5B) + CapTarget[15B] + struct.pack('&lt;H', crc16) [18B]
+//   BatchHeader : struct.pack('&lt;BHBH', magic, batchId, totalCaps, crc16) [6B]
+//   CapTarget   : struct.pack('&lt;BBHHffB', id, color, pxX, pxY, x_mm, y_mm, bin) [15B]
 // =========================================================================
 #ifndef PACKET_PROTOCOL_H
 #define PACKET_PROTOCOL_H
 
 #include &lt;stdint.h&gt;
 
-// Shared Batch Capacity Limit
-#define MAX_BATCH_CAPS        100   // Maximum CapTarget entries accepted in one batch
+// Shared Batch Capacity &amp; Continuous Board Reachability Limits
+#define MAX_BATCH_CAPS        100   // Maximum CapTarget entries accepted in one legacy batch
+#define BOARD_SIZE_MM         300.0f // Continuous 300x300 mm open flat plywood sorting plate
+#define CAP_DIAMETER_NOM_MM    30.0f // Nominal beverage bottle cap outer diameter (28-32 mm)
+#define SAFE_PICK_MIN_X_MM     18.0f // Min safe cap center X (keeps rim inside plate &amp; clear of X-home)
+#define SAFE_PICK_MAX_X_MM    282.0f // Max safe cap center X (keeps rim inside 300 mm plate)
+#define SAFE_PICK_MIN_Y_MM     18.0f // Min safe cap center Y (keeps rim inside plate &amp; clear of Y-home)
+#define SAFE_PICK_MAX_Y_MM    282.0f // Max safe cap center Y (keeps rim inside 300 mm plate)
 
-// Frame &amp; Batch Magic Bytes
+// Frame, Legacy Batch &amp; Closed-Loop Single-Target Magic Bytes
 #define FRAME_SYNC_BYTE_1     0x55
 #define FRAME_SYNC_BYTE_2     0xAA
-#define PROTOCOL_MAGIC_BYTE   0x5A
+#define PROTOCOL_MAGIC_BYTE   0x5A  // Legacy multi-cap batch packet header
+#define PROTOCOL_SINGLE_MAGIC 0x5B  // Closed-loop single-cap target: [0x5B][CapTarget 15B][CRC16 2B]
 
 // Inter-Controller Command, Handshake &amp; Supervision Opcodes
-#define CMD_CAPTURE_FRAME     0xAA  // Teensy -&gt; ESP32-CAM: Trigger QVGA capture
-#define CMD_BATCH_ACK         0xA1  // Mega -&gt; Vision Host: Batch CRC16 valid, starting motion
-#define CMD_BATCH_NACK        0xA2  // Mega -&gt; Vision Host: CRC16 mismatch, invalid length, or busy
-#define CMD_BATCH_COMPLETE    0xA3  // Mega -&gt; Vision Host: All caps sorted &amp; gantry parked at (0,0)
+#define CMD_CAPTURE_FRAME     0xAA  // Teensy -&gt; ESP32-CAM: Trigger fresh QVGA capture
+#define CMD_BATCH_ACK         0xA1  // Mega -&gt; Vision Host: Packet CRC16 &amp; bounds valid, starting motion
+#define CMD_BATCH_NACK        0xA2  // Mega -&gt; Vision Host: CRC16 mismatch, out-of-bounds target, or busy
+#define CMD_BATCH_COMPLETE    0xA3  // Mega -&gt; Vision Host: Session/batch finished &amp; gantry parked at (0,0)
 #define CMD_CAP_PROGRESS      0xA4  // Mega -&gt; Vision Host: One cap cycle completed (resets stall timer)
+#define CMD_SCAN_WINDOW_OPEN  0xA5  // Mega -&gt; Vision Host: Stationary at bin (Z raised, settled); capture fresh frame now
+#define CMD_AWAIT_NEXT        0xA6  // Mega -&gt; Vision Host: Bin retract (or clear-FOV park) complete; ready for next command
 
 #define CMD_QUERY_STATUS      0xB0  // Vision Host -&gt; Mega: Query readiness/fault state
 #define CMD_STATUS_READY      0xB1  // Mega -&gt; Vision Host: Homed, fault-free, ready in STATE_IDLE
-#define CMD_STATUS_BUSY       0xB2  // Mega -&gt; Vision Host: Homing or actively executing a batch
+#define CMD_STATUS_BUSY       0xB2  // Mega -&gt; Vision Host: Homing or actively executing a session/batch
 #define CMD_STATUS_FAULT      0xB3  // Mega -&gt; Vision Host: Fail-safe halt or hard fault latched
 #define CMD_REARM_HOME        0xB4  // Vision Host -&gt; Mega: Explicit operator re-arm &amp; re-home request
+#define CMD_PARK_FOR_SCAN     0xB5  // Vision Host -&gt; Mega: Move to clear-FOV (0,0) and emit CMD_AWAIT_NEXT
+#define CMD_FINISH_SESSION    0xB6  // Vision Host -&gt; Mega: Park at (0,0) if needed, emit CMD_BATCH_COMPLETE -&gt; STATE_IDLE
 
-#define CMD_HEARTBEAT_PING    0xF0  // Vision Host -&gt; Mega: 250ms keep-alive pulse during active batch
+#define CMD_HEARTBEAT_PING    0xF0  // Vision Host -&gt; Mega: 250ms keep-alive pulse during active session/batch
 #define CMD_RECOVERY_HALT     0xEE  // Mega -&gt; Vision Host: Comms-loss fail-safe halt latched
 #define CMD_HARD_FAULT        0xEF  // Mega -&gt; Vision Host: E-stop, NC limit trip, or homing fault
 

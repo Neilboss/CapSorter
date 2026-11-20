@@ -163,6 +163,14 @@ bool isCapVerifiedHeld() {
 #endif
 }
 
+bool isValidSingleTarget(const CapTarget &cap) {
+  if (!isfinite(cap.boardX_mm) || !isfinite(cap.boardY_mm)) return false;
+  if (cap.boardX_mm < SAFE_PICK_MIN_X_MM || cap.boardX_mm > SAFE_PICK_MAX_X_MM) return false;
+  if (cap.boardY_mm < SAFE_PICK_MIN_Y_MM || cap.boardY_mm > SAFE_PICK_MAX_Y_MM) return false;
+  if (cap.targetBinId < 1 || cap.targetBinId > 4) return false;
+  return true;
+}
+
 void moveGantryToMm(float boardX_mm, float boardY_mm) {
   float targetX = constrain(boardX_mm + TOOL_OFFSET_X_MM, 0.0f, MAX_TRAVEL_X_MM);
   float targetY = constrain(boardY_mm + TOOL_OFFSET_Y_MM, 0.0f, MAX_TRAVEL_Y_MM);
@@ -190,7 +198,7 @@ void serviceSerialDuringHoming() {
     uint8_t b = (uint8_t)Serial1.read();
     if (b == CMD_QUERY_STATUS) {
       Serial1.write(CMD_STATUS_BUSY);
-    } else if (b == PROTOCOL_MAGIC_BYTE) {
+    } else if (b == PROTOCOL_MAGIC_BYTE || b == PROTOCOL_SINGLE_MAGIC) {
       Serial1.write(CMD_BATCH_NACK);
     }
   }
@@ -203,6 +211,7 @@ void triggerHardFault(const __FlashStringHelper *reason) {
   stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Disable stepper coils immediately
   digitalWrite(PIN_SERVO_OE, HIGH);   // Disable PCA9685 PWM outputs (no commanded fault motion)
+  closedLoopMode    = false;
   isHomed           = false;
   hasInFlightCap    = false;
   batchTotal        = 0;
@@ -227,6 +236,7 @@ bool waitServicedDelayMs(unsigned long durationMs) {
 
 void homeAxes() {
   currentState      = STATE_HOMING;
+  closedLoopMode    = false;
   isHomed           = false;
   hasInFlightCap    = false;
   commsFaultLatched = false;
@@ -418,7 +428,88 @@ void pollVisionHostPackets() {
       continue;
     }
 
-    // 4. New Batch Header (ONLY accepted when homed, fault-free, and IDLE)
+    // 4. Closed-Loop Clear-FOV Park Command (move gantry to (0,0) for unobstructed verification scan)
+    if (peekByte == CMD_PARK_FOR_SCAN) {
+      if ((currentState != STATE_AWAIT_NEXT_TARGET && currentState != STATE_IDLE) ||
+          !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F("Z-axis not retracted before clear-FOV park"));
+        return;
+      }
+      closedLoopMode  = true;
+      lastHeartbeatMs = millis();
+      moveGantryToMm(0.0f, 0.0f);
+      currentState    = STATE_PARKING_FOR_SCAN;
+      continue;
+    }
+
+    // 5. Closed-Loop Session Finish Command (park at (0,0) if needed, emit COMPLETE -> IDLE)
+    if (peekByte == CMD_FINISH_SESSION) {
+      if ((currentState != STATE_AWAIT_NEXT_TARGET && currentState != STATE_IDLE) ||
+          !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F("Z-axis not retracted before session finish park"));
+        return;
+      }
+      closedLoopMode  = false;
+      lastHeartbeatMs = millis();
+      moveGantryToMm(0.0f, 0.0f);
+      currentState    = STATE_PARKING_HOME;
+      continue;
+    }
+
+    // 6. Closed-Loop Single-Target Pick Packet: [0x5B][CapTarget 15B][CRC16 2B] (18B total)
+    if (peekByte == PROTOCOL_SINGLE_MAGIC) {
+      bool canAccept = (currentState == STATE_IDLE || currentState == STATE_AWAIT_NEXT_TARGET);
+      if (!canAccept || !isHomed || commsFaultLatched || isEstopActive()) {
+        Serial1.write(CMD_BATCH_NACK);
+        continue;
+      }
+
+      CapTarget rxCap;
+      uint8_t crcBuf[2];
+      if (!readSerial1Bytes((uint8_t*)&rxCap, sizeof(CapTarget), 250) ||
+          !readSerial1Bytes(crcBuf, 2, 100)) {
+        if (currentState == STATE_IDLE || currentState == STATE_AWAIT_NEXT_TARGET) {
+          Serial1.write(CMD_BATCH_NACK);
+        }
+        return;
+      }
+
+      uint16_t rxCrc   = (uint16_t)crcBuf[0] | ((uint16_t)crcBuf[1] << 8);
+      uint16_t calcCrc = computeCRC16((const uint8_t*)&rxCap, sizeof(CapTarget));
+      if (calcCrc != rxCrc || !isValidSingleTarget(rxCap)) {
+        Serial1.write(CMD_BATCH_NACK);
+        return;
+      }
+
+      if (!isZRetractedSafeForXY()) {
+        triggerHardFault(F("Z-axis not retracted before single-target start"));
+        return;
+      }
+
+      // Valid closed-loop target! Move directly from current pose (0,0 or bin) to cap
+      closedLoopMode    = true;
+      batchTotal        = 1;
+      currentIdx        = 0;
+      currentCap        = rxCap;
+      hasInFlightCap    = false;
+      commsFaultLatched = false;
+      lastHeartbeatMs   = millis();
+      Serial1.write(CMD_BATCH_ACK);
+
+      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      currentState = STATE_MOVING_TO_CAP;
+      return;
+    }
+
+    // 7. Legacy Multi-Cap Batch Header (ONLY accepted when homed, fault-free, and IDLE)
     if (peekByte == PROTOCOL_MAGIC_BYTE) {
       if (currentState != STATE_IDLE || !isHomed || commsFaultLatched || isEstopActive()) {
         Serial1.write(CMD_BATCH_NACK);
@@ -447,13 +538,20 @@ void pollVisionHostPackets() {
         Serial1.write(CMD_BATCH_NACK);
         return;
       }
+      for (uint8_t i = 0; i < hdr.totalCaps; i++) {
+        if (!isValidSingleTarget(batchQueue[i])) {
+          Serial1.write(CMD_BATCH_NACK);
+          return;
+        }
+      }
 
       if (!isZRetractedSafeForXY()) {
         triggerHardFault(F("Z-axis not retracted before batch start"));
         return;
       }
 
-      // Valid batch received! Store locally & acknowledge
+      // Valid legacy batch received! Store locally & acknowledge
+      closedLoopMode    = false;
       batchTotal        = hdr.totalCaps;
       currentIdx        = 0;
       hasInFlightCap    = false;
@@ -509,6 +607,7 @@ void executeSafeCommsLossPolicy() {
   // Only continue bin deposit if a physical grip sensor verifies a cap is held
   // AND Z has already lifted the cap clear of the workspace.
   bool inCarryStage = (currentState == STATE_TRAVERSE_BIN ||
+                       currentState == STATE_BIN_SETTLE ||
                        currentState == STATE_LOWER_BIN ||
                        currentState == STATE_RELEASE_CAP);
   if (inCarryStage && isCapVerifiedHeld()) {
@@ -526,6 +625,7 @@ void executeSafeCommsLossPolicy() {
   stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Remove stepper drive torque safely
   pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED); // Retract Z clear of board; preserve jaw state
+  closedLoopMode = false;
   isHomed        = false;
   hasInFlightCap = false;
   batchTotal     = 0;
@@ -539,6 +639,7 @@ void executeMotionStateMachine() {
   switch (currentState) {
     case STATE_IDLE:
     case STATE_HOMING:
+    case STATE_AWAIT_NEXT_TARGET:
     case STATE_FAILSAFE_HALT:
     case STATE_HARD_FAULT:
       break;
@@ -584,16 +685,31 @@ void executeMotionStateMachine() {
       }
       break;
 
-    // Step 05: Traverse to designated color bin
+    // Step 05: Traverse to designated color bin; pause briefly to settle before bin-side capture
     case STATE_TRAVERSE_BIN:
       if (isGantryAtTarget()) {
+        if (closedLoopMode) {
+          stateTimerMs = millis();
+          currentState = STATE_BIN_SETTLE;
+        } else {
+          pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN);
+          stateTimerMs = millis();
+          currentState = STATE_LOWER_BIN;
+        }
+      }
+      break;
+
+    // Step 05b: Stationary 120 ms XY settle at bin (Z raised) -> trigger pipelined camera scan
+    case STATE_BIN_SETTLE:
+      if (millis() - stateTimerMs >= BIN_SETTLE_MS) {
+        Serial1.write(CMD_SCAN_WINDOW_OPEN);
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN);
         stateTimerMs = millis();
         currentState = STATE_LOWER_BIN;
       }
       break;
 
-    // Step 06: Lower Z partially (~25 mm) into bin opening
+    // Step 06: Lower Z partially (~25 mm) into bin opening (in parallel with vision analysis!)
     case STATE_LOWER_BIN:
       if (millis() - stateTimerMs >= 250) {
         pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
@@ -612,7 +728,7 @@ void executeMotionStateMachine() {
       }
       break;
 
-    // Step 08: Retract Z to 0 mm, emit progress pulse, advance or halt
+    // Step 08: Retract Z to 0 mm, emit progress pulse, await next closed-loop target or finish
     case STATE_RETRACT_Z:
       if (millis() - stateTimerMs >= 300) {
         if (!isZRetractedSafeForXY()) {
@@ -630,23 +746,40 @@ void executeMotionStateMachine() {
           return;
         }
 
+        if (closedLoopMode) {
+          batchTotal = 0;
+          currentIdx = 0;
+          Serial1.write(CMD_AWAIT_NEXT);
+          currentState = STATE_AWAIT_NEXT_TARGET;
+          return;
+        }
+
         currentIdx++;
         if (currentIdx < batchTotal) {
           currentCap = batchQueue[currentIdx];
           moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
           currentState = STATE_MOVING_TO_CAP;
         } else {
-          // Batch finished! Return gantry to (0,0) clear of camera FOV
+          // Legacy batch finished! Return gantry to (0,0) clear of camera FOV
           moveGantryToMm(0.0f, 0.0f);
           currentState = STATE_PARKING_HOME;
         }
       }
       break;
 
+    // Clear-FOV verification park (gantry clears bridge off board, stays in active session)
+    case STATE_PARKING_FOR_SCAN:
+      if (isGantryAtTarget()) {
+        Serial1.write(CMD_AWAIT_NEXT);
+        currentState = STATE_AWAIT_NEXT_TARGET;
+      }
+      break;
+
     case STATE_PARKING_HOME:
       if (isGantryAtTarget()) {
-        batchTotal = 0;
-        currentIdx = 0;
+        closedLoopMode = false;
+        batchTotal     = 0;
+        currentIdx     = 0;
         Serial1.write(CMD_BATCH_COMPLETE);
         currentState = STATE_IDLE;
       }
@@ -655,10 +788,11 @@ void executeMotionStateMachine() {
     case STATE_FAILSAFE_PARKING:
       if (isGantryAtTarget()) {
         digitalWrite(PIN_STEPPER_EN, HIGH);
-        isHomed    = false;
-        batchTotal = 0;
-        currentIdx = 0;
-        currentState = STATE_FAILSAFE_HALT;
+        closedLoopMode = false;
+        isHomed        = false;
+        batchTotal     = 0;
+        currentIdx     = 0;
+        currentState   = STATE_FAILSAFE_HALT;
       }
       break;
   }

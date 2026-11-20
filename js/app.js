@@ -165,7 +165,7 @@ function initScrollReveal() {
 }
 
 /* ==========================================================================
-   1. Gantry Pick & Place 2D Simulator (HiDPI, Eased Motion, Zero Idle Drain)
+   1. Gantry Pick & Place 2D Simulator (Continuous Coords, Bump Physics & Bin-Side Re-Imaging)
    ========================================================================== */
 function initSimulator() {
   const canvas = document.getElementById('simulation-canvas');
@@ -173,7 +173,6 @@ function initSimulator() {
   const ctx = canvas.getContext('2d');
   const isV2 = isV2Theme();
   const accentPrimary = isV2 ? '#00d2ff' : '#ff6b00';
-  const accentGlow = isV2 ? 'rgba(0, 210, 255, 0.25)' : 'rgba(255, 107, 0, 0.25)';
 
   // Logical coordinate space (580 x 500) scaled by DPR for Retina crispness
   const LOGICAL_W = 580;
@@ -183,18 +182,27 @@ function initSimulator() {
   canvas.height = LOGICAL_H * DPR;
   ctx.scale(DPR, DPR);
 
-  // Physical specs & centered layout geometry
+  // Physical specs & continuous 300x300 mm open flat plywood board geometry
   const BOARD_SIZE_MM = 300;
   const GRID_DIVS = 10;
   const CELL_SIZE_MM = 30;
   const CAP_RADIUS_MM = 14.5;
+  const SAFE_PICK_MIN_MM = 18;
+  const SAFE_PICK_MAX_MM = 282;
+
+  // X-axis parallel gripper jaw footprint & overhead gantry bridge occlusion band
+  const JAW_INNER_HALF_MM = 18;
+  const JAW_OUTER_HALF_MM = 26;
+  const JAW_WIDTH_HALF_MM = 10;
+  const JAW_CLEARANCE_PAD_MM = 1.5;
+  const BRIDGE_OCCLUSION_HALF_MM = 35;
 
   const PADDING_LEFT = 48;
   const PADDING_TOP = 50;
   const GRID_PIXELS = 360;
   const SCALE = GRID_PIXELS / BOARD_SIZE_MM; // 1.2 px per mm
 
-  // 4 Output Bins cleanly balanced on the right of the 300x300mm grid
+  // 4 Output Bins on the right of the 300x300 mm plywood plate
   const BINS = [
     { id: 'red', name: 'BIN 1 • RED', color: '#ef4444', bg: 'rgba(239,68,68,0.10)', headerBg: 'rgba(239,68,68,0.22)', x: 326, y: 12, w: 66, h: 64, count: 0 },
     { id: 'yellow', name: 'BIN 2 • YLW', color: '#eab308', bg: 'rgba(234,179,8,0.10)', headerBg: 'rgba(234,179,8,0.22)', x: 326, y: 88, w: 66, h: 64, count: 0 },
@@ -212,17 +220,20 @@ function initSimulator() {
     total: document.getElementById('telemetry-total-caps'),
     sorted: document.getElementById('telemetry-sorted-count'),
     pending: document.getElementById('telemetry-pending-count'),
+    scans: document.getElementById('telemetry-scan-count'),
+    shifts: document.getElementById('telemetry-shift-count'),
     startBtn: document.getElementById('btn-start-sort'),
     commsBtn: document.getElementById('btn-sim-comms-cut'),
+    bumpBtn: document.getElementById('btn-toggle-bump'),
   };
   const defaultStartBtnHTML = uiEls.startBtn?.innerHTML || '';
   const defaultStartBtnClass = uiEls.startBtn?.className || '';
   const lastTelemetry = { x: null, y: null, z: null, grip: null, state: null };
 
   // Simulator State
-  let caps = [];
+  let caps = [];          // Ground-truth physical cap coordinates on the board
   let sortedCaps = [];
-  let hoverCell = null; // { col, row, snapX, snapY, occupied }
+  let hoverPoint = null;  // { x, y, existingIdx, overlap, inSafe, snapped }
   let gantry = {
     x: 0,
     y: 0,
@@ -235,20 +246,193 @@ function initSimulator() {
     gripper: 'OPEN',
     gripperWidth: 36,
     heldCap: null,
-    speed: 90, // mm/s nominal display speed (70-90 mm/s smooth profile)
+    speed: 90,
   };
 
   let simState = 'IDLE';
-  let planQueue = [];
-  let currentTarget = null;
+  let currentTarget = null;       // Cap currently being picked
+  let queuedNextTarget = null;    // Fresh next target computed during pipelined bin-side scan
   let animTimer = 0;
   let scanSweepY = 0;
+  let binScanActive = false;
+  let binScanSweepY = 0;
+  let activeOcclusionY = null;    // Y coordinate of gantry bridge during bin-side scan
+  let bumpAppliedThisPick = false;
+  let bumpPhysicsEnabled = true;
+  let scanCount = 0;
+  let shiftEvents = 0;
+  let activePickTierLabel = 'CLEAR';
   let simElapsedSec = 0;
   let lastFrameTime = performance.now();
   let simSpeedMultiplier = 1;
   let commsLost = false;
   let selectedColor = 'red';
   let rafId = null;
+
+  function circleIntersectsRect(cx, cy, r, x0, y0, x1, y1) {
+    const nx = Math.min(Math.max(cx, x0), x1);
+    const ny = Math.min(Math.max(cy, y0), y1);
+    const dx = cx - nx;
+    const dy = cy - ny;
+    return (dx * dx + dy * dy) < (r * r);
+  }
+
+  function isInSafePickBounds(x, y) {
+    return x >= SAFE_PICK_MIN_MM && x <= SAFE_PICK_MAX_MM &&
+           y >= SAFE_PICK_MIN_MM && y <= SAFE_PICK_MAX_MM;
+  }
+
+  function countJawCollisionsSim(target, allCaps) {
+    const rCheck = CAP_RADIUS_MM + JAW_CLEARANCE_PAD_MM;
+    let leftBlocked = false;
+    let rightBlocked = false;
+    let minNeighbor = 1e9;
+
+    for (const other of allCaps) {
+      if (other.id === target.id) continue;
+      const d = Math.hypot(other.x - target.x, other.y - target.y);
+      if (d < minNeighbor) minNeighbor = d;
+
+      if (!leftBlocked && circleIntersectsRect(
+        other.x, other.y, rCheck,
+        target.x - JAW_OUTER_HALF_MM, target.y - JAW_WIDTH_HALF_MM,
+        target.x - JAW_INNER_HALF_MM, target.y + JAW_WIDTH_HALF_MM
+      )) {
+        leftBlocked = true;
+      }
+      if (!rightBlocked && circleIntersectsRect(
+        other.x, other.y, rCheck,
+        target.x + JAW_INNER_HALF_MM, target.y - JAW_WIDTH_HALF_MM,
+        target.x + JAW_OUTER_HALF_MM, target.y + JAW_WIDTH_HALF_MM
+      )) {
+        rightBlocked = true;
+      }
+    }
+    return {
+      blockedSides: (leftBlocked ? 1 : 0) + (rightBlocked ? 1 : 0),
+      minNeighbor,
+    };
+  }
+
+  function performCameraScan(occludedY, curX, curY) {
+    scanCount++;
+    const visibleCaps = caps.filter(c => {
+      if (occludedY !== null && Math.abs(c.y - occludedY) <= BRIDGE_OCCLUSION_HALF_MM) {
+        return false;
+      }
+      return true;
+    });
+
+    // Mark every visible cap as re-acquired by vision (clears stale shift markers)
+    visibleCaps.forEach(c => {
+      c.shifted = false;
+      c.prevX = null;
+      c.prevY = null;
+    });
+
+    const pickable = visibleCaps
+      .filter(c => isInSafePickBounds(c.x, c.y))
+      .map(c => {
+        const { blockedSides, minNeighbor } = countJawCollisionsSim(c, visibleCaps);
+        const travel = Math.hypot(c.x - curX, c.y - curY);
+        return { cap: c, blockedSides, travel, minNeighbor };
+      });
+
+    if (pickable.length === 0) {
+      updateTelemetryUI();
+      return null;
+    }
+
+    // Clearance-first / outermost-first ranking (identical to V2 & V1 firmware!)
+    pickable.sort((a, b) => {
+      if (a.blockedSides !== b.blockedSides) return a.blockedSides - b.blockedSides;
+      if (Math.abs(a.travel - b.travel) > 0.5) return a.travel - b.travel;
+      return b.minNeighbor - a.minNeighbor;
+    });
+
+    const chosen = pickable[0];
+    chosen.cap.blockedSides = chosen.blockedSides;
+    activePickTierLabel =
+      chosen.blockedSides === 0 ? 'CLEAR' :
+      chosen.blockedSides === 1 ? 'EDGE-PEEL' : 'TIGHT';
+    updateTelemetryUI();
+    return chosen.cap;
+  }
+
+  function applyGripperBumpPhysics(tx, ty, targetId) {
+    if (!bumpPhysicsEnabled) return 0;
+
+    // Descending open X-jaws (outer +/-26 mm) physically nudge any close neighbor
+    const bumpEnvRadius = CAP_RADIUS_MM + 4.5;
+    let nudged = 0;
+
+    for (const c of caps) {
+      if (c.id === targetId) continue;
+      const hitsLeft = circleIntersectsRect(
+        c.x, c.y, bumpEnvRadius,
+        tx - JAW_OUTER_HALF_MM - 2, ty - JAW_WIDTH_HALF_MM - 2,
+        tx - JAW_INNER_HALF_MM + 1, ty + JAW_WIDTH_HALF_MM + 2
+      );
+      const hitsRight = circleIntersectsRect(
+        c.x, c.y, bumpEnvRadius,
+        tx + JAW_INNER_HALF_MM - 1, ty - JAW_WIDTH_HALF_MM - 2,
+        tx + JAW_OUTER_HALF_MM + 2, ty + JAW_WIDTH_HALF_MM + 2
+      );
+      const closeRadially = Math.hypot(c.x - tx, c.y - ty) < (CAP_RADIUS_MM * 2 + 12);
+
+      if (hitsLeft || hitsRight || closeRadially) {
+        const dx = c.x - tx;
+        const dy = c.y - ty;
+        const dist = Math.max(1, Math.hypot(dx, dy));
+        // Push outward along impact vector with slight realistic lateral slide
+        const pushMag = (hitsLeft || hitsRight) ? 18 + Math.random() * 10 : 9 + Math.random() * 7;
+        const angleJitter = (Math.random() - 0.5) * 0.35;
+        const baseAngle = Math.atan2(dy, dx) + angleJitter;
+
+        if (!c.shifted) {
+          c.prevX = c.x;
+          c.prevY = c.y;
+        }
+        c.x = Math.min(BOARD_SIZE_MM - CAP_RADIUS_MM, Math.max(CAP_RADIUS_MM, c.x + Math.cos(baseAngle) * pushMag));
+        c.y = Math.min(BOARD_SIZE_MM - CAP_RADIUS_MM, Math.max(CAP_RADIUS_MM, c.y + Math.sin(baseAngle) * pushMag));
+        c.shifted = true;
+        nudged++;
+      }
+    }
+
+    // Resolve cascading cap-to-cap collisions (4 relaxation passes)
+    const minSep = CAP_RADIUS_MM * 2 + 0.6;
+    for (let iter = 0; iter < 4; iter++) {
+      for (let i = 0; i < caps.length; i++) {
+        if (caps[i].id === targetId) continue;
+        for (let j = i + 1; j < caps.length; j++) {
+          if (caps[j].id === targetId) continue;
+          const a = caps[i];
+          const b = caps[j];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 0.01 && dist < minSep) {
+            const overlap = (minSep - dist) * 0.55;
+            const ux = dx / dist;
+            const uy = dy / dist;
+            if (!a.shifted) { a.prevX = a.x; a.prevY = a.y; a.shifted = true; nudged++; }
+            if (!b.shifted) { b.prevX = b.x; b.prevY = b.y; b.shifted = true; nudged++; }
+            a.x = Math.min(BOARD_SIZE_MM - CAP_RADIUS_MM, Math.max(CAP_RADIUS_MM, a.x - ux * overlap));
+            a.y = Math.min(BOARD_SIZE_MM - CAP_RADIUS_MM, Math.max(CAP_RADIUS_MM, a.y - uy * overlap));
+            b.x = Math.min(BOARD_SIZE_MM - CAP_RADIUS_MM, Math.max(CAP_RADIUS_MM, b.x + ux * overlap));
+            b.y = Math.min(BOARD_SIZE_MM - CAP_RADIUS_MM, Math.max(CAP_RADIUS_MM, b.y + uy * overlap));
+          }
+        }
+      }
+    }
+
+    if (nudged > 0) {
+      shiftEvents += nudged;
+      updateTelemetryUI();
+    }
+    return nudged;
+  }
 
   function ensureLoopRunning() {
     if (rafId !== null) return;
@@ -274,21 +458,51 @@ function initSimulator() {
     gantry.gripperWidth = 36;
     gantry.heldCap = null;
     currentTarget = null;
-    planQueue = [];
+    queuedNextTarget = null;
+    binScanActive = false;
+    binScanSweepY = 0;
+    activeOcclusionY = null;
+    bumpAppliedThisPick = false;
+    scanCount = 0;
+    shiftEvents = 0;
+    activePickTierLabel = 'CLEAR';
     commsLost = false;
     simElapsedSec = 0;
     simState = 'IDLE';
     updateControlButtonsState();
   }
 
+  function makeCap(id, color, x, y) {
+    return { id, color, x, y, status: 'pending', shifted: false, prevX: null, prevY: null, blockedSides: 0 };
+  }
+
   function resetToDefaultCaps() {
+    // Realistic continuous off-grid positions (straddling grid lines + one close pair!)
     caps = [
-      { id: 1, color: 'red', x: 45, y: 45, status: 'pending' },
-      { id: 2, color: 'yellow', x: 195, y: 75, status: 'pending' },
-      { id: 3, color: 'green', x: 75, y: 225, status: 'pending' },
-      { id: 4, color: 'blue', x: 225, y: 195, status: 'pending' },
-      { id: 5, color: 'red', x: 135, y: 165, status: 'pending' },
-      { id: 6, color: 'yellow', x: 255, y: 255, status: 'pending' },
+      makeCap(1, 'red', 52, 58),
+      makeCap(2, 'yellow', 184, 71),
+      makeCap(3, 'green', 86, 214),
+      makeCap(4, 'blue', 121, 219),
+      makeCap(5, 'red', 238, 162),
+      makeCap(6, 'yellow', 261, 258),
+    ];
+    BINS.forEach(b => (b.count = 0));
+    sortedCaps = [];
+    resetGantryPose();
+    updateTelemetryUI();
+    renderOnce();
+  }
+
+  function loadTightClusterPreset() {
+    // Stress-test preset: touching same-color caps + 3-cap horizontal cluster + cap under Bin 1 Y=55 strip
+    caps = [
+      makeCap(1, 'red', 102, 134),
+      makeCap(2, 'red', 134, 136),
+      makeCap(3, 'yellow', 166, 139),
+      makeCap(4, 'green', 120, 168),
+      makeCap(5, 'blue', 152, 171),
+      makeCap(6, 'red', 64, 54),     // Sits right inside Bin 1 Y=55 bridge occlusion strip!
+      makeCap(7, 'blue', 242, 224),
     ];
     BINS.forEach(b => (b.count = 0));
     sortedCaps = [];
@@ -303,7 +517,7 @@ function initSimulator() {
         uiEls.startBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>Re-Arm &amp; Home Gantry</span>`;
         uiEls.startBtn.className = 'w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition-all';
       } else if (simState !== 'IDLE') {
-        uiEls.startBtn.innerHTML = `<span class="w-2 h-2 rounded-full bg-current animate-pulse"></span><span>Sorting Active (${simState.replace(/_/g, ' ')})</span>`;
+        uiEls.startBtn.innerHTML = `<span class="w-2 h-2 rounded-full bg-current animate-pulse"></span><span>Sorting (${simState.replace(/_/g, ' ')})</span>`;
         uiEls.startBtn.className = defaultStartBtnClass + ' opacity-85 cursor-default';
       } else {
         uiEls.startBtn.innerHTML = defaultStartBtnHTML;
@@ -316,69 +530,83 @@ function initSimulator() {
       const canCut = simState !== 'IDLE' && simState !== 'SAFE_HALTED';
       uiEls.commsBtn.classList.toggle('opacity-55', !canCut);
     }
+
+    if (uiEls.bumpBtn) {
+      uiEls.bumpBtn.textContent = bumpPhysicsEnabled ? 'Bump Physics: ON' : 'Bump Physics: OFF';
+      uiEls.bumpBtn.classList.toggle('text-amber-300', bumpPhysicsEnabled);
+      uiEls.bumpBtn.classList.toggle('border-amber-500/40', bumpPhysicsEnabled);
+      uiEls.bumpBtn.classList.toggle('text-slate-400', !bumpPhysicsEnabled);
+    }
   }
 
-  function getBoardCellFromPointer(e) {
+  function getBoardPointFromPointer(e) {
     const rect = canvas.getBoundingClientRect();
     const mouseX = (e.clientX - rect.left) * (LOGICAL_W / rect.width);
     const mouseY = (e.clientY - rect.top) * (LOGICAL_H / rect.height);
-    const boardX = (mouseX - PADDING_LEFT) / SCALE;
-    const boardY = (mouseY - PADDING_TOP) / SCALE;
+    const rawX = (mouseX - PADDING_LEFT) / SCALE;
+    const rawY = (mouseY - PADDING_TOP) / SCALE;
 
-    if (boardX >= 0 && boardX < BOARD_SIZE_MM && boardY >= 0 && boardY < BOARD_SIZE_MM) {
-      const col = Math.floor(boardX / CELL_SIZE_MM);
-      const row = Math.floor(boardY / CELL_SIZE_MM);
-      const snapX = col * CELL_SIZE_MM + CELL_SIZE_MM / 2;
-      const snapY = row * CELL_SIZE_MM + CELL_SIZE_MM / 2;
-      const existingIdx = caps.findIndex(c => Math.hypot(c.x - snapX, c.y - snapY) < 15);
-      return { col, row, snapX, snapY, existingIdx };
+    if (rawX >= 0 && rawX <= BOARD_SIZE_MM && rawY >= 0 && rawY <= BOARD_SIZE_MM) {
+      let x = rawX;
+      let y = rawY;
+      let snapped = false;
+      if (e.shiftKey) {
+        const col = Math.min(GRID_DIVS - 1, Math.max(0, Math.floor(rawX / CELL_SIZE_MM)));
+        const row = Math.min(GRID_DIVS - 1, Math.max(0, Math.floor(rawY / CELL_SIZE_MM)));
+        x = col * CELL_SIZE_MM + CELL_SIZE_MM / 2;
+        y = row * CELL_SIZE_MM + CELL_SIZE_MM / 2;
+        snapped = true;
+      } else {
+        x = Math.round(Math.min(BOARD_SIZE_MM - CAP_RADIUS_MM, Math.max(CAP_RADIUS_MM, rawX)) * 2) / 2;
+        y = Math.round(Math.min(BOARD_SIZE_MM - CAP_RADIUS_MM, Math.max(CAP_RADIUS_MM, rawY)) * 2) / 2;
+      }
+
+      const existingIdx = caps.findIndex(c => Math.hypot(c.x - rawX, c.y - rawY) <= CAP_RADIUS_MM + 1.5);
+      const overlap = existingIdx < 0 && caps.some(c => Math.hypot(c.x - x, c.y - y) < CAP_RADIUS_MM * 2 + 0.5);
+      const inSafe = isInSafePickBounds(x, y);
+      return { x, y, existingIdx, overlap, inSafe, snapped };
     }
     return null;
   }
 
   canvas.addEventListener('mousemove', (e) => {
     if (simState !== 'IDLE') {
-      if (hoverCell) {
-        hoverCell = null;
-      }
+      if (hoverPoint) hoverPoint = null;
       return;
     }
-    const cell = getBoardCellFromPointer(e);
-    const changed =
-      (cell === null) !== (hoverCell === null) ||
-      (cell && hoverCell && (cell.col !== hoverCell.col || cell.row !== hoverCell.row));
-    hoverCell = cell;
-    canvas.style.cursor = cell ? 'pointer' : 'crosshair';
-    if (changed) renderOnce();
+    const pt = getBoardPointFromPointer(e);
+    hoverPoint = pt;
+    canvas.style.cursor = pt ? (pt.overlap ? 'not-allowed' : 'pointer') : 'crosshair';
+    renderOnce();
   });
 
   canvas.addEventListener('mouseleave', () => {
-    if (hoverCell) {
-      hoverCell = null;
+    if (hoverPoint) {
+      hoverPoint = null;
       if (simState === 'IDLE') renderOnce();
     }
   });
 
   canvas.addEventListener('click', (e) => {
     if (simState !== 'IDLE') {
-      showNotification('Pause or wait for the current cycle to finish before editing caps.', 'info');
+      showNotification('Wait for the active closed-loop cycle to finish before editing caps.', 'info');
       return;
     }
-    const cell = getBoardCellFromPointer(e);
-    if (!cell) return;
+    const pt = getBoardPointFromPointer(e);
+    if (!pt) return;
 
-    if (cell.existingIdx >= 0) {
-      caps.splice(cell.existingIdx, 1);
+    if (pt.existingIdx >= 0) {
+      caps.splice(pt.existingIdx, 1);
+    } else if (pt.overlap) {
+      showNotification('Caps cannot physically overlap (<29.5 mm center-to-center). Place beside it instead.', 'warning');
+      return;
     } else {
-      caps.push({
-        id: Date.now() + Math.random(),
-        color: selectedColor,
-        x: cell.snapX,
-        y: cell.snapY,
-        status: 'pending'
-      });
+      caps.push(makeCap(Date.now() + Math.random(), selectedColor, pt.x, pt.y));
+      if (!pt.inSafe) {
+        showNotification('Cap placed in outer edge margin (<18 mm from border): camera sees it as an obstacle, Mega skips unsafe pick.', 'warning');
+      }
     }
-    hoverCell = getBoardCellFromPointer(e);
+    hoverPoint = getBoardPointFromPointer(e);
     updateTelemetryUI();
     renderOnce();
   });
@@ -389,7 +617,7 @@ function initSimulator() {
       resetGantryPose();
       updateTelemetryUI();
       renderOnce();
-      showNotification('Gantry re-armed & homed to (0, 0). Ready for next sort cycle.', 'success');
+      showNotification('Gantry re-armed & homed to (0, 0). Ready for next closed-loop sort.', 'success');
       return;
     }
     startSorting();
@@ -397,27 +625,35 @@ function initSimulator() {
 
   document.getElementById('btn-reset-sim')?.addEventListener('click', () => {
     resetToDefaultCaps();
-    showNotification('Simulator reset to 6 default bottle caps.', 'info');
+    showNotification('Reset to 6 realistic off-grid caps (including one close pair).', 'info');
+  });
+
+  document.getElementById('btn-preset-cluster')?.addEventListener('click', () => {
+    loadTightClusterPreset();
+    showNotification('Loaded 7-cap Tight Cluster + Bridge-Occlusion stress test!', 'info');
+  });
+
+  uiEls.bumpBtn?.addEventListener('click', () => {
+    bumpPhysicsEnabled = !bumpPhysicsEnabled;
+    updateControlButtonsState();
+    showNotification(
+      bumpPhysicsEnabled
+        ? 'Bump Physics ON: Descending jaws will physically nudge close neighbors.'
+        : 'Bump Physics OFF: Neighbors remain stationary during picks.',
+      'info'
+    );
   });
 
   document.getElementById('btn-preset-scatter')?.addEventListener('click', () => {
     caps = [];
     const colors = ['red', 'yellow', 'green', 'blue'];
-    let i = 0;
-    while (caps.length < 8) {
-      const col = Math.floor(Math.random() * 10);
-      const row = Math.floor(Math.random() * 10);
-      const snapX = col * CELL_SIZE_MM + CELL_SIZE_MM / 2;
-      const snapY = row * CELL_SIZE_MM + CELL_SIZE_MM / 2;
-      if (!caps.some(c => c.x === snapX && c.y === snapY)) {
-        caps.push({
-          id: Date.now() + i,
-          color: colors[i % 4],
-          x: snapX,
-          y: snapY,
-          status: 'pending'
-        });
-        i++;
+    let attempts = 0;
+    while (caps.length < 8 && attempts < 400) {
+      attempts++;
+      const x = Math.round((22 + Math.random() * 256) * 2) / 2;
+      const y = Math.round((22 + Math.random() * 256) * 2) / 2;
+      if (!caps.some(c => Math.hypot(c.x - x, c.y - y) < CAP_RADIUS_MM * 2 + 2)) {
+        caps.push(makeCap(Date.now() + caps.length, colors[caps.length % 4], x, y));
       }
     }
     BINS.forEach(b => (b.count = 0));
@@ -457,6 +693,8 @@ function initSimulator() {
     }
     if (simState === 'SAFE_HALTED') return;
     commsLost = true;
+    binScanActive = false;
+    activeOcclusionY = null;
     gantry.z = 'RAISED';
     gantry.zHeight = 0;
     simState = 'SAFE_HALTED';
@@ -476,46 +714,37 @@ function initSimulator() {
       el.classList.add('ring-2', 'ring-white');
       el.setAttribute('aria-pressed', 'true');
       selectedColor = el.dataset.color;
-      if (hoverCell && simState === 'IDLE') renderOnce();
+      if (hoverPoint && simState === 'IDLE') renderOnce();
     });
   });
 
   function startSorting() {
     if (caps.length === 0) {
-      showNotification('Click anywhere on the 10×10 grid to place bottle caps first!', 'info');
+      showNotification('Click anywhere on the 300×300 mm board to place bottle caps first!', 'info');
       return;
     }
     if (simState !== 'IDLE') return;
 
-    hoverCell = null;
-    simState = 'SCANNING';
+    hoverPoint = null;
+    simState = 'SCANNING_INITIAL';
     animTimer = 0;
     scanSweepY = 0;
+    binScanActive = false;
+    activeOcclusionY = null;
+    queuedNextTarget = null;
+    scanCount = 0;
+    shiftEvents = 0;
     simElapsedSec = 0;
     commsLost = false;
 
-    // Nearest-neighbor heuristic for shortest Cartesian travel
-    const remaining = [...caps];
-    planQueue = [];
-    let curX = gantry.x;
-    let curY = gantry.y;
-
-    while (remaining.length > 0) {
-      remaining.sort((a, b) => Math.hypot(a.x - curX, a.y - curY) - Math.hypot(b.x - curX, b.y - curY));
-      const nextCap = remaining.shift();
-      planQueue.push(nextCap);
-      const bin = BINS.find(b => b.id === nextCap.color);
-      curX = bin.x + bin.w / 2;
-      curY = bin.y + bin.h / 2;
-    }
-
     updateControlButtonsState();
+    updateTelemetryUI();
     ensureLoopRunning();
 
     if (isV2) {
-      showNotification(`Pi Zero 2 W OpenCV computed ${planQueue.length} cap targets in ~45 ms. Batch dispatched to Mega!`, 'success');
+      showNotification('Scan #1 (Clear FOV): Pi Zero 2 W analyzing continuous coordinates & X-jaw clearance...', 'success');
     } else {
-      showNotification(`Teensy 4.1 computed ${planQueue.length} cap targets. Batch dispatched to Mega!`, 'success');
+      showNotification('Scan #1 (Clear FOV): Teensy 4.1 analyzing continuous coordinates & X-jaw clearance...', 'success');
     }
   }
 
@@ -534,7 +763,6 @@ function initSimulator() {
     const distFromStart = Math.hypot(gantry.x - gantry.startX, gantry.y - gantry.startY);
     const totalDist = Math.max(1, Math.hypot(tx - gantry.startX, ty - gantry.startY));
 
-    // Smooth accel/decel ramp over first/last 28mm
     const rampDist = Math.min(28, totalDist * 0.35);
     let speedFactor = 1;
     if (distFromStart < rampDist) {
@@ -577,34 +805,49 @@ function initSimulator() {
     }
   }
 
+  function advanceBinScanAnimation(dt) {
+    if (!binScanActive) return;
+    binScanSweepY = Math.min(1, binScanSweepY + dt * 2.2);
+    if (binScanSweepY >= 1) {
+      binScanActive = false;
+    }
+  }
+
   function updateSimulation(dt) {
     if (simState === 'IDLE' || simState === 'SAFE_HALTED') return;
     simElapsedSec += dt;
+    advanceBinScanAnimation(dt);
 
-    if (simState === 'SCANNING') {
+    if (simState === 'SCANNING_INITIAL' || simState === 'SCANNING_VERIFY') {
       animTimer += dt;
-      scanSweepY = Math.min(1, animTimer / 0.75);
-      if (animTimer >= 0.85) {
-        simState = 'NEXT_CAP';
+      scanSweepY = Math.min(1, animTimer / 0.65);
+      if (animTimer >= 0.72) {
+        const nextCap = performCameraScan(null, gantry.x, gantry.y);
+        if (nextCap) {
+          currentTarget = nextCap;
+          bumpAppliedThisPick = false;
+          setGantryTarget(currentTarget.x, currentTarget.y);
+          simState = 'MOVING_TO_CAP';
+        } else {
+          currentTarget = null;
+          simState = 'IDLE';
+          updateControlButtonsState();
+          updateTelemetryUI();
+          const edgeSkipped = caps.filter(c => !isInSafePickBounds(c.x, c.y)).length;
+          const extra = edgeSkipped > 0 ? ` (${edgeSkipped} edge-margin cap skipped safely)` : '';
+          showNotification(
+            `Closed-loop sort verified complete! Sorted ${sortedCaps.length} caps across ${scanCount} scans (${shiftEvents} bumps re-acquired)${extra}.`,
+            'success'
+          );
+        }
       }
-      return;
-    }
-
-    if (simState === 'NEXT_CAP') {
-      if (planQueue.length === 0) {
-        simState = 'PARKING';
-        setGantryTarget(0, 0);
-        return;
-      }
-      currentTarget = planQueue.shift();
-      setGantryTarget(currentTarget.x, currentTarget.y);
-      simState = 'MOVING_TO_CAP';
       return;
     }
 
     if (simState === 'MOVING_TO_CAP') {
       if (moveGantryTowards(gantry.targetX, gantry.targetY, dt)) {
         simState = 'LOWERING_Z';
+        bumpAppliedThisPick = false;
         animTimer = 0;
       }
       return;
@@ -613,7 +856,11 @@ function initSimulator() {
     if (simState === 'LOWERING_Z') {
       animTimer += dt * 3.6;
       const t = Math.min(1, animTimer);
-      gantry.zHeight = t * t * (3 - 2 * t); // smoothstep
+      gantry.zHeight = t * t * (3 - 2 * t);
+      if (!bumpAppliedThisPick && t >= 0.48 && currentTarget) {
+        bumpAppliedThisPick = true;
+        applyGripperBumpPhysics(currentTarget.x, currentTarget.y, currentTarget.id);
+      }
       if (t >= 1) {
         gantry.z = 'LOWERED';
         simState = 'GRIPPING';
@@ -653,6 +900,21 @@ function initSimulator() {
 
     if (simState === 'MOVING_TO_BIN') {
       if (moveGantryTowards(gantry.targetX, gantry.targetY, dt)) {
+        simState = 'BIN_SETTLE_SCAN';
+        animTimer = 0;
+      }
+      return;
+    }
+
+    // Stationary 120 ms XY settle at bin (Z raised) -> fire pipelined bin-side camera scan!
+    if (simState === 'BIN_SETTLE_SCAN') {
+      animTimer += dt;
+      if (animTimer >= 0.14) {
+        activeOcclusionY = gantry.y;
+        binScanActive = true;
+        binScanSweepY = 0;
+        // Re-image the board NOW (in parallel with bin drop) & pick fresh next coordinates
+        queuedNextTarget = performCameraScan(activeOcclusionY, gantry.x, gantry.y);
         simState = 'LOWERING_BIN';
         animTimer = 0;
       }
@@ -694,17 +956,30 @@ function initSimulator() {
       if (t >= 1) {
         gantry.zHeight = 0;
         gantry.z = 'RAISED';
-        simState = 'NEXT_CAP';
+        activeOcclusionY = null;
+        if (queuedNextTarget && caps.some(c => c.id === queuedNextTarget.id)) {
+          // Move straight from bin to fresh re-imaged coordinates (no return to 0,0!)
+          currentTarget = queuedNextTarget;
+          queuedNextTarget = null;
+          bumpAppliedThisPick = false;
+          setGantryTarget(currentTarget.x, currentTarget.y);
+          simState = 'MOVING_TO_CAP';
+        } else {
+          // 0 graspable caps visible outside bridge strip -> clear-FOV park at (0,0) to verify!
+          queuedNextTarget = null;
+          currentTarget = null;
+          setGantryTarget(0, 0);
+          simState = 'PARKING_FOR_VERIFY';
+        }
       }
       return;
     }
 
-    if (simState === 'PARKING') {
+    if (simState === 'PARKING_FOR_VERIFY') {
       if (moveGantryTowards(0, 0, dt)) {
-        simState = 'IDLE';
-        updateControlButtonsState();
-        updateTelemetryUI();
-        showNotification(`Batch complete! Sorted ${sortedCaps.length} caps in ${simElapsedSec.toFixed(1)}s simulated time.`, 'success');
+        simState = 'SCANNING_VERIFY';
+        animTimer = 0;
+        scanSweepY = 0;
       }
     }
   }
@@ -719,13 +994,13 @@ function initSimulator() {
 
     const boardPx = BOARD_SIZE_MM * SCALE;
 
-    // 1. Workspace board backdrop
+    // 1. Open flat 300x300 mm plywood workspace backdrop
     drawRoundedRect(PADDING_LEFT, PADDING_TOP, boardPx, boardPx, 4);
     ctx.fillStyle = '#0f1626';
     ctx.fill();
 
-    // Subtle 10x10 grid lines
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
+    // Subtle 10x10 visual coordinate reference grid (30 mm lines — caps sit freely anywhere)
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.10)';
     ctx.lineWidth = 1;
     for (let i = 1; i < GRID_DIVS; i++) {
       const xPos = PADDING_LEFT + i * (CELL_SIZE_MM * SCALE);
@@ -741,16 +1016,29 @@ function initSimulator() {
       ctx.stroke();
     }
 
-    // Grid axis labels (A-J along top, 1-10 along left) positioned clear of home carriage
+    // Subtle dashed safe-pick boundary (18..282 mm)
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(
+      PADDING_LEFT + SAFE_PICK_MIN_MM * SCALE,
+      PADDING_TOP + SAFE_PICK_MIN_MM * SCALE,
+      (SAFE_PICK_MAX_MM - SAFE_PICK_MIN_MM) * SCALE,
+      (SAFE_PICK_MAX_MM - SAFE_PICK_MIN_MM) * SCALE
+    );
+    ctx.restore();
+
+    // Coordinate scale ticks along top & left (0..300 mm)
     ctx.fillStyle = '#64748b';
-    ctx.font = '600 10px "JetBrains Mono", monospace';
+    ctx.font = '600 9.5px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for (let i = 0; i < GRID_DIVS; i++) {
-      const gx = PADDING_LEFT + (i + 0.5) * (CELL_SIZE_MM * SCALE);
-      ctx.fillText(String.fromCharCode(65 + i), gx, PADDING_TOP - 22);
-      const gy = PADDING_TOP + (i + 0.5) * (CELL_SIZE_MM * SCALE);
-      ctx.fillText((i + 1).toString(), PADDING_LEFT - 24, gy);
+    for (let mm = 0; mm <= BOARD_SIZE_MM; mm += 60) {
+      const px = PADDING_LEFT + mm * SCALE;
+      ctx.fillText(`${mm}`, px, PADDING_TOP - 20);
+      const py = PADDING_TOP + mm * SCALE;
+      ctx.fillText(`${mm}`, PADDING_LEFT - 24, py);
     }
 
     // Board border & 4 corner homography fiducials
@@ -769,32 +1057,56 @@ function initSimulator() {
       ctx.fillRect(cx - 4, cy - 4, 8, 8);
     });
 
-    // Hover cell preview (when IDLE)
-    if (hoverCell && simState === 'IDLE') {
-      const hx = PADDING_LEFT + hoverCell.col * (CELL_SIZE_MM * SCALE);
-      const hy = PADDING_TOP + hoverCell.row * (CELL_SIZE_MM * SCALE);
-      const cellPx = CELL_SIZE_MM * SCALE;
-      ctx.fillStyle = hoverCell.existingIdx >= 0 ? 'rgba(239, 68, 68, 0.16)' : 'rgba(255, 255, 255, 0.06)';
-      ctx.fillRect(hx + 1, hy + 1, cellPx - 2, cellPx - 2);
-      ctx.strokeStyle = hoverCell.existingIdx >= 0 ? 'rgba(248, 113, 113, 0.8)' : accentPrimary;
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(hx + 1, hy + 1, cellPx - 2, cellPx - 2);
+    // Bridge occlusion mask band during bin-side scan
+    if (activeOcclusionY !== null) {
+      const bandTopMm = Math.max(0, activeOcclusionY - BRIDGE_OCCLUSION_HALF_MM);
+      const bandBotMm = Math.min(BOARD_SIZE_MM, activeOcclusionY + BRIDGE_OCCLUSION_HALF_MM);
+      const bandY = PADDING_TOP + bandTopMm * SCALE;
+      const bandH = (bandBotMm - bandTopMm) * SCALE;
 
-      if (hoverCell.existingIdx < 0) {
-        const cx = PADDING_LEFT + hoverCell.snapX * SCALE;
-        const cy = PADDING_TOP + hoverCell.snapY * SCALE;
-        ctx.save();
-        ctx.globalAlpha = 0.45;
+      ctx.save();
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
+      ctx.fillRect(PADDING_LEFT, bandY, boardPx, bandH);
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeRect(PADDING_LEFT, bandY, boardPx, bandH);
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.85)';
+      ctx.font = '700 9px "JetBrains Mono", monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('BRIDGE OCCLUSION MASK (DEFERRED TO NEXT BIN / VERIFY PARK)', PADDING_LEFT + 8, bandY + 11);
+      ctx.restore();
+    }
+
+    // Continuous hover placement preview (when IDLE)
+    if (hoverPoint && simState === 'IDLE') {
+      const cx = PADDING_LEFT + hoverPoint.x * SCALE;
+      const cy = PADDING_TOP + hoverPoint.y * SCALE;
+      const cr = CAP_RADIUS_MM * SCALE;
+
+      if (hoverPoint.existingIdx >= 0) {
+        const ex = caps[hoverPoint.existingIdx];
         ctx.beginPath();
-        ctx.arc(cx, cy, CAP_RADIUS_MM * SCALE, 0, Math.PI * 2);
-        ctx.fillStyle = getCapHex(selectedColor);
+        ctx.arc(PADDING_LEFT + ex.x * SCALE, PADDING_TOP + ex.y * SCALE, cr + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(248, 113, 113, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else {
+        ctx.save();
+        ctx.globalAlpha = hoverPoint.overlap ? 0.35 : 0.55;
+        ctx.beginPath();
+        ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+        ctx.fillStyle = hoverPoint.overlap ? '#ef4444' : getCapHex(selectedColor);
         ctx.fill();
+        ctx.strokeStyle = hoverPoint.overlap ? '#f87171' : (hoverPoint.inSafe ? '#ffffff' : '#fbbf24');
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
         ctx.restore();
       }
     }
 
-    // Active planned path preview line (shows target trajectory!)
-    if (simState === 'MOVING_TO_CAP' || simState === 'MOVING_TO_BIN' || simState === 'PARKING') {
+    // Active planned trajectory dashed line
+    if (simState === 'MOVING_TO_CAP' || simState === 'MOVING_TO_BIN' || simState === 'PARKING_FOR_VERIFY') {
       const gx = PADDING_LEFT + gantry.x * SCALE;
       const gy = PADDING_TOP + gantry.y * SCALE;
       const tx = PADDING_LEFT + gantry.targetX * SCALE;
@@ -810,7 +1122,7 @@ function initSimulator() {
       ctx.restore();
     }
 
-    // 2. Draw 4 Sorting Bins on right side (integrated header strip — never obscured by gantry beam!)
+    // 2. Draw 4 Sorting Bins on right side
     BINS.forEach(bin => {
       const bx = PADDING_LEFT + bin.x * SCALE;
       const by = PADDING_TOP + bin.y * SCALE;
@@ -818,12 +1130,10 @@ function initSimulator() {
       const bh = bin.h * SCALE;
       const headerH = 20;
 
-      // Bin body
       drawRoundedRect(bx, by, bw, bh, 8);
       ctx.fillStyle = bin.bg;
       ctx.fill();
 
-      // Integrated colored top header bar inside bin
       ctx.save();
       drawRoundedRect(bx, by, bw, bh, 8);
       ctx.clip();
@@ -831,20 +1141,17 @@ function initSimulator() {
       ctx.fillRect(bx, by, bw, headerH);
       ctx.restore();
 
-      // Bin outer stroke
       drawRoundedRect(bx, by, bw, bh, 8);
       ctx.strokeStyle = bin.color;
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Header text cleanly centered inside header strip
       ctx.fillStyle = '#f8fafc';
       ctx.font = '700 9.5px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(bin.name, bx + bw / 2, by + headerH / 2 + 0.5);
 
-      // Mini sorted cap tokens inside bin body
       const dots = Math.min(bin.count, 8);
       for (let d = 0; d < dots; d++) {
         const col = d % 4;
@@ -858,7 +1165,6 @@ function initSimulator() {
         ctx.stroke();
       }
 
-      // Count badge at bottom of bin
       ctx.fillStyle = bin.count > 0 ? '#ffffff' : '#94a3b8';
       ctx.font = '600 10.5px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
@@ -866,17 +1172,41 @@ function initSimulator() {
       ctx.fillText(`Qty: ${bin.count}`, bx + bw / 2, by + bh - 12);
     });
 
-    // 3. Draw Pending Caps on Board
+    // 3. Draw Pending Caps on Board (with bumped displacement trail & clearance ring)
     caps.forEach(cap => {
       const cx = PADDING_LEFT + cap.x * SCALE;
       const cy = PADDING_TOP + cap.y * SCALE;
       const cr = CAP_RADIUS_MM * SCALE;
       const isCurrent = currentTarget && currentTarget.id === cap.id;
 
+      // Show amber displacement trail if physically pushed since last camera scan
+      if (cap.shifted && cap.prevX !== null && cap.prevY !== null) {
+        const px = PADDING_LEFT + cap.prevX * SCALE;
+        const py = PADDING_TOP + cap.prevY * SCALE;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(px, py, cr * 0.85, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(cx, cy);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       if (isCurrent) {
         ctx.beginPath();
         ctx.arc(cx, cy, cr + 5, 0, Math.PI * 2);
-        ctx.strokeStyle = accentPrimary;
+        ctx.strokeStyle = cap.blockedSides === 0 ? '#34d399' : '#fbbf24';
+        ctx.lineWidth = 1.75;
+        ctx.stroke();
+      } else if (cap.shifted) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, cr + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = '#fbbf24';
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
@@ -892,7 +1222,7 @@ function initSimulator() {
       ctx.arc(cx, cy, cr, 0, Math.PI * 2);
       ctx.fillStyle = getCapHex(cap.color);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+      ctx.strokeStyle = isInSafePickBounds(cap.x, cap.y) ? 'rgba(255, 255, 255, 0.45)' : '#fbbf24';
       ctx.lineWidth = 1.75;
       ctx.stroke();
 
@@ -903,8 +1233,8 @@ function initSimulator() {
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Centroid crosshair
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      // Vision centroid crosshair
+      ctx.strokeStyle = cap.shifted ? '#fde68a' : 'rgba(255, 255, 255, 0.85)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(cx - 3.5, cy); ctx.lineTo(cx + 3.5, cy);
@@ -912,9 +1242,11 @@ function initSimulator() {
       ctx.stroke();
     });
 
-    // 4. Camera scanning laser sweep overlay
-    if (simState === 'SCANNING') {
-      const sweepPxY = PADDING_TOP + scanSweepY * boardPx;
+    // 4. Camera scanning laser sweep overlay (Initial, Pipelined Bin-Side, or Clear-FOV Verify)
+    const isFullScan = simState === 'SCANNING_INITIAL' || simState === 'SCANNING_VERIFY';
+    if (isFullScan || binScanActive) {
+      const sweepRatio = isFullScan ? scanSweepY : binScanSweepY;
+      const sweepPxY = PADDING_TOP + sweepRatio * boardPx;
       const grad = ctx.createLinearGradient(0, sweepPxY - 34, 0, sweepPxY);
       grad.addColorStop(0, 'rgba(0, 210, 255, 0)');
       grad.addColorStop(1, 'rgba(0, 210, 255, 0.24)');
@@ -928,12 +1260,15 @@ function initSimulator() {
       ctx.lineTo(PADDING_LEFT + boardPx, sweepPxY);
       ctx.stroke();
 
-      // Clean centered pill banner inside board (never overflows into bins!)
-      const label = isV2 ? 'PI ZERO 2 W OPENCV + FISHEYE SCAN...' : 'TEENSY 4.1 HSV + HOMOGRAPHY SCAN...';
-      const pillW = 310;
-      const pillH = 30;
+      const label = binScanActive
+        ? `BIN-SIDE RE-SCAN #${scanCount} (RE-ACQUIRING BUMPED CAPS)`
+        : simState === 'SCANNING_VERIFY'
+        ? `CLEAR-FOV VERIFY SCAN #${scanCount + 1} (UNOBSTRUCTED)`
+        : (isV2 ? 'SCAN #1: PI ZERO 2 W OPENCV + WATERSHED...' : 'SCAN #1: TEENSY 4.1 HSV + CHAMFER...');
+      const pillW = 340;
+      const pillH = 28;
       const pillX = PADDING_LEFT + (boardPx - pillW) / 2;
-      const pillY = PADDING_TOP + (boardPx - pillH) / 2;
+      const pillY = binScanActive ? PADDING_TOP + 12 : PADDING_TOP + (boardPx - pillH) / 2;
       drawRoundedRect(pillX, pillY, pillW, pillH, 999);
       ctx.fillStyle = 'rgba(10, 14, 23, 0.92)';
       ctx.fill();
@@ -942,7 +1277,7 @@ function initSimulator() {
       ctx.stroke();
 
       ctx.fillStyle = '#38bdf8';
-      ctx.font = '700 11px "JetBrains Mono", monospace';
+      ctx.font = '700 10px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(label, pillX + pillW / 2, pillY + pillH / 2);
@@ -952,11 +1287,11 @@ function initSimulator() {
     const gantryPxX = PADDING_LEFT + gantry.x * SCALE;
     const gantryPxY = PADDING_TOP + gantry.y * SCALE;
 
-    // Y-Axis Gantry Bridge Beam (subtle frosted rail spanning board + bins)
-    ctx.fillStyle = 'rgba(30, 41, 59, 0.42)';
+    // Y-Axis Gantry Bridge Beam
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.48)';
     drawRoundedRect(PADDING_LEFT - 10, gantryPxY - 5, boardPx + 132, 10, 3);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.38)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
@@ -976,7 +1311,7 @@ function initSimulator() {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // 2-Finger Parallel Gripper Jaws
+    // 2-Finger Parallel Gripper Jaws (Opening along X-axis)
     const jawHalfGap = (gantry.gripperWidth * SCALE) / 2;
     ctx.fillStyle = '#f8fafc';
     drawRoundedRect(gantryPxX - jawHalfGap - 4.5, gantryPxY - 12, 4.5, 24, 2);
@@ -996,7 +1331,7 @@ function initSimulator() {
       ctx.stroke();
     }
 
-    // 6. Sleek Bottom HUD Status Strip (fills bottom area cleanly with live context)
+    // 6. Bottom HUD Status Strip
     const hudY = 434;
     const hudH = 48;
     drawRoundedRect(18, hudY, LOGICAL_W - 36, hudH, 10);
@@ -1006,29 +1341,30 @@ function initSimulator() {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Left HUD status text
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.font = '600 11px "JetBrains Mono", monospace';
+    ctx.font = '600 10.5px "JetBrains Mono", monospace';
     let hudLeft = '';
     if (simState === 'SAFE_HALTED') {
       ctx.fillStyle = '#f87171';
       hudLeft = 'FAULT LATCHED • Z RETRACTED • CLICK "RE-ARM & HOME"';
     } else if (simState !== 'IDLE') {
       ctx.fillStyle = '#34d399';
-      hudLeft = `ACTIVE: ${simState.replace(/_/g, ' ')}  •  ELAPSED ${simElapsedSec.toFixed(1)}s`;
-    } else if (hoverCell) {
-      const colChar = String.fromCharCode(65 + hoverCell.col);
-      const action = hoverCell.existingIdx >= 0 ? 'Click to remove' : `Click to place ${selectedColor.toUpperCase()}`;
-      ctx.fillStyle = '#e2e8f0';
-      hudLeft = `CELL ${colChar}${hoverCell.row + 1} (${hoverCell.snapX}, ${hoverCell.snapY} mm) • ${action}`;
+      hudLeft = `${simState.replace(/_/g, ' ')} • ${activePickTierLabel} • SCANS:${scanCount} SHIFTS:${shiftEvents}`;
+    } else if (hoverPoint) {
+      const action =
+        hoverPoint.existingIdx >= 0 ? 'Click to remove' :
+        hoverPoint.overlap ? 'Overlap blocked' :
+        !hoverPoint.inSafe ? `Edge margin (${selectedColor.toUpperCase()})` :
+        `Place ${selectedColor.toUpperCase()}${hoverPoint.snapped ? ' [SNAP]' : ' (free)'}`;
+      ctx.fillStyle = hoverPoint.overlap ? '#f87171' : '#e2e8f0';
+      hudLeft = `(${hoverPoint.x.toFixed(1)}, ${hoverPoint.y.toFixed(1)} mm) • ${action}`;
     } else {
       ctx.fillStyle = '#94a3b8';
-      hudLeft = 'READY • Hover grid to place/remove caps or Start Sort';
+      hudLeft = 'FREE PLACEMENT • Click anywhere (Shift=grid snap) or Start Sort';
     }
     ctx.fillText(hudLeft, 32, hudY + hudH / 2);
 
-    // Right HUD home/origin badge
     ctx.textAlign = 'right';
     ctx.fillStyle = accentPrimary;
     ctx.font = '700 10.5px "JetBrains Mono", monospace';
@@ -1084,6 +1420,8 @@ function initSimulator() {
     if (uiEls.total) uiEls.total.textContent = String(caps.length + sortedCaps.length);
     if (uiEls.sorted) uiEls.sorted.textContent = String(sortedCaps.length);
     if (uiEls.pending) uiEls.pending.textContent = String(caps.length);
+    if (uiEls.scans) uiEls.scans.textContent = String(scanCount);
+    if (uiEls.shifts) uiEls.shifts.textContent = String(shiftEvents);
   }
 
   // Initial draw
