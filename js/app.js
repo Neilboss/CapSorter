@@ -517,6 +517,9 @@ function initSimulator() {
       if (simState === 'SAFE_HALTED') {
         uiEls.startBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span>Re-Arm &amp; Home Gantry</span>`;
         uiEls.startBtn.className = 'w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 transition-all';
+      } else if (commsLost && simState !== 'IDLE') {
+        uiEls.startBtn.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-300 animate-pulse"></span><span>UART Cut (${simState === 'FAILSAFE_PARKING' ? 'Parking 0,0' : 'Depositing Cap'})</span>`;
+        uiEls.startBtn.className = 'w-full py-2.5 rounded-xl bg-amber-600/90 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 cursor-default transition-all';
       } else if (simState !== 'IDLE') {
         uiEls.startBtn.innerHTML = `<span class="w-2 h-2 rounded-full bg-current animate-pulse"></span><span>Sorting (${simState.replace(/_/g, ' ')})</span>`;
         uiEls.startBtn.className = defaultStartBtnClass + ' opacity-85 cursor-default';
@@ -528,7 +531,7 @@ function initSimulator() {
     }
 
     if (uiEls.commsBtn) {
-      const canCut = simState !== 'IDLE' && simState !== 'SAFE_HALTED';
+      const canCut = simState !== 'IDLE' && simState !== 'SAFE_HALTED' && !commsLost;
       uiEls.commsBtn.classList.toggle('opacity-55', !canCut);
     }
 
@@ -686,20 +689,49 @@ function initSimulator() {
 
   uiEls.commsBtn?.addEventListener('click', () => {
     if (simState === 'IDLE') {
-      showNotification('Start an autonomous sort first, then trigger a UART cut mid-cycle to test fail-safe halt.', 'info');
+      showNotification('Start an autonomous sort first, then trigger a UART cut mid-cycle to test safe deposit & home halt.', 'info');
       return;
     }
-    if (simState === 'SAFE_HALTED') return;
+    if (simState === 'SAFE_HALTED' || commsLost) return;
+
     commsLost = true;
+    queuedNextTarget = null;
     binScanActive = false;
     activeOcclusionY = null;
+
+    const activeCapStates = [
+      'MOVING_TO_CAP', 'LOWERING_Z', 'GRIPPING', 'LIFTING_Z',
+      'MOVING_TO_BIN', 'BIN_SETTLE_SCAN', 'LOWERING_BIN', 'RELEASING', 'RETRACTING_BIN'
+    ];
+    if (activeCapStates.includes(simState)) {
+      updateControlButtonsState();
+      updateTelemetryUI();
+      showNotification(
+        'UART Link Cut! Finishing current scanned cap into its bin, then parking at (0, 0) to halt.',
+        'warning'
+      );
+      return;
+    }
+
+    // No cap currently scanned/dispatched -> return straight to (0, 0) and halt
+    currentTarget = null;
     gantry.z = 'RAISED';
     gantry.zHeight = 0;
-    simState = 'SAFE_HALTED';
-    updateControlButtonsState();
-    updateTelemetryUI();
-    renderOnce();
-    showNotification('UART Link Interrupted! Fail-safe halt latched: XY stopped, Z retracted (jaw preserved). Click "Re-Arm & Home" to recover.', 'error');
+    if (Math.hypot(gantry.x, gantry.y) < 1) {
+      gantry.x = 0;
+      gantry.y = 0;
+      simState = 'SAFE_HALTED';
+      updateControlButtonsState();
+      updateTelemetryUI();
+      renderOnce();
+      showNotification('UART Link Cut at (0, 0)! Fail-safe halt latched. Click "Re-Arm & Home" to recover.', 'error');
+    } else {
+      setGantryTarget(0, 0);
+      simState = 'FAILSAFE_PARKING';
+      updateControlButtonsState();
+      updateTelemetryUI();
+      showNotification('UART Link Cut! Returning gantry to (0, 0) to latch fail-safe halt.', 'warning');
+    }
   });
 
   // Color picker buttons
@@ -896,7 +928,7 @@ function initSimulator() {
 
     if (simState === 'MOVING_TO_BIN') {
       if (moveGantryTowards(gantry.targetX, gantry.targetY, dt)) {
-        simState = 'BIN_SETTLE_SCAN';
+        simState = commsLost ? 'LOWERING_BIN' : 'BIN_SETTLE_SCAN';
         animTimer = 0;
       }
       return;
@@ -904,6 +936,11 @@ function initSimulator() {
 
     // Stationary 120 ms XY settle at bin (Z raised) -> fire pipelined bin-side camera scan!
     if (simState === 'BIN_SETTLE_SCAN') {
+      if (commsLost) {
+        simState = 'LOWERING_BIN';
+        animTimer = 0;
+        return;
+      }
       animTimer += dt;
       if (animTimer >= 0.14) {
         activeOcclusionY = gantry.y;
@@ -953,7 +990,13 @@ function initSimulator() {
         gantry.zHeight = 0;
         gantry.z = 'RAISED';
         activeOcclusionY = null;
-        if (queuedNextTarget && caps.some(c => c.id === queuedNextTarget.id)) {
+        if (commsLost) {
+          // Active scanned cap has been deposited -> park cleanly at (0, 0) and latch halt
+          queuedNextTarget = null;
+          currentTarget = null;
+          setGantryTarget(0, 0);
+          simState = 'FAILSAFE_PARKING';
+        } else if (queuedNextTarget && caps.some(c => c.id === queuedNextTarget.id)) {
           // Move straight from bin to fresh re-imaged coordinates (no return to 0,0!)
           currentTarget = queuedNextTarget;
           queuedNextTarget = null;
@@ -976,6 +1019,23 @@ function initSimulator() {
         simState = 'SCANNING_VERIFY';
         animTimer = 0;
         scanSweepY = 0;
+      }
+      return;
+    }
+
+    if (simState === 'FAILSAFE_PARKING') {
+      if (moveGantryTowards(0, 0, dt)) {
+        gantry.x = 0;
+        gantry.y = 0;
+        gantry.z = 'RAISED';
+        gantry.zHeight = 0;
+        simState = 'SAFE_HALTED';
+        updateControlButtonsState();
+        updateTelemetryUI();
+        showNotification(
+          'Active cap deposited & gantry parked at (0, 0). Fail-safe halt latched — click "Re-Arm & Home" to recover.',
+          'error'
+        );
       }
     }
   }
@@ -1102,13 +1162,16 @@ function initSimulator() {
     }
 
     // Active planned trajectory dashed line
-    if (simState === 'MOVING_TO_CAP' || simState === 'MOVING_TO_BIN' || simState === 'PARKING_FOR_VERIFY') {
+    if (simState === 'MOVING_TO_CAP' || simState === 'MOVING_TO_BIN' ||
+        simState === 'PARKING_FOR_VERIFY' || simState === 'FAILSAFE_PARKING') {
       const gx = PADDING_LEFT + gantry.x * SCALE;
       const gy = PADDING_TOP + gantry.y * SCALE;
       const tx = PADDING_LEFT + gantry.targetX * SCALE;
       const ty = PADDING_TOP + gantry.targetY * SCALE;
       ctx.save();
-      ctx.strokeStyle = simState === 'MOVING_TO_BIN' ? 'rgba(16, 185, 129, 0.65)' : accentPrimary;
+      ctx.strokeStyle =
+        simState === 'FAILSAFE_PARKING' ? 'rgba(248, 113, 113, 0.8)' :
+        simState === 'MOVING_TO_BIN' ? 'rgba(16, 185, 129, 0.65)' : accentPrimary;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([5, 5]);
       ctx.beginPath();
@@ -1301,7 +1364,7 @@ function initSimulator() {
 
     // X-Axis Carriage Block
     drawRoundedRect(gantryPxX - 13, gantryPxY - 13, 26, 26, 6);
-    ctx.fillStyle = simState === 'SAFE_HALTED' ? '#ef4444' : accentPrimary;
+    ctx.fillStyle = simState === 'SAFE_HALTED' ? '#ef4444' : (commsLost ? '#f59e0b' : accentPrimary);
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1.5;
@@ -1343,7 +1406,13 @@ function initSimulator() {
     let hudLeft = '';
     if (simState === 'SAFE_HALTED') {
       ctx.fillStyle = '#f87171';
-      hudLeft = 'FAULT LATCHED • Z RETRACTED • CLICK "RE-ARM & HOME"';
+      hudLeft = 'HALTED AT (0,0) • UART CUT • CLICK "RE-ARM & HOME"';
+    } else if (simState === 'FAILSAFE_PARKING') {
+      ctx.fillStyle = '#fbbf24';
+      hudLeft = 'UART CUT • CAP DEPOSITED • PARKING AT (0,0) TO HALT...';
+    } else if (commsLost && simState !== 'IDLE') {
+      ctx.fillStyle = '#fbbf24';
+      hudLeft = 'UART CUT • FINISHING ACTIVE CAP -> BIN -> PARK (0,0)';
     } else if (simState !== 'IDLE') {
       ctx.fillStyle = '#34d399';
       hudLeft = `${simState.replace(/_/g, ' ')} • ${activePickTierLabel} • SCANS:${scanCount} SHIFTS:${shiftEvents}`;

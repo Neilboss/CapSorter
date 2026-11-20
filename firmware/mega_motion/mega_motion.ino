@@ -603,36 +603,43 @@ bool checkCommunicationLoss() {
 
 void executeSafeCommsLossPolicy() {
   commsFaultLatched = true;
+  Serial1.write(CMD_RECOVERY_HALT);
 
-  // Only continue bin deposit if a physical grip sensor verifies a cap is held
-  // AND Z has already lifted the cap clear of the workspace.
-  bool inCarryStage = (currentState == STATE_TRAVERSE_BIN ||
-                       currentState == STATE_BIN_SETTLE ||
-                       currentState == STATE_LOWER_BIN ||
-                       currentState == STATE_RELEASE_CAP);
-  if (inCarryStage && isCapVerifiedHeld()) {
-    Serial.println(F("[COMMS_LOSS] Verified held cap in transit; completing deposit then halting."));
+  // If a single scanned cap has already been dispatched and is currently in its
+  // pick-and-place cycle, finish depositing ONLY that one cap into its bin,
+  // then park cleanly at (0, 0) via STATE_FAILSAFE_PARKING and latch halt.
+  // (Hardwired E-stop Pin 25 and NC X/Y/Z limits remain active at all times.)
+  bool inActiveCapCycle = (currentState == STATE_MOVING_TO_CAP ||
+                           currentState == STATE_LOWER_Z ||
+                           currentState == STATE_GRIP_CAP ||
+                           currentState == STATE_LIFT_Z ||
+                           currentState == STATE_TRAVERSE_BIN ||
+                           currentState == STATE_BIN_SETTLE ||
+                           currentState == STATE_LOWER_BIN ||
+                           currentState == STATE_RELEASE_CAP ||
+                           currentState == STATE_RETRACT_Z);
+  if (inActiveCapCycle) {
+    batchTotal = 0; // Do not start any further queued caps after this one
+    Serial.println(F("[COMMS_LOSS] Finishing current scanned cap into bin, then parking at (0,0) to halt."));
     return;
   }
 
-  // Default fail-closed policy (un-sensed gripper or not carrying):
-  // Never assume a cap was picked and never traverse blindly to a bin.
-  // Stop XY immediately, raise Z safely (preserving jaw state), disable steppers,
-  // latch STATE_FAILSAFE_HALT, and require explicit CMD_REARM_HOME + re-home.
-  stepperX.setSpeed(0.0f);
-  stepperY.setSpeed(0.0f);
-  stepperX.moveTo(stepperX.currentPosition());
-  stepperY.moveTo(stepperY.currentPosition());
-  digitalWrite(PIN_STEPPER_EN, HIGH); // Remove stepper drive torque safely
-  pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED); // Retract Z clear of board; preserve jaw state
+  // No cap currently active (e.g., awaiting next target at bin or parking):
+  // Confirm Z is safely retracted, park cleanly at (0, 0), disable steppers,
+  // and latch STATE_FAILSAFE_HALT until explicit CMD_REARM_HOME + re-home.
+  pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+  pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+  if (!isZRetractedSafeForXY()) {
+    triggerHardFault(F("Z-axis not retracted on comms-loss park"));
+    return;
+  }
   closedLoopMode = false;
-  isHomed        = false;
   hasInFlightCap = false;
   batchTotal     = 0;
   currentIdx     = 0;
-  currentState   = STATE_FAILSAFE_HALT;
-  Serial1.write(CMD_RECOVERY_HALT);
-  Serial.println(F("[COMMS_LOSS] Fail-safe halt latched. Explicit re-arm & re-home required."));
+  moveGantryToMm(0.0f, 0.0f);
+  currentState   = STATE_FAILSAFE_PARKING;
+  Serial.println(F("[COMMS_LOSS] No active cap; parking at (0,0) then latching fail-safe halt."));
 }
 
 void executeMotionStateMachine() {
@@ -688,7 +695,7 @@ void executeMotionStateMachine() {
     // Step 05: Traverse to designated color bin; pause briefly to settle before bin-side capture
     case STATE_TRAVERSE_BIN:
       if (isGantryAtTarget()) {
-        if (closedLoopMode) {
+        if (closedLoopMode && !commsFaultLatched) {
           stateTimerMs = millis();
           currentState = STATE_BIN_SETTLE;
         } else {
@@ -701,8 +708,10 @@ void executeMotionStateMachine() {
 
     // Step 05b: Stationary 120 ms XY settle at bin (Z raised) -> trigger pipelined camera scan
     case STATE_BIN_SETTLE:
-      if (millis() - stateTimerMs >= BIN_SETTLE_MS) {
-        Serial1.write(CMD_SCAN_WINDOW_OPEN);
+      if (commsFaultLatched || (millis() - stateTimerMs >= BIN_SETTLE_MS)) {
+        if (!commsFaultLatched) {
+          Serial1.write(CMD_SCAN_WINDOW_OPEN);
+        }
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN);
         stateTimerMs = millis();
         currentState = STATE_LOWER_BIN;
@@ -739,10 +748,13 @@ void executeMotionStateMachine() {
         Serial1.write(CMD_CAP_PROGRESS);
 
         if (commsFaultLatched) {
-          // Verified in-flight cap deposit finished; park at (0,0) then require explicit re-arm
+          // Active scanned cap deposit finished; park cleanly at (0,0) then latch halt
           Serial1.write(CMD_RECOVERY_HALT);
+          closedLoopMode = false;
+          batchTotal     = 0;
+          currentIdx     = 0;
           moveGantryToMm(0.0f, 0.0f);
-          currentState = STATE_FAILSAFE_PARKING;
+          currentState   = STATE_FAILSAFE_PARKING;
           return;
         }
 
@@ -790,9 +802,12 @@ void executeMotionStateMachine() {
         digitalWrite(PIN_STEPPER_EN, HIGH);
         closedLoopMode = false;
         isHomed        = false;
+        hasInFlightCap = false;
         batchTotal     = 0;
         currentIdx     = 0;
         currentState   = STATE_FAILSAFE_HALT;
+        Serial1.write(CMD_RECOVERY_HALT);
+        Serial.println(F("[COMMS_LOSS] Parked at (0,0) & halted. Explicit re-arm & re-home required."));
       }
       break;
   }

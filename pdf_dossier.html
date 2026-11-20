@@ -1290,22 +1290,22 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
 
     <!-- Communication-Loss Safe Recovery Architecture -->
     <div class="card card-orange" style="margin-top: 3mm;">
-      <h3 style="color: #ff9142; margin-bottom: 1.5mm;">Fail-Closed Communication-Loss Halt &amp; Re-Arm Policy</h3>
+      <h3 style="color: #ff9142; margin-bottom: 1.5mm;">Controlled Communication-Loss Deposit, Park &amp; Re-Arm Policy</h3>
       <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-        Because the default gripper has no physical cap-presence or grip-force sensor (<code>HAS_GRIP_SENSOR == 0</code>), firmware never assumes a cap was gripped on UART loss. Hosts maintain 250 ms heartbeats across the entire batch via per-cap <code>CMD_CAP_PROGRESS</code> updates.
+        Hosts maintain 250 ms heartbeats across every closed-loop cycle. If UART heartbeats drop (&gt;1.2 s) while a scanned cap is mid-cycle, the Mega finishes placing that single active cap into its color bin, then returns cleanly to <code>(0, 0)</code> and halts.
       </p>
       
       <div class="grid-3" style="font-size: 7.5pt; margin-top: 2mm;">
         <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #ff9142;">
           <strong style="color: #ff9142;">1. READY Handshake &amp; CRC16</strong>
           <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
-            Teensy polls <code>CMD_QUERY_STATUS</code> and waits for <code>CMD_STATUS_READY</code> after homing before transmitting a CRC16-CCITT batch (32-byte chunks, 2 ms pause).
+            Teensy polls <code>CMD_QUERY_STATUS</code> and waits for <code>CMD_STATUS_READY</code> after homing before transmitting 18-byte CRC16-CCITT closed-loop targets (<code>0x5B</code>).
           </p>
         </div>
         <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #38bdf8;">
-          <strong style="color: #38bdf8;">2. Safe Controlled Halt</strong>
+          <strong style="color: #38bdf8;">2. Finish Active Cap &amp; Park (0,0)</strong>
           <p style="font-size: 7pt; color: #94a3b8; margin-top: 1mm;">
-            If heartbeats stop (&gt;1.2 s), Mega immediately halts XY travel, raises Z (preserving jaw state), disables steppers, and emits <code>CMD_RECOVERY_HALT</code> without blind bin travel.
+            If heartbeats stop (&gt;1.2 s), Mega finishes ONLY the current dispatched cap into its bin (skipping further scans), parks at <code>(0, 0)</code> via <code>STATE_FAILSAFE_PARKING</code>, disables steppers, and emits <code>CMD_RECOVERY_HALT</code>.
           </p>
         </div>
         <div style="background: #0d121d; border-radius: 4px; padding: 2.5mm; border-left: 2px solid #34d399;">

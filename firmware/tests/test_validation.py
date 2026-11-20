@@ -507,6 +507,8 @@ class TestV1AlgorithmsAndFirmwareInvariants(unittest.TestCase):
         self.assertIn("STATE_BIN_SETTLE", mega)
         self.assertIn("STATE_AWAIT_NEXT_TARGET", mega)
         self.assertIn("STATE_PARKING_FOR_SCAN", mega)
+        self.assertIn("STATE_FAILSAFE_PARKING", mega)
+        self.assertIn("inActiveCapCycle", mega)
         self.assertIn("isValidSingleTarget", mega)
         self.assertIn("digitalWrite(PIN_SERVO_OE, HIGH);", mega)
         self.assertIn("#define HAS_GRIP_SENSOR        0", mega)

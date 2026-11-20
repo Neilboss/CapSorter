@@ -94,7 +94,7 @@ The system operates **100% offline** without laptops, Wi-Fi, or cloud connectivi
 ## 🛡️ Fail-Safe Comms Recovery & Emergency Stop Protocol
 
 - **Hardwired Emergency Stop**: A dual-pole latching NC mushroom E-stop directly cuts 12V actuator power (Branches A & B) independently of firmware while an auxiliary NC contact on Mega Pin 25 latches `STATE_HARD_FAULT`, disables `PIN_STEPPER_EN` and `PIN_SERVO_OE`, and requires explicit operator re-arm (`CMD_REARM_HOME`) and re-homing before motion resumes.
-- **UART Communication Loss (`>1.2 s` without `0xF0` heartbeat)**: Because the default gripper has no physical cap-presence sensor, the Mega **does not assume a cap was picked** and does not traverse blindly to a bin. Instead it immediately stops XY motion, retracts Z to safe overhead clearance while preserving jaw state, disables steppers, emits `CMD_RECOVERY_HALT`, and latches `STATE_FAILSAFE_HALT` until explicit operator re-arm and re-homing. (Verified in-flight bin completion is gated behind optional physical grip sensing.)
+- **UART Communication Loss (`>1.2 s` without `0xF0` heartbeat)**: If a single scanned cap has already been dispatched and is mid-cycle on the Mega, the Mega finishes placing **only that one active cap** into its assigned color bin (skipping any bin-side scan or further caps), returns the gantry cleanly to **`(0, 0)`** (`STATE_FAILSAFE_PARKING`), disables steppers, emits `CMD_RECOVERY_HALT`, and latches `STATE_FAILSAFE_HALT` until explicit operator re-arm (`CMD_REARM_HOME`) and re-homing. If no cap is active, it parks directly at `(0, 0)` and halts. (Hardwired E-stop Pin 25 and NC limit switches still halt immediately at any point.)
 
 ---
 
