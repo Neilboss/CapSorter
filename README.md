@@ -10,7 +10,7 @@
 
 ---
 
-![System Poster](assets/system_poster.jpg)
+![System Poster](website/assets/system_poster.jpg)
 
 ## 📌 Executive Overview
 
@@ -102,7 +102,7 @@ The system operates **100% offline** without laptops, Wi-Fi, or cloud connectivi
 
 A publication-grade, 12-page technical dossier is included directly in this repository for formal academic or industrial engineering submissions:
 
-👉 **[Download Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf](Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)**
+👉 **[Download Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf](website/Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)**
 
 ### Dossier Contents & Page Structure:
 1. **Cover & Master System Poster**: Project identity, key specifications, and full-bleed CAD architecture render.
@@ -129,13 +129,13 @@ The repository includes a standalone, zero-dependency engineering web applicatio
 - **`pdf_dossier.html` & `pdf_dossier_v2.html`**: 12-page printable A4 technical report dossiers for V1 and V2.
 
 ### How to Run Locally
-Simply open `index.html` in any modern web browser:
+Simply open `website/index.html` in any modern web browser:
 ```bash
 # On Windows
-start index.html
+start website/index.html
 
 # Or via Python local server
-python -m http.server 8000
+python -m http.server 8000 --directory website
 ```
 
 ---

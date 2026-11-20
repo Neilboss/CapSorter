@@ -785,14 +785,14 @@ class TestClosedLoopBinReimagingAndRecovery(unittest.TestCase):
 class TestHTMLCodeVaultSyncAndDocsAudit(unittest.TestCase):
     def test_html_code_vaults_match_standalone_firmware_verbatim(self):
         checks = [
-            ("v1.html", "code-teensy",    "firmware/v1_teensy41/teensy_vision.cpp"),
-            ("v1.html", "code-mega",      "firmware/mega_motion/mega_motion.ino"),
-            ("v1.html", "code-esp32",     "firmware/v1_esp32cam/esp32cam_uart.ino"),
-            ("v1.html", "code-protocol",  "firmware/common/packet_protocol.h"),
-            ("v2.html", "code-pizero",    "firmware/v2_pizero2w/pi_zero_vision.py"),
-            ("v2.html", "code-calibrate", "firmware/v2_pizero2w/fisheye_calibrate.py"),
-            ("v2.html", "code-mega",      "firmware/mega_motion/mega_motion.ino"),
-            ("v2.html", "code-protocol",  "firmware/common/packet_protocol.h"),
+            ("website/v1.html", "code-teensy",    "firmware/v1_teensy41/teensy_vision.cpp"),
+            ("website/v1.html", "code-mega",      "firmware/mega_motion/mega_motion.ino"),
+            ("website/v1.html", "code-esp32",     "firmware/v1_esp32cam/esp32cam_uart.ino"),
+            ("website/v1.html", "code-protocol",  "firmware/common/packet_protocol.h"),
+            ("website/v2.html", "code-pizero",    "firmware/v2_pizero2w/pi_zero_vision.py"),
+            ("website/v2.html", "code-calibrate", "firmware/v2_pizero2w/fisheye_calibrate.py"),
+            ("website/v2.html", "code-mega",      "firmware/mega_motion/mega_motion.ino"),
+            ("website/v2.html", "code-protocol",  "firmware/common/packet_protocol.h"),
         ]
         cache = {}
         for html_file, block_id, src_file in checks:
@@ -826,8 +826,8 @@ class TestHTMLCodeVaultSyncAndDocsAudit(unittest.TestCase):
             (r"completes depositing|in-flight pickup", "unverified-cap comms recovery claim"),
         ]
         doc_files = [
-            "README.md", "firmware/README.md", "index.html",
-            "v1.html", "v2.html", "pdf_dossier.html", "pdf_dossier_v2.html",
+            "README.md", "firmware/README.md", "website/index.html",
+            "website/v1.html", "website/v2.html", "website/pdf_dossier.html", "website/pdf_dossier_v2.html",
         ]
         for fn in doc_files:
             text = _read_text(os.path.join(REPO_ROOT, fn))
@@ -844,7 +844,7 @@ class TestHTMLCodeVaultSyncAndDocsAudit(unittest.TestCase):
                 )
 
         # Ensure V2 dossier has no leftover V1 Serial2/OV2640/QVGA/921,600 baud architecture prose
-        v2_dossier = _read_text(os.path.join(REPO_ROOT, "pdf_dossier_v2.html"))
+        v2_dossier = _read_text(os.path.join(REPO_ROOT, "website", "pdf_dossier_v2.html"))
         for v1_leftover in [r"OV2640", r"\bQVGA\b", r"921,600\s*Baud", r"Serial2", r"BGR888"]:
             self.assertIsNone(
                 re.search(v1_leftover, v2_dossier, re.I),
