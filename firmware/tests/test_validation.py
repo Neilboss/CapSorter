@@ -26,6 +26,7 @@ if V2_DIR not in sys.path:
     sys.path.insert(0, V2_DIR)
 
 import fisheye_calibrate as fc
+import lcd_hud as hud_mod
 import pi_zero_vision as pzv
 
 
@@ -782,6 +783,144 @@ class TestClosedLoopBinReimagingAndRecovery(unittest.TestCase):
             self.assertEqual(world_caps[0][2], pzv.COLOR_RED)
 
 
+class TestV2USBSerialAndLCDHUD(unittest.TestCase):
+    def _make_controller(self, td, state_callback=None):
+        cal_path = os.path.join(td, "cal.npz")
+        H = fc.compute_homography_from_fiducials([[92, 34], [548, 34], [548, 446], [92, 446]])
+        fc.save_validated_calibration(
+            cal_path,
+            np.array([[320.0, 0, 320.0], [0, 320.0, 240.0], [0, 0, 1.0]]),
+            np.zeros((4, 1)), H, "picamera2_imx219", "fisheye", (640, 480), 0.1,
+        )
+        return pzv.PiZeroVisionController(
+            calib_file=cal_path, camera_type="picamera2_imx219",
+            init_hardware=False, state_callback=state_callback,
+        )
+
+    def test_resolve_serial_port_priority_and_udev_rules(self):
+        # 1. Explicit override always wins
+        self.assertEqual(pzv.resolve_serial_port("/dev/ttyUSB9"), "/dev/ttyUSB9")
+
+        # 2. Persistent udev symlink /dev/capsorter_mega has highest auto priority
+        self.assertEqual(
+            pzv.resolve_serial_port("auto", exists_fn=lambda p: p == "/dev/capsorter_mega", glob_fn=lambda _: []),
+            "/dev/capsorter_mega",
+        )
+
+        # 3. CH9102 / CP2102 by-id match wins over generic ttyUSB/ttyACM
+        by_id_ch9102 = "/dev/serial/by-id/usb-1a86_USB_Single_Serial_54321-if00"
+        self.assertEqual(
+            pzv.resolve_serial_port(
+                "auto",
+                exists_fn=lambda _: False,
+                glob_fn=lambda pat: [by_id_ch9102] if "by-id" in pat else ["/dev/ttyUSB0"],
+            ),
+            by_id_ch9102,
+        )
+
+        # 4. Falls through to /dev/ttyUSB0, then /dev/ttyACM0, then /dev/serial0
+        self.assertEqual(
+            pzv.resolve_serial_port(
+                "auto",
+                exists_fn=lambda _: False,
+                glob_fn=lambda pat: ["/dev/ttyUSB0"] if "ttyUSB" in pat else [],
+            ),
+            "/dev/ttyUSB0",
+        )
+        self.assertEqual(
+            pzv.resolve_serial_port(
+                "auto",
+                exists_fn=lambda _: False,
+                glob_fn=lambda pat: ["/dev/ttyACM0"] if "ttyACM" in pat else [],
+            ),
+            "/dev/ttyACM0",
+        )
+        self.assertEqual(
+            pzv.resolve_serial_port("auto", exists_fn=lambda _: False, glob_fn=lambda _: []),
+            "/dev/serial0",
+        )
+
+        # 5. Verify shipped udev rules cover both WCH CH9102 (1a86) and Silicon Labs CP2102 (10c4)
+        udev = _read_text(os.path.join(V2_DIR, "99-capsorter-mega.rules"))
+        self.assertIn('idVendor}=="1a86"', udev)
+        self.assertIn('idVendor}=="10c4"', udev)
+        self.assertIn('SYMLINK+="capsorter_mega"', udev)
+
+    def test_usb_serial_disconnect_mid_cycle_returns_link_lost_cleanly(self):
+        with tempfile.TemporaryDirectory() as td:
+            events = []
+            ctrl = self._make_controller(td, state_callback=lambda ev, pl: events.append((ev, pl)))
+
+            class FailingUSBSerial(FakeUART):
+                def __init__(self):
+                    super().__init__()
+                    self.writes = 0
+
+                def write(self, data: bytes):
+                    self.writes += 1
+                    if self.writes == 1:
+                        self.rx_queue.append(pzv.CMD_BATCH_ACK)
+                        return len(data)
+                    raise OSError("Simulated USB-TTL unplug (Errno 5)")
+
+            ctrl.uart = FailingUSBSerial()
+            board = _draw_synthetic_board(ctrl.H_inv, [(120.0, 140.0, pzv.COLOR_RED)])
+            res = ctrl.run_closed_loop_sort_session(
+                capture_fn=lambda: board, clock=lambda: 0.0, sleep_fn=lambda _: None
+            )
+            self.assertEqual(res["status"], "LINK_LOST")
+            self.assertTrue(any(ev == "LINK_LOST" for ev, _ in events))
+
+            # Verify send_rearm_home sends 0xB4 cleanly on healthy link
+            ctrl.uart = FakeUART()
+            self.assertTrue(ctrl.send_rearm_home())
+            self.assertEqual(ctrl.uart.tx_log[-1], bytes([pzv.CMD_REARM_HOME]))
+
+    def test_lcd_hud_kinematics_rendering_rgb565_and_touch_controls(self):
+        # Verify trapezoidal & triangular move duration matches Mega kinematics
+        self.assertAlmostEqual(hud_mod.compute_axis_move_time(0.0), 0.0, places=5)
+        self.assertAlmostEqual(hud_mod.compute_axis_move_time(140.0), (140.0 / 70.0) + (70.0 / 150.0), places=4)
+        self.assertAlmostEqual(hud_mod.compute_axis_move_time(15.0), 2.0 * math.sqrt(15.0 / 150.0), places=4)
+
+        paused_calls = []
+        rearm_calls = []
+        hud = hud_mod.CapSorterLCDHUD(
+            fb_device="",
+            on_pause_toggle=lambda p: paused_calls.append(p),
+            on_rearm=lambda: rearm_calls.append(True),
+        )
+        caps = [
+            {"capId": 1, "color": pzv.COLOR_RED, "boardX_mm": 80.0, "boardY_mm": 120.0, "in_safe_bounds": True},
+            {"capId": 2, "color": pzv.COLOR_BLUE, "boardX_mm": 210.0, "boardY_mm": 220.0, "in_safe_bounds": True},
+        ]
+        hud.update_state("READY", {"caps": caps, "serial_port": "/dev/capsorter_mega", "scans": 1}, now=1.0)
+        hud.update_state("TARGET_DISPATCHED", {"target": caps[0], "caps": caps}, now=1.0)
+
+        # Mid-travel frame should advance gantry along (0,0) -> (80,120)
+        frame_mid = hud.render_frame_bgr(now=2.0)
+        self.assertEqual(frame_mid.shape, (hud_mod.LCD_HEIGHT, hud_mod.LCD_WIDTH, 3))
+        self.assertEqual(frame_mid.dtype, np.uint8)
+        self.assertGreater(hud.predictor.x, 5.0)
+        self.assertGreater(hud.predictor.y, 5.0)
+
+        # Bin scan window anchors gantry at bin (X=355) & enables bridge occlusion overlay
+        hud.update_state("SCAN_WINDOW_OPEN", {"bin_y": 55.0, "caps": [caps[1]], "scans": 2}, now=5.0)
+        hud.update_state("CAP_SORTED", {"color": pzv.COLOR_RED}, now=5.8)
+        frame_bin = hud.render_frame_bgr(now=5.2)
+        rgb565 = hud_mod.bgr_to_rgb565_bytes(frame_bin)
+        self.assertEqual(len(rgb565), hud_mod.LCD_WIDTH * hud_mod.LCD_HEIGHT * 2)
+        self.assertEqual(hud.state["bin_counts"][pzv.COLOR_RED], 1)
+
+        # Verify touch hit-testing for PAUSE, RE-ARM, and VIEW buttons
+        for key in ("pause", "rearm", "view"):
+            x0, y0, x1, y1 = hud_mod.TOUCH_BUTTONS[key]
+            cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+            self.assertEqual(hud.handle_touch_px(cx, cy), key)
+        self.assertEqual(paused_calls, [True])
+        self.assertEqual(rearm_calls, [True])
+        self.assertEqual(hud.view_mode, "CAM")
+
+
 class TestHTMLCodeVaultSyncAndDocsAudit(unittest.TestCase):
     def test_html_code_vaults_match_standalone_firmware_verbatim(self):
         checks = [
@@ -790,6 +929,7 @@ class TestHTMLCodeVaultSyncAndDocsAudit(unittest.TestCase):
             ("website/v1.html", "code-esp32",     "firmware/v1_esp32cam/esp32cam_uart.ino"),
             ("website/v1.html", "code-protocol",  "firmware/common/packet_protocol.h"),
             ("website/v2.html", "code-pizero",    "firmware/v2_pizero2w/pi_zero_vision.py"),
+            ("website/v2.html", "code-lcd",       "firmware/v2_pizero2w/lcd_hud.py"),
             ("website/v2.html", "code-calibrate", "firmware/v2_pizero2w/fisheye_calibrate.py"),
             ("website/v2.html", "code-mega",      "firmware/mega_motion/mega_motion.ino"),
             ("website/v2.html", "code-protocol",  "firmware/common/packet_protocol.h"),

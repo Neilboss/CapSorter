@@ -3018,7 +3018,7 @@ void loop() {
 // Status: Pre-Validation Engineering Firmware (requires physical bench tests)
 // Hardware: ATmega2560 @ 16 MHz | 2x TMC2208 Steppers | PCA9685 Servos
 // Wiring:
-//   Serial1 (Pin 19 RX1, Pin 18 TX1) &lt;-&gt; 5V/3.3V Shifter &lt;-&gt; Teensy or Pi Zero 2W
+//   Serial1 (Pin 19 RX1, Pin 18 TX1) &lt;-&gt; 5V/3.3V Shifter &lt;-&gt; V1 Teensy or V2 Pi Zero 2W (via OTG + CH9102/CP2102)
 //   X Stepper (TMC2208): STEP = Pin 2, DIR = Pin 5, EN = Pin 8 (Active LOW)
 //   Y Stepper (TMC2208): STEP = Pin 3, DIR = Pin 6, EN = Pin 8 (Active LOW)
 //   Limit Switches (NC to GND, INPUT_PULLUP, polled in loop - Port A has no ISR):

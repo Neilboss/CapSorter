@@ -2021,7 +2021,7 @@ function initCodeVault() {
     if (!codeEl) return;
     const raw = codeEl.textContent || '';
     codeEl.dataset.rawCode = raw;
-    const isPy = block.id.includes('pizero') || block.id.includes('calibrate');
+    const isPy = block.id.includes('pizero') || block.id.includes('calibrate') || block.id.includes('lcd');
     codeEl.innerHTML = highlightCodeText(raw, isPy ? 'python' : 'cpp');
     block.dataset.highlighted = '1';
   }

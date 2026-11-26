@@ -1,68 +1,87 @@
+<div align="center">
+
+<img src="website/assets/logo.png" alt="CapSorter Logo" width="240">
+
 # Autonomous Bottle-Cap Sorting Machine
-### Vision-Guided Pick & Place System (Offline • Dual-Controller Architecture)
+### Vision-Guided Cartesian Pick & Place System (100% Offline • V1 & V2 Dual-Controller Architectures)
 
 **By Neil Shettigar, Kahan, and Shourya**  
 *Main development & documentation by Neil Shettigar*
 
-🌐 **Live Website (Vercel):** [https://capsorter.vercel.app](https://capsorter.vercel.app)  
-🌐 **Mirror (GitHub Pages):** [https://neilboss.github.io/CapSorter/](https://neilboss.github.io/CapSorter/)  
-📄 **Technical Report (12-Page PDF):** [Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf](https://capsorter.vercel.app/Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)
+[![Live Website (Vercel)](https://img.shields.io/badge/Live_Website-capsorter.vercel.app-ff6b00?style=for-the-badge&logo=vercel&logoColor=white)](https://capsorter.vercel.app)
+[![GitHub Pages Mirror](https://img.shields.io/badge/GitHub_Pages-Mirror-00d2ff?style=for-the-badge&logo=github&logoColor=white)](https://neilboss.github.io/CapSorter/)
+[![Technical Report PDF](https://img.shields.io/badge/Technical_Report-12--Page_PDF-10b981?style=for-the-badge&logo=adobeacrobatreader&logoColor=white)](website/Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)
+
+</div>
 
 ---
 
-![System Poster](website/assets/system_poster.jpg)
+## 🖼️ Master Architecture Posters (V1 & V2)
+
+| Version 1 — Teensy 4.1 + ESP32-CAM + Mega 2560 | Version 2 — Raspberry Pi Zero 2 W + 8MP IMX219 + Mega 2560 |
+| :---: | :---: |
+| ![V1 System Poster](website/assets/system_poster.jpg) | ![V2 System Poster](website/assets/system_poster_v2.jpg) |
+| **[Explore V1 Specification (`website/v1.html`)](website/v1.html)** | **[Explore V2 Specification (`website/v2.html`)](website/v2.html)** |
+
+---
 
 ## 📌 Executive Overview
 
-The **Autonomous Bottle-Cap Sorting Machine** is an embedded robotics project designed to detect, pick, and sort standard plastic bottle caps ($\varnothing 28\text{–}32\text{ mm}$) by colour anywhere across a continuous **$300 \times 300\text{ mm}$ open flat plywood workspace** (with an optional 10×10 visual reference grid), depositing them into four designated color bins (Red, Yellow, Green, Blue) using **closed-loop bin-side re-imaging** after every pick.
+The **Autonomous Bottle-Cap Sorting Machine** is an embedded Cartesian robotics project designed to detect, pick, and sort standard plastic beverage bottle caps (**Ø 28–32 mm**) by colour anywhere across a continuous **300 × 300 mm open flat plywood workspace** (with an optional 10 × 10 visual reference grid), depositing them into four external color bins (**Red, Yellow, Green, Blue**) using **closed-loop bin-side re-imaging** after every pick.
 
-The system operates **100% offline** without laptops, Wi-Fi, or cloud connectivity. The web portal (`index.html`) now presents **two complete hardware architecture versions**:
+The system operates **100% offline** without external laptops, Wi-Fi, or cloud connectivity. This repository documents and implements **two complete hardware architecture versions**:
 
-- **Version 1 (`v1.html`)**: **Teensy 4.1 + ESP32-CAM (OV2640) + Arduino Mega 2560** (Bare-metal C++ dual-MCU + camera streamer architecture).
-- **Version 2 (`v2.html`)**: **Raspberry Pi Zero 2 W (16 GB microSD) + 8MP Sony IMX219 160° CSI Camera (or USB Webcam) + Arduino Mega 2560** (Consolidated offline Linux + Python OpenCV vision SBC paired with deterministic real-time Mega motion control).
+- **Version 1 ([`website/v1.html`](website/v1.html))**: **Teensy 4.1 + ESP32-CAM (OV2640) + Arduino Mega 2560** — Bare-metal C++ dual-MCU + dedicated UART camera streamer architecture.
+- **Version 2 ([`website/v2.html`](website/v2.html))**: **Raspberry Pi Zero 2 W (16 GB microSD) + 3.5" SPI Touch LCD (480×320 Native HUD) + 8MP Sony IMX219 160° CSI Camera + Arduino Mega 2560** — Consolidated offline Linux + Python OpenCV vision SBC with local framebuffer HMI, bridged over Micro-USB OTG → CH9102/CP2102 USB-to-TTL → 3.3V/5V level shifter to deterministic real-time Mega motion control.
+
+> **Engineering Status:** Pre-validation engineering firmware and technical documentation. Static review fixes and 20 automated validation test cases are verified in [`firmware/tests/test_validation.py`](firmware/tests/test_validation.py); physical bench validation on target hardware is required before production sign-off (see [`firmware/README.md`](firmware/README.md)).
 
 ---
 
 ## 🚀 Key Specifications (V1 vs. V2)
 
-| Specification | Version 1 (`v1.html`) | Version 2 (`v2.html`) |
+| Specification | Version 1 ([`website/v1.html`](website/v1.html)) | Version 2 ([`website/v2.html`](website/v2.html)) |
 | :--- | :--- | :--- |
-| **Machine Envelope** | $500 \times 500 \times 500\text{ mm}$ | $500 \times 500 \times 500\text{ mm}$ |
-| **Sorting Workspace** | Continuous $300 \times 300\text{ mm}$ open flat plywood plate (caps anywhere; 10×10 reference grid) | Continuous $300 \times 300\text{ mm}$ open flat plywood plate (caps anywhere; 10×10 reference grid) |
+| **Machine Envelope** | 500 × 500 × 500 mm (2020 V-slot aluminum extrusion) | 500 × 500 × 500 mm (2020 V-slot aluminum extrusion) |
+| **Sorting Workspace** | Continuous 300 × 300 mm open flat plywood plate (caps anywhere; optional 10 × 10 reference grid) | Continuous 300 × 300 mm open flat plywood plate (caps anywhere; optional 10 × 10 reference grid) |
 | **Sorting Loop & Bump Handling** | Closed-loop bin-side re-imaging (`CMD_SCAN_WINDOW_OPEN`), chamfer blob split, X-jaw clearance peeling & clear-FOV verify park | Closed-loop bin-side re-imaging (`CMD_SCAN_WINDOW_OPEN`), OpenCV distance-transform split, X-jaw clearance peeling & clear-FOV verify park |
-| **Cap Outer Diameter** | $\varnothing 28\text{–}32\text{ mm}$ standard beverage bottle caps | $\varnothing 28\text{–}32\text{ mm}$ standard beverage bottle caps |
+| **Cap Outer Diameter** | Ø 28–32 mm standard plastic bottle caps | Ø 28–32 mm standard plastic bottle caps |
 | **Colours Handled** | 4 primary colours (Red, Yellow, Green, Blue) | 4 primary colours (Red, Yellow, Green, Blue) |
-| **Primary Vision Processor** | Teensy 4.1 ($600\text{ MHz}$ Cortex-M7, $1\text{ MB}$ RAM) | **Raspberry Pi Zero 2 W** ($4\times 1\text{ GHz}$ Cortex-A53, $512\text{ MB}$ RAM, $16\text{ GB}$ microSD) |
-| **Camera Sensor** | ESP32-CAM (OV2640 • $320 \times 240$ RGB565) | **8MP Sony IMX219 160° Wide-Angle CSI** (or USB Webcam • $640 \times 480$ RGB888) |
-| **Capture + Vision Latency** | $\sim 1.67\text{ s}$ UART frame stream + $\sim 40\text{ ms}$ C++ vision | **$\sim 20\text{ ms}$ MIPI CSI-2 DMA + $\sim 25\text{ ms}$ Python OpenCV ($\sim 45\text{ ms}$ total)** |
-| **Motion Controller** | Arduino Mega 2560 ($16\text{ MHz}$ AVR) | Arduino Mega 2560 ($16\text{ MHz}$ AVR) |
-| **Actuation** | 2× NEMA 17 Steppers (TMC2208) + 2× MG90S Servos (PCA9685) | 2× NEMA 17 Steppers (TMC2208) + 2× MG90S Servos (PCA9685) |
-| **Main Power Supply** | $12\text{V}, 10\text{A}$ SMPS ($120\text{W}$) feeding 3 separate regulated branches (common star ground) | $12\text{V}, 10\text{A}$ SMPS ($120\text{W}$) feeding 3 separate regulated branches (common star ground) |
+| **Primary Vision Processor** | **Teensy 4.1** (600 MHz ARM Cortex-M7, 1 MB SRAM) | **Raspberry Pi Zero 2 W** (4× 1.0 GHz ARM Cortex-A53, 512 MB RAM, 16 GB microSD) + **3.5" SPI Touch LCD V3.0** (480×320 Native HUD) |
+| **Camera Sensor** | **ESP32-CAM** (OV2640 • 320 × 240 RGB565, PSRAM) | **8MP Sony IMX219 160° Wide-Angle CSI** (640 × 480 RGB888; USB webcam requires USB hub since OTG port drives Mega TTL) |
+| **Pi / Vision ↔ Mega Link** | Level-shifted UART1 (`115,200` baud) | **Micro-USB OTG → CH9102/CP2102 USB-TTL (`/dev/capsorter_mega`) → 3.3V/5V Shifter → Mega `Serial1` (`115,200` baud)** |
+| **Capture + Vision Latency** | ~1.67 s UART frame stream + ~40 ms C++ vision | **~20 ms MIPI CSI-2 DMA + ~25 ms Python OpenCV (~45 ms total)** |
+| **Motion Controller** | Arduino Mega 2560 (16 MHz AVR) | Arduino Mega 2560 (16 MHz AVR) |
+| **Actuation** | 2× NEMA 17 Steppers (TMC2208, 1/8 microstep) + 2× MG90S Servos (PCA9685) | 2× NEMA 17 Steppers (TMC2208, 1/8 microstep) + 2× MG90S Servos (PCA9685) |
+| **Estimated Cycle Time** | ~5–13 s / cap (travel-dependent, pending bench timing) | ~5–13 s / cap (travel-dependent, pending bench timing) |
+| **Main Power Supply** | 12V, 10A SMPS (120W) feeding 3 separate regulated branches (common star ground) | 12V, 10A SMPS (120W) feeding 3 separate regulated branches (common star ground) |
 
 ---
 
 ## 🧠 System Architecture & Division of Responsibilities
 
-```
-+---------------+      Wired UART (921,600 Baud)      +-------------------+
+### Version 1 Architecture (Teensy 4.1 + ESP32-CAM + Arduino Mega 2560)
+
+```text
++---------------+      Wired UART2 (921,600 Baud)     +-------------------+
 |   ESP32-CAM   | ----------------------------------> |    Teensy 4.1     |
 | (Image Capture|                                     | (Vision & Planning|
 |  OV2640 QVGA) | <---------------------------------- |   Cortex-M7 600M) |
-+---------------+          Capture Trigger            +-------------------+
++---------------+       Capture Trigger (0xAA)        +-------------------+
                                                                 |
-                                             Level-Shifted UART | Plan Packets &
-                                             (115,200 Baud)     | Heartbeat
+                                             Level-Shifted UART | Single-Cap Targets (0x5B),
+                                             (115,200 Baud)     | READY/SCAN Handshake & 0xF0
                                                                 v
                                                       +-------------------+
                                                       | Arduino Mega 2560 |
                                                       | (Motion & Safety) |
                                                       +-------------------+
                                                        /        |        \
-                                     STEP/DIR Pulses  /         |         \ I2C PWM
+                                     STEP/DIR Pulses  /         |         \ I2C PWM (400 kHz)
                                                      v          v          v
                                                 +---------+ +-------+ +---------+
                                                 | TMC2208 | | Limit | | PCA9685 |
-                                                | Stepper | | Switch| | 16-Ch   |
+                                                | Stepper | | &EStop| | 16-Ch   |
                                                 | Drivers | |  (NC) | | 12-Bit  |
                                                 +---------+ +-------+ +---------+
                                                      |                     |
@@ -71,75 +90,155 @@ The system operates **100% offline** without laptops, Wi-Fi, or cloud connectivi
                                                 (X & Y Gantry)       (Z & Gripper)
 ```
 
-### Division of Responsibilities
-1. **ESP32-CAM**: Dedicated purely to top-down frame acquisition (QVGA $320 \times 240$ RGB565). No network overhead.
-2. **Teensy 4.1**: Decodes raw frame, performs fixed-point HSV color segmentation, extracts connected-component centroids, applies $3 \times 3$ planar homography for perspective distortion correction, and computes the shortest-travel sorting plan.
-3. **Arduino Mega 2560**: Manages deterministic step generation, microswitch homing, 8-step pick-and-place choreography, and fail-safe state recovery.
-4. **PCA9685**: Dedicated 16-channel 12-bit I2C PWM generator driving the two MG90S metal-gear micro servos (Z-axis linkage & parallel gripper jaws).
-5. **TMC2208 × 2**: SilentStepStick drivers running in StealthChop2 mode for silent, resonance-free XY gantry travel.
+### Version 2 Architecture (Raspberry Pi Zero 2 W + 3.5" SPI LCD + 8MP IMX219 CSI + Arduino Mega 2560)
+
+```text
++--------------------+   2-Lane MIPI CSI-2         +-----------------------+   GPIO Pins 1-26 (SPI0/XPT2046)   +--------------------+
+| 8MP Sony IMX219    | --------------------------> | Raspberry Pi Zero 2 W | <-------------------------------> | 3.5" SPI Touch LCD |
+| 160° Fisheye Lens  |   640x480 RGB888 (~20 ms)   | (OS Lite + OpenCV +   |   480x320 Native RGB565 HUD       | (V3.0 ILI9486 HMI) |
+|                    |                             |  4x Cortex-A53 1 GHz) |                                   +--------------------+
++--------------------+                             +-----------------------+
+                                                               |
+                                             Micro-USB OTG -> CH9102/CP2102 USB-TTL
+                                             (/dev/capsorter_mega @ 115,200 Baud)
+                                             -> 3.3V/5V Shifter -> Single-Cap (0x5B) & 0xF0
+                                                               v
+                                                     +-------------------+
+                                                     | Arduino Mega 2560 |
+                                                     | (Motion & Safety) |
+                                                     +-------------------+
+                                                      /        |        \
+                                    STEP/DIR Pulses  /         |         \ I2C PWM (400 kHz)
+                                                    v          v          v
+                                               +---------+ +-------+ +---------+
+                                               | TMC2208 | | Limit | | PCA9685 |
+                                               | Stepper | | &EStop| | 16-Ch   |
+                                               | Drivers | |  (NC) | | 12-Bit  |
+                                               +---------+ +-------+ +---------+
+                                                    |                     |
+                                                    v                     v
+                                               2x NEMA 17             2x MG90S
+                                               (X & Y Gantry)       (Z & Gripper)
+```
+
+### Subsystem Responsibilities
+1. **Image Acquisition (`ESP32-CAM` in V1 / `IMX219 CSI` or `USB` in V2)**: Captures top-down frames of the 300 × 300 mm workspace with locked auto-exposure and white balance (`AeEnable=False, AwbEnable=False`) after warm-up under the diffused LED light plate, flushing stale framebuffers before every capture.
+2. **Vision & Closed-Loop Planner (`Teensy 4.1` in V1 / `Raspberry Pi Zero 2 W` in V2)**: Performs lens undistortion (V2 validated fisheye or pinhole calibration), HSV colour segmentation, morphological filtering, touching-cap blob splitting, 3 × 3 planar homography mapping with radial cap-height parallax compensation, X-axis jaw-clearance target selection, and 250 ms heartbeat supervision.
+3. **Deterministic Motion & Safety Controller (`Arduino Mega 2560`)**: Executes non-blocking 40 steps/mm nominal XY step generation (`70 mm/s`, `150 mm/s²`), per-axis NC switch homing with 30 s timeout and switch-release verification, polled X/Y/Z NC limit and Pin 25 E-stop sensing, 8-step pick-and-place choreography, and comms-loss fail-safe parking.
+4. **Servo PWM Driver (`PCA9685`)**: Dedicated 16-channel 12-bit I2C PWM generator driving the Z-axis lift linkage (`CH0`) and parallel gripper jaws (`CH1`) with active-LOW Output Enable (`PIN_SERVO_OE = Pin 9`) to suppress power-on and fault twitching.
+5. **Stepper Drivers (`2× TMC2208`)**: SilentStepStick drivers running in StealthChop2 1/8 microstepping mode (`MS1=GND, MS2=GND`) with shared active-LOW hardware enable (`PIN_STEPPER_EN = Pin 8`).
+
+---
+
+## 🔄 Closed-Loop Bin-Side Re-Imaging & Continuous Sorting Pipeline
+
+Because caps rest freely on an open flat 300 × 300 mm plywood plate (not trapped in mechanical pockets), lowering the parallel gripper onto one cap can nudge a neighboring cap by several millimeters. Both V1 and V2 resolve this through a **closed-loop single-cap sorting protocol**:
+
+1. **Continuous Coordinates & Reachability Bounds**: Targets are mapped directly in continuous floating-point millimeters (`boardX_mm`, `boardY_mm`) without cell-center snapping, and checked against the gripper's safe physical picking envelope (`18.0..282.0 mm`) before dispatch via `PROTOCOL_SINGLE_MAGIC` (`0x5B`, 18 bytes, CRC16-CCITT verified).
+2. **Parallel Bin-Side Re-Imaging (`CMD_SCAN_WINDOW_OPEN` `0xA5`)**: As soon as the gantry arrives over a color bin (`X = 355 mm`, completely outside the 300 × 300 mm board), the Mega pauses `120 ms` in `STATE_BIN_SETTLE` with Z raised for belt vibration to damp, then emits `CMD_SCAN_WINDOW_OPEN` (`0xA5`). The vision processor captures and processes a fresh overhead image **in parallel** with the 800 ms bin drop (`LOWER_BIN` → `RELEASE_CAP` → `RETRACT_Z`), immediately re-acquiring any cap that was bumped during the pick.
+3. **Touching Same-Color Cap Separation**: When two or more caps of the same color touch (`area > 1850 px²` in V2 or `> 480 px²` in V1, or low circularity), V2 applies Euclidean distance-transform local-maxima splitting (`cv2.distanceTransform`) and V1 applies a two-pass L1 chamfer distance transform to isolate individual cap centers before 24 mm spatial NMS.
+4. **Radial Cap-Height Parallax Compensation**: Because a cap's top surface (`h_cap ≈ 13 mm`) sits above the `Z = 0` calibration plane, off-axis viewing projects the cap top radially outward from the camera optical center. Both pipelines apply radial height correction `r_true = r_apparent × (1 - h_cap / H_cam)` when `camera_height_mm > cap_height_mm > 0`.
+5. **X-Axis Jaw-Footprint Clearance Peeling**: Open gripper jaws span ~44 mm along X (`±28 mm` center-to-center clearance, `±18 mm` along Y). Target selection prioritizes caps with zero X-corridor neighbors (`blocked_sides = 0`), peeling cluster perimeters from the outside in before picking interior caps.
+6. **Y-Bridge Occlusion Masking & Clear-FOV Verification Park**: During a bin-side scan at `(355, BIN_Y)`, the Y gantry beam crosses the board at `Y ≈ BIN_Y`, occluding a `±35 mm` horizontal strip. Detections inside that strip are masked out; once the unoccluded board appears clear, the host sends `CMD_PARK_FOR_SCAN` (`0xB5`) to park the bridge at `(0, 0)` and takes a full unoccluded verification scan before sending `CMD_FINISH_SESSION` (`0xB6`).
+7. **3-Attempt Missed-Pick Quarantine**: If a cap remains at the same coordinates (`< 10 mm` shift) after 3 consecutive pick attempts, the planner quarantines that coordinate for the remainder of the session so a stuck or deformed cap never causes an infinite loop.
 
 ---
 
 ## ⚡ Power Distribution Tree
 
-> **Note:** All three branches share a **common single-point star ground** (separate regulated branches for noise decoupling, **not** galvanic isolation). Verify exact part SKUs, buck converter efficiencies, wire gauges, branch fuse ratings, and servo voltage specifications before power-up.
+> **Important:** All three branches share a **common single-point star ground** (separate regulated branches for noise decoupling, **not** galvanic isolation). Verify exact part SKUs, buck converter efficiencies, wire gauges, branch fuse ratings, and servo voltage specifications before power-up.
 
-- **Branch A (Motors - 12V Direct)**: Fused 12V line (switched via dual-pole hardware E-stop) feeding TMC2208 VMOT with $100\,\mu\text{F}$ low-ESR decoupling capacitors.
-- **Branch B (Servos - 5V/5A Buck)**: Separate high-current buck converter (12V input switched via hardware E-stop) feeding PCA9685 V+ to absorb servo stall spikes without pulling down logic. Verify MG90S SKU voltage rating (original TowerPro MG90S is specified at $4.8\text{V}$ nominal) and PCA9685 V+ terminal ratings.
-- **Branch C (Logic - 5V/3A Buck)**: Separate regulated 5V logic rail powering Arduino Mega `5V` pin (**not `VIN`**; avoid USB backfeed during flashing), Teensy 4.1 VIN (V1) or Raspberry Pi Zero 2 W 5V (V2), ESP32-CAM 5V (V1), and PCA9685 VCC.
-- **Level Shifter**: 4-channel bidirectional logic shifter mandatory on **both TX and RX** between Arduino Mega 5V Serial1 and Teensy 4.1 / Pi Zero 2 W 3.3V UART (neither Teensy 4.1 nor Pi Zero 2 W has 5V-tolerant pins).
+- **Branch A (Stepper Motors — 12V Direct)**: Fused 12V line (routed through Pole 1 of the dual-pole hardware E-stop) feeding both TMC2208 `VMOT` pins with 100 µF low-ESR decoupling capacitors. Inspect your exact TMC2208 carrier sense resistor (`R_sense`, commonly `0.11 Ω`) and set `V_ref` using the ADI/Trinamic Rev 1.13 formula: `I_RMS = (0.325 / (R_sense + 0.03)) × (1 / √2) × (V_ref / 2.5)` (`~0.75 A RMS` at `V_ref = 1.15 V, R_sense = 0.11 Ω`).
+- **Branch B (MG90S Servos — 5V / 5A Buck)**: Separate high-current buck converter (12V input switched through Pole 1 of the hardware E-stop) feeding `PCA9685 V+` with a 1000 µF bulk capacitor to absorb servo stall spikes. Verify your exact MG90S servo SKU voltage rating (original TowerPro MG90S is rated at **4.8V nominal**) and PCA9685 terminal ratings.
+- **Branch C (Logic — 5V / 3A Buck)**: Separate regulated 5V logic rail (remains powered during E-stop to preserve fault telemetry and prevent Pi Zero 2 W SD card corruption) powering the Arduino Mega `5V` pin (**not `VIN`**, which requires 7–12V; guard against USB backfeed when flashing), Teensy 4.1 `VIN` (V1) or **Raspberry Pi Zero 2 W `PWR IN` Micro-USB port** (V2 — since the 3.5" SPI LCD physically covers GPIO Header Pins 1–26 including 5V Pins 2/4/6; total Branch C peak ≈ 1.4 A including the ~160 mA LCD backlight and ~30 mA CH9102/CP2102 converter), ESP32-CAM `5V` (V1), and `PCA9685 VCC`.
+- **Bidirectional Logic Level Shifter**: 4-channel bidirectional level shifter (`HV = 5V`, `LV = 3.3V`) mandatory on **both TX and RX** between Arduino Mega 5V `Serial1` and V1 Teensy 4.1 UART (no 5V-tolerant pins) or the V2 **CH9102/CP2102 USB-to-TTL converter** (`LV` fed from the converter's `3V3` pin; **leave the converter's `+5V` pin disconnected** to prevent USB VBUS backfeed into Branch C / Mega 5V).
 
 ---
 
 ## 🛡️ Fail-Safe Comms Recovery & Emergency Stop Protocol
 
-- **Hardwired Emergency Stop**: A dual-pole latching NC mushroom E-stop directly cuts 12V actuator power (Branches A & B) independently of firmware while an auxiliary NC contact on Mega Pin 25 latches `STATE_HARD_FAULT`, disables `PIN_STEPPER_EN` and `PIN_SERVO_OE`, and requires explicit operator re-arm (`CMD_REARM_HOME`) and re-homing before motion resumes.
-- **UART Communication Loss (`>1.2 s` without `0xF0` heartbeat)**: If a single scanned cap has already been dispatched and is mid-cycle on the Mega, the Mega finishes placing **only that one active cap** into its assigned color bin (skipping any bin-side scan or further caps), returns the gantry cleanly to **`(0, 0)`** (`STATE_FAILSAFE_PARKING`), disables steppers, emits `CMD_RECOVERY_HALT`, and latches `STATE_FAILSAFE_HALT` until explicit operator re-arm (`CMD_REARM_HOME`) and re-homing. If no cap is active, it parks directly at `(0, 0)` and halts. (Hardwired E-stop Pin 25 and NC limit switches still halt immediately at any point.)
+- **Hardwired Dual-Pole Emergency Stop**: Pole 1 of a latching red mushroom E-stop directly cuts 12V actuator power (Branches A & B) independently of firmware. Pole 2 connects as an NC auxiliary contact to **Mega Pin 25 (`PIN_ESTOP`)** so firmware immediately latches `STATE_HARD_FAULT`, disables `PIN_STEPPER_EN` (`HIGH`) and `PIN_SERVO_OE` (`HIGH`), emits `CMD_HARD_FAULT` (`0xEF`), and requires physical E-stop release plus explicit operator re-arm (`CMD_REARM_HOME` `0xB4`) and re-homing before motion can resume. Counterbalance the Z linkage against gravity drop when servo power is removed.
+- **Polled NC Limit Switches (X, Y, Z)**: Mega Pins 22 (`X`), 23 (`Y`), and 24 (`Z`) sit on ATmega2560 Port A (`PA0`–`PA2`, which has no hardware interrupts) and are polled every `loop()` pass with 3-sample debouncing plus pre-homing broken-wire checks.
+- **UART Communication Loss (`> 1.2 s` without `0xF0` heartbeat)**: If a single scanned cap has already been dispatched and is mid-cycle on the Mega (`inActiveCapCycle`), the Mega finishes placing **only that one active cap** into its assigned color bin (skipping any bin-side scan or subsequent caps), returns the gantry cleanly to **`(0, 0)`** (`STATE_FAILSAFE_PARKING`), disables steppers, emits `CMD_RECOVERY_HALT` (`0xEE`), and latches `STATE_FAILSAFE_HALT` until explicit operator re-arm (`CMD_REARM_HOME`) and re-homing. If no cap is active, it parks directly at `(0, 0)` and halts.
 
 ---
 
-## 📄 Comprehensive Engineering Technical Report (PDF)
+## 📁 Repository Directory Structure
 
-A publication-grade, 12-page technical dossier is included directly in this repository for formal academic or industrial engineering submissions:
-
-👉 **[Download Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf](website/Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)**
-
-### Dossier Contents & Page Structure:
-1. **Cover & Master System Poster**: Project identity, key specifications, and full-bleed CAD architecture render.
-2. **System Overview & Architectural Partitioning**: Dual-controller design rationale, responsibility division table, and UART pipeline.
-3. **Mechanical Engineering & Gantry Motion**: 4-axis mechanical analysis (X, Y, Z, Gripper) + workspace geometry and travel limits.
-4. **Embedded Computer Vision Pipeline**: 4-stage vision pipeline (RGB565 → HSV → Centroid Extraction → Homography Coordinate Mapping).
-5. **Electrical & Power Distribution Architecture**: 3-branch separate regulated power tree (12V Motors, 5V/5A Servos, 5V/3A Logic, common star ground) & bidirectional level-shifter safeguards.
-6. **Hardware Pinout & Wiring Interface Matrix**: Complete pin-by-pin mapping for Teensy 4.1, Arduino Mega 2560, TMC2208, and PCA9685.
-7. **Motion Control & Pick-and-Place Choreography**: 8-step kinematic pick-and-place sequence, fail-safe communication recovery state machine.
-8. **Comprehensive Bill of Materials (BOM)**: Categorized itemized list with technical specifications, quantities, and SKU verification notes.
-9. **Implementation Roadmap & Milestones**: 6-stage structured milestone plan with physical prototype build photos.
-10. **Critical Engineering Considerations & FMEA**: Power rail decoupling, thermal dissipation, homing accuracy, servo chatter mitigation, and optical calibration.
-11. **Firmware Vault — Part 1**: Pre-validation C/C++ firmware headers (`packet_protocol.h`) and ESP32-CAM frame streaming driver (`esp32cam_uart.ino`).
-12. **Firmware Vault — Part 2 & Pre-Build Review**: Teensy 4.1 computer vision pipeline (`teensy_vision.cpp`), Arduino Mega motion sequencer (`mega_motion.ino`), and bench validation checklist.
+```text
+CapSorter/
+├── README.md                                  # Master project documentation (V1 & V2)
+├── vercel.json                                # Vercel deployment config (outputDirectory: "website")
+├── website/                                   # Standalone interactive web portal & technical dossiers
+│   ├── index.html                             # V1 vs. V2 architecture selector landing portal
+│   ├── v1.html                                # Version 1 engineering specification, 2D simulator & C++ vault
+│   ├── v2.html                                # Version 2 engineering specification, 2D simulator & Python/C++ vault
+│   ├── pdf_dossier.html                       # Printable 12-page A4 engineering dossier (Version 1)
+│   ├── pdf_dossier_v2.html                    # Printable 12-page A4 engineering dossier (Version 2)
+│   ├── Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf
+│   ├── css/style.css                          # Custom dark-mode styling & A4 print layout rules
+│   ├── js/app.js                              # 2D closed-loop gantry simulator, vision pipeline & UI engine
+│   └── assets/                                # High-res 4K system posters, CAD renders & brand logos
+└── firmware/                                  # Embedded C/C++ & Python OpenCV firmware vault
+    ├── README.md                              # Pinned toolchains, calibration CLI guide & bench checklist
+    ├── common/packet_protocol.h               # Shared binary packet structs, opcodes & CRC16-CCITT
+    ├── mega_motion/mega_motion.ino            # Arduino Mega 2560 motion FSM, homing & safety watchdog
+    ├── v1_esp32cam/esp32cam_uart.ino          # ESP32-CAM OV2640 QVGA RGB565 frame streamer
+    ├── v1_teensy41/teensy_vision.cpp          # Teensy 4.1 HSV vision, 4-pt DLT homography & closed-loop planner
+    ├── v2_pizero2w/
+    │   ├── pi_zero_vision.py                  # Pi Zero 2 W OpenCV pipeline, USB-TTL link & closed-loop planner
+    │   ├── lcd_hud.py                         # Native 480x320 SPI LCD RGB565 HUD & XPT2046 touch controller
+    │   ├── 99-capsorter-mega.rules            # Persistent udev rule (/dev/capsorter_mega) for CH9102/CP2102
+    │   ├── fisheye_calibrate.py               # Dual-model (fisheye / pinhole) checkerboard & fiducial calibration CLI
+    │   └── calibration.npz                    # Fail-closed uncalibrated placeholder archive
+    └── tests/test_validation.py               # Automated tests for protocol, vision, LCD HUD, closed-loop & doc sync
+```
 
 ---
 
-## 💻 Web Presentation & Multi-Version Interactive Simulator
+## 📄 Comprehensive 12-Page Engineering Technical Dossiers
 
-The repository includes a standalone, zero-dependency engineering web application with a **Version Selector Portal**:
-- **`index.html` (Version Portal)**: Landing gateway with **V1** and **V2** buttons and a side-by-side architectural comparison matrix.
-- **`v1.html` (Version 1 Specification)**: Complete Teensy 4.1 + ESP32-CAM + Arduino Mega 2560 blueprint, simulator, pinout matrix, BOM, and C++ firmware vault.
-- **`v2.html` (Version 2 Specification)**: Complete Raspberry Pi Zero 2 W (16 GB microSD) + 8MP IMX219 160° Camera + Arduino Mega 2560 blueprint, 5-stage OpenCV fisheye pipeline, simulator, GPIO pinout matrix, V2 BOM, and Python OpenCV + C++ firmware vault (`pi_zero_vision.py`, `fisheye_calibrate.py`, `mega_motion.ino`, `packet_protocol.h`).
-- **`pdf_dossier.html` & `pdf_dossier_v2.html`**: 12-page printable A4 technical report dossiers for V1 and V2.
+Publication-grade, 12-page A4 technical dossiers are included for both hardware architectures:
 
-### How to Run Locally
-Simply open `website/index.html` in any modern web browser:
+- 📙 **V1 Technical Report (PDF):** [`website/Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf`](website/Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)
+- 📙 **V1 Printable HTML Dossier:** [`website/pdf_dossier.html`](website/pdf_dossier.html) (Teensy 4.1 + ESP32-CAM + Arduino Mega 2560)
+- 📘 **V2 Printable HTML Dossier:** [`website/pdf_dossier_v2.html`](website/pdf_dossier_v2.html) (Raspberry Pi Zero 2 W + 8MP IMX219 CSI + Arduino Mega 2560)
+
+### 12-Page Dossier Structure
+1. **Cover & Master System Poster**: Project identity, executive specifications, and full-bleed CAD render.
+2. **System Overview & Architectural Partitioning**: Controller responsibility matrix and wired UART / CSI pipeline.
+3. **Mechanical Engineering & Gantry Kinematics**: 4-axis mechanical analysis (X, Y, Z, Gripper) and continuous 300 × 300 mm workspace geometry.
+4. **Embedded Computer Vision Pipeline**: Color segmentation, touching-cap splitting, fisheye/homography calibration, and clearance-first path planning.
+5. **Electrical & Power Distribution Architecture**: 3-branch separate regulated power tree (common star ground), dual-pole E-stop cutoff, and bidirectional level shifting.
+6. **Hardware Pinout & Wiring Interface Matrix**: Complete pin-by-pin wiring map across all controllers, TMC2208 drivers, PCA9685, limit switches, and E-stop sense.
+7. **Motion Control & Closed-Loop Choreography**: 8-step kinematic pick-and-place sequence, parallel bin-side re-imaging, and comms-loss finish-and-park recovery.
+8. **Comprehensive Bill of Materials (BOM)**: Categorized component inventory with specifications, quantities, and SKU verification notes.
+9. **Implementation Roadmap & Milestones**: 6-stage build and integration plan with prototype reference imagery.
+10. **Critical Engineering Considerations & FMEA**: TMC2208 `V_ref` calculation, servo rail decoupling, specular glare suppression, Z counterbalance, and troubleshooting.
+11. **Firmware Vault — Part 1**: Wire protocol (`packet_protocol.h`) and camera acquisition / calibration utilities (`esp32cam_uart.ino` / `fisheye_calibrate.py`).
+12. **Firmware Vault — Part 2 & Pre-Build Validation Gate**: Vision planner (`teensy_vision.cpp` / `pi_zero_vision.py`), Mega motion sequencer (`mega_motion.ino`), and bench validation gate.
+
+---
+
+## 💻 Running the Web Portal & Automated Verification Suite
+
+### 1. Launch the Interactive Web Portal & 2D Gantry Simulator
+Serve the [`website/`](website/) folder locally (or open [`website/index.html`](website/index.html) directly in any modern browser):
+
 ```bash
-# On Windows
-start website/index.html
-
-# Or via Python local server
+# Serve on http://localhost:8000
 python -m http.server 8000 --directory website
+```
+
+### 2. Run the Automated Firmware & Documentation Validation Suite
+Execute all 20 automated unit tests covering CRC16-CCITT protocol parity, OpenCV fisheye/pinhole checkerboard calibration, fail-closed startup guards, touching-cap splitting, radial parallax compensation, X-jaw clearance peeling, closed-loop bin-side re-imaging, and HTML code-vault synchronization:
+
+```bash
+python -m unittest discover -s firmware/tests -v
 ```
 
 ---
 
 ## 👥 Credits
 - **Designed & Engineered by:** Neil Shettigar, Kahan, and Shourya
-- **Lead Embedded Architecture & Software:** Neil Shettigar
+- **Lead Embedded Architecture, Firmware & Documentation:** Neil Shettigar

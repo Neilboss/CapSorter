@@ -1,0 +1,14 @@
+# CapSorter V2 Persistent USB-to-TTL Serial Symlink (/dev/capsorter_mega)
+# Install on Raspberry Pi Zero 2 W (Bookworm OS Lite):
+#   sudo cp 99-capsorter-mega.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Matches both WCH CH9102 ("CP2102 CH9102 Affordable Version", VID 1a86)
+# and genuine Silicon Labs CP2102/CP2102N (VID 10c4) over Micro-USB OTG.
+
+# WCH CH9102 / CH343 / CH340 USB-to-UART converters (ttyUSB* or ttyACM*)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", SYMLINK+="capsorter_mega", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="capsorter_mega", GROUP="dialout", MODE="0660"
+
+# Genuine Silicon Labs CP2102 / CP2102N USB-to-UART bridge
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="capsorter_mega", GROUP="dialout", MODE="0660"

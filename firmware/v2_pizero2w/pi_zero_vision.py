@@ -3,10 +3,13 @@
 # Raspberry Pi Zero 2 W - Autonomous CapSorter Vision & Closed-Loop Planner (V2)
 # Status: Pre-Validation Engineering Firmware (requires bench calibration)
 # Hardware: Quad-Core Cortex-A53 @ 1 GHz | 512 MB RAM | 16 GB microSD
+# Display:  3.5" SPI Touch LCD V3.0 (480x320, GPIO Pins 1-26 -> /dev/fb0 HUD)
 # Camera:   8MP Sony IMX219 160-deg CSI Camera (top-center, looking straight down)
-# Link:     UART0 (/dev/serial0 @ 115200 baud) <-> 3.3V/5V Shifter <-> Mega Serial1
+# Link:     Micro-USB OTG -> CH9102/CP2102 USB-TTL (/dev/capsorter_mega @ 115200)
+#           <-> 3.3V/5V Bidirectional Shifter <-> Arduino Mega Serial1 (Pins 18/19)
 # =========================================================================
 import argparse
+import glob
 import math
 import os
 import struct
@@ -18,8 +21,12 @@ import numpy as np
 try:
     import serial
     HAS_PYSERIAL = True
+    SERIAL_EXCEPTIONS = (serial.SerialException, OSError)
 except ImportError:
     HAS_PYSERIAL = False
+    SERIAL_EXCEPTIONS = (OSError,)
+
+DEFAULT_SERIAL_PORT = "auto"
 
 try:
     from picamera2 import Picamera2
@@ -103,6 +110,41 @@ HSV_RANGES = {
 
 class CalibrationError(RuntimeError):
     """Raised when camera calibration is missing, malformed, unverified, or mismatched."""
+
+
+def resolve_serial_port(
+    port_spec: str = DEFAULT_SERIAL_PORT,
+    exists_fn=os.path.exists,
+    glob_fn=glob.glob,
+) -> str:
+    """
+    Resolves the Arduino Mega serial interface path.
+    In 'auto' mode, prefers the persistent udev symlink (/dev/capsorter_mega)
+    for Micro-USB OTG CH9102/CP2102 converters, then USB-serial devices
+    (/dev/serial/by-id/*, /dev/ttyUSB*, /dev/ttyACM*), falling back to
+    legacy /dev/serial0 if no USB-TTL adapter is present.
+    """
+    if port_spec and port_spec != "auto":
+        return str(port_spec)
+
+    if exists_fn("/dev/capsorter_mega"):
+        return "/dev/capsorter_mega"
+
+    by_id = sorted(glob_fn("/dev/serial/by-id/*"))
+    preferred_tokens = ("ch9102", "ch343", "ch340", "cp210", "1a86", "10c4", "silicon_labs", "wch")
+    for path in by_id:
+        low = os.path.basename(path).lower()
+        if any(tok in low for tok in preferred_tokens):
+            return path
+    if by_id:
+        return by_id[0]
+
+    for pattern in ("/dev/ttyUSB*", "/dev/ttyACM*"):
+        matches = sorted(glob_fn(pattern))
+        if matches:
+            return matches[0]
+
+    return "/dev/serial0"
 
 
 def crc16_ccitt(data: bytes) -> int:
@@ -221,7 +263,7 @@ class PiZeroVisionController:
     def __init__(
         self,
         calib_file: str = None,
-        serial_port: str = "/dev/serial0",
+        serial_port: str = DEFAULT_SERIAL_PORT,
         camera_type: str = None,
         width: int = 640,
         height: int = 480,
@@ -230,10 +272,15 @@ class PiZeroVisionController:
         jaw_axis: str = GRIPPER_JAW_AXIS,
         camera_height_mm: float = None,
         cap_height_mm: float = None,
+        state_callback=None,
     ):
         self.width = int(width)
         self.height = int(height)
         self.batch_id = 1
+        self.serial_port_spec = serial_port
+        self.resolved_serial_port = resolve_serial_port(serial_port)
+        self.state_callback = state_callback
+        self.paused = False
         self.bridge_occlusion_half_mm = max(0.0, float(bridge_occlusion_half_mm))
         self.jaw_axis = str(jaw_axis).upper()
         if self.jaw_axis not in ("X", "Y"):
@@ -293,7 +340,7 @@ class PiZeroVisionController:
 
         if init_hardware:
             if HAS_PYSERIAL:
-                self.uart = serial.Serial(serial_port, baudrate=115200, timeout=0.5)
+                self.reconnect_serial()
             if self.camera_type == "picamera2_imx219":
                 if not HAS_PICAMERA2:
                     raise RuntimeError("picamera2_imx219 requested, but Picamera2 is not installed.")
@@ -712,6 +759,49 @@ class PiZeroVisionController:
         self.batch_id = ((self.batch_id + 1) & 0xFFFF) or 1
         return header + bytes(payload)
 
+    def _emit_hud(self, event: str, payload: dict = None):
+        if self.state_callback is not None:
+            try:
+                self.state_callback(event, payload or {})
+            except Exception:
+                pass
+
+    def reconnect_serial(self) -> bool:
+        """
+        (Re-)opens the USB-to-TTL serial bridge (Micro-USB OTG -> CH9102/CP2102)
+        at 115,200 baud. Safe to call after a USB EMI drop or hot-replug.
+        """
+        if not HAS_PYSERIAL:
+            return False
+        if self.uart is not None:
+            try:
+                self.uart.close()
+            except Exception:
+                pass
+            self.uart = None
+        self.resolved_serial_port = resolve_serial_port(self.serial_port_spec)
+        try:
+            self.uart = serial.Serial(self.resolved_serial_port, baudrate=115200, timeout=0.5)
+            self._emit_hud("SERIAL_OPEN", {"serial_port": self.resolved_serial_port, "link_status": "WAIT_MEGA"})
+            return True
+        except SERIAL_EXCEPTIONS as exc:
+            print(f"[UART] Failed to open '{self.resolved_serial_port}': {exc}", file=sys.stderr)
+            self.uart = None
+            self._emit_hud("LINK_LOST", {"serial_port": self.resolved_serial_port, "reason": "USB-TTL OFFLINE"})
+            return False
+
+    def send_rearm_home(self) -> bool:
+        """Sends explicit CMD_REARM_HOME (0xB4) triggered by operator touch button."""
+        if self.uart is None:
+            return False
+        try:
+            self.uart.write(bytes([CMD_REARM_HOME]))
+            self.uart.flush()
+            return True
+        except SERIAL_EXCEPTIONS:
+            self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+            return False
+
     def write_paced_uart(self, packet: bytes, chunk_size: int = 32, sleep_fn=time.sleep):
         # Pace in 32-byte chunks with 2 ms pause so Mega's 64-byte RX ring buffer never overflows
         for offset in range(0, len(packet), chunk_size):
@@ -736,43 +826,54 @@ class PiZeroVisionController:
 
         start_t = clock()
         last_poll_t = -1e9
-        while timeout_s is None or (clock() - start_t < timeout_s):
-            now = clock()
-            if now - last_poll_t >= poll_interval_s:
-                self.uart.write(bytes([CMD_QUERY_STATUS]))
-                self.uart.flush()
-                last_poll_t = now
+        try:
+            while timeout_s is None or (clock() - start_t < timeout_s):
+                now = clock()
+                if now - last_poll_t >= poll_interval_s:
+                    self.uart.write(bytes([CMD_QUERY_STATUS]))
+                    self.uart.flush()
+                    last_poll_t = now
 
-            while self.uart.in_waiting > 0:
-                resp = self.uart.read(1)[0]
-                if resp == CMD_STATUS_READY:
-                    return True
-                if resp in (CMD_STATUS_FAULT, CMD_HARD_FAULT, CMD_RECOVERY_HALT):
-                    print(
-                        f"[FAULT] Mega reported status 0x{resp:02X}; "
-                        "motion inhibited until operator clears fault & re-arms.",
-                        file=sys.stderr,
-                    )
-                    return False
-                # CMD_STATUS_BUSY: keep polling until Mega finishes homing
+                while self.uart.in_waiting > 0:
+                    resp = self.uart.read(1)[0]
+                    if resp == CMD_STATUS_READY:
+                        self._emit_hud("READY", {"serial_port": self.resolved_serial_port})
+                        return True
+                    if resp in (CMD_STATUS_FAULT, CMD_HARD_FAULT, CMD_RECOVERY_HALT):
+                        print(
+                            f"[FAULT] Mega reported status 0x{resp:02X}; "
+                            "motion inhibited until operator clears fault & re-arms.",
+                            file=sys.stderr,
+                        )
+                        self._emit_hud("FAULT", {"reason": f"MEGA FAULT 0x{resp:02X}"})
+                        return False
+                    # CMD_STATUS_BUSY: keep polling until Mega finishes homing
 
-            sleep_fn(0.02)
+                sleep_fn(0.02)
+        except SERIAL_EXCEPTIONS as exc:
+            print(f"[UART] Serial link error during READY poll: {exc}", file=sys.stderr)
+            self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+            return False
         return False
 
     def _send_single_target_with_ack(self, cap: dict, sleep_fn=time.sleep) -> str:
         packet = self.pack_single_target_packet(cap)
-        for _ in range(3):
-            self.uart.reset_input_buffer()
-            self.uart.write(packet)
-            self.uart.flush()
-            ack = self.uart.read(1)
-            if ack:
-                code = ack[0]
-                if code == CMD_BATCH_ACK:
-                    return "ACK"
-                if code in (CMD_HARD_FAULT, CMD_RECOVERY_HALT, CMD_STATUS_FAULT):
-                    return "FAULT"
-            sleep_fn(0.05)
+        try:
+            for _ in range(3):
+                self.uart.reset_input_buffer()
+                self.uart.write(packet)
+                self.uart.flush()
+                ack = self.uart.read(1)
+                if ack:
+                    code = ack[0]
+                    if code == CMD_BATCH_ACK:
+                        return "ACK"
+                    if code in (CMD_HARD_FAULT, CMD_RECOVERY_HALT, CMD_STATUS_FAULT):
+                        return "FAULT"
+                sleep_fn(0.05)
+        except SERIAL_EXCEPTIONS as exc:
+            print(f"[UART] USB-TTL disconnect during target send: {exc}", file=sys.stderr)
+            return "LINK_LOST"
         return "NACK"
 
     def _await_opcode_with_heartbeat(
@@ -783,20 +884,24 @@ class PiZeroVisionController:
         sleep_fn=time.sleep,
     ) -> str:
         start_t = clock()
-        while True:
-            self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-            self.uart.flush()
-            sleep_fn(HEARTBEAT_INTERVAL_S)
+        try:
+            while True:
+                self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+                self.uart.flush()
+                sleep_fn(HEARTBEAT_INTERVAL_S)
 
-            while self.uart.in_waiting > 0:
-                resp = self.uart.read(1)[0]
-                if resp == target_opcode:
-                    return "OK"
-                if resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
-                    return "FAULT"
+                while self.uart.in_waiting > 0:
+                    resp = self.uart.read(1)[0]
+                    if resp == target_opcode:
+                        return "OK"
+                    if resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
+                        return "FAULT"
 
-            if clock() - start_t > timeout_s:
-                return "TIMEOUT"
+                if clock() - start_t > timeout_s:
+                    return "TIMEOUT"
+        except SERIAL_EXCEPTIONS as exc:
+            print(f"[UART] USB-TTL disconnect awaiting 0x{target_opcode:02X}: {exc}", file=sys.stderr)
+            return "LINK_LOST"
 
     def run_closed_loop_sort_session(
         self,
@@ -827,13 +932,19 @@ class PiZeroVisionController:
         out_of_bounds_seen = 0
 
         # Scan #0: Unobstructed full-board scan while parked at (0, 0)
+        self._emit_hud("SCAN_INITIAL", {"scans": scans})
         frame = cap_source()
         scans += 1
         caps = self.detect_caps(frame, occluded_y_mm=None)
         out_of_bounds_seen += sum(1 for c in caps if not c.get("in_safe_bounds", True))
+        self._emit_hud(
+            "SCAN_INITIAL",
+            {"caps": caps, "scans": scans, "quarantined": quarantined_zones, "cam_frame": frame},
+        )
         next_cap = self.select_next_cap(caps, (0.0, 0.0), retry_records, quarantined_zones)
 
         if next_cap is None:
+            self._emit_hud("SESSION_COMPLETE", {"caps": caps, "picked": 0, "scans": scans})
             return {
                 "status": "COMPLETE",
                 "picked": 0,
@@ -842,152 +953,219 @@ class PiZeroVisionController:
                 "out_of_bounds_seen": out_of_bounds_seen,
             }
 
-        for _ in range(max_cycles):
-            ack_status = self._send_single_target_with_ack(next_cap, sleep_fn=sleep_fn)
-            if ack_status != "ACK":
-                return {
-                    "status": ack_status,
-                    "picked": picked,
-                    "scans": scans,
-                    "quarantined": quarantined_zones,
-                    "out_of_bounds_seen": out_of_bounds_seen,
-                }
-
-            last_target = next_cap
-            bin_x, bin_y, _ = BIN_COORDS[last_target["color"]]
-            cycle_start = clock()
-            scanned_at_bin = False
-            retry_evaluated = False
-            await_received = False
-            candidate_next = None
-
-            while not await_received:
-                self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-                self.uart.flush()
-                sleep_fn(HEARTBEAT_INTERVAL_S)
-
-                while self.uart.in_waiting > 0:
-                    resp = self.uart.read(1)[0]
-                    if resp == CMD_SCAN_WINDOW_OPEN and not scanned_at_bin:
-                        # Pipelined capture while Mega lowers/drops/retracts at color bin
-                        fresh = cap_source()
-                        scans += 1
-                        scanned_at_bin = True
-                        self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-                        self.uart.flush()
-
-                        fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
-                        out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
-                        retry_evaluated = self._update_retry_state(
-                            last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
-                        )
-                        candidate_next = self.select_next_cap(
-                            fresh_caps, (bin_x, bin_y), retry_records, quarantined_zones
-                        )
-                    elif resp == CMD_CAP_PROGRESS:
-                        cycle_start = clock()
-                    elif resp == CMD_AWAIT_NEXT:
-                        await_received = True
-                        break
-                    elif resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
-                        return {
-                            "status": "FAULT",
-                            "picked": picked,
-                            "scans": scans,
-                            "quarantined": quarantined_zones,
-                            "out_of_bounds_seen": out_of_bounds_seen,
-                        }
-
-                if not await_received and (clock() - cycle_start > MAX_SINGLE_CAP_S):
-                    print("[TIMEOUT] Mega stopped responding during closed-loop cap cycle.", file=sys.stderr)
+        try:
+            for _ in range(max_cycles):
+                ack_status = self._send_single_target_with_ack(next_cap, sleep_fn=sleep_fn)
+                if ack_status != "ACK":
+                    self._emit_hud(
+                        "LINK_LOST" if ack_status == "LINK_LOST" else "FAULT",
+                        {"reason": f"DISPATCH {ack_status}"},
+                    )
                     return {
-                        "status": "TIMEOUT",
+                        "status": ack_status,
                         "picked": picked,
                         "scans": scans,
                         "quarantined": quarantined_zones,
                         "out_of_bounds_seen": out_of_bounds_seen,
                     }
 
-            picked += 1
+                last_target = next_cap
+                bin_x, bin_y, _ = BIN_COORDS[last_target["color"]]
+                self._emit_hud("TARGET_DISPATCHED", {"target": last_target, "scans": scans, "picked": picked})
+                cycle_start = clock()
+                scanned_at_bin = False
+                retry_evaluated = False
+                await_received = False
+                candidate_next = None
 
-            # Fallback capture if Mega signaled AWAIT_NEXT without prior SCAN_WINDOW_OPEN
-            if not scanned_at_bin:
-                fresh = cap_source()
+                while not await_received:
+                    self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+                    self.uart.flush()
+                    sleep_fn(HEARTBEAT_INTERVAL_S)
+
+                    while self.uart.in_waiting > 0:
+                        resp = self.uart.read(1)[0]
+                        if resp == CMD_SCAN_WINDOW_OPEN and not scanned_at_bin:
+                            # Pipelined capture while Mega lowers/drops/retracts at color bin
+                            self._emit_hud("SCAN_WINDOW_OPEN", {"bin_y": bin_y})
+                            fresh = cap_source()
+                            scans += 1
+                            scanned_at_bin = True
+                            self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+                            self.uart.flush()
+
+                            fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
+                            out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
+                            retry_evaluated = self._update_retry_state(
+                                last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
+                            )
+                            self._emit_hud(
+                                "SCAN_WINDOW_OPEN",
+                                {
+                                    "bin_y": bin_y,
+                                    "caps": fresh_caps,
+                                    "scans": scans,
+                                    "quarantined": quarantined_zones,
+                                    "cam_frame": fresh,
+                                },
+                            )
+                            candidate_next = self.select_next_cap(
+                                fresh_caps, (bin_x, bin_y), retry_records, quarantined_zones
+                            )
+                        elif resp == CMD_CAP_PROGRESS:
+                            cycle_start = clock()
+                        elif resp == CMD_AWAIT_NEXT:
+                            await_received = True
+                            break
+                        elif resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
+                            self._emit_hud("FAULT", {"reason": f"MEGA FAULT 0x{resp:02X}"})
+                            return {
+                                "status": "FAULT",
+                                "picked": picked,
+                                "scans": scans,
+                                "quarantined": quarantined_zones,
+                                "out_of_bounds_seen": out_of_bounds_seen,
+                            }
+
+                    if not await_received and (clock() - cycle_start > MAX_SINGLE_CAP_S):
+                        print("[TIMEOUT] Mega stopped responding during closed-loop cap cycle.", file=sys.stderr)
+                        self._emit_hud("TIMEOUT", {"reason": "CYCLE TIMEOUT"})
+                        return {
+                            "status": "TIMEOUT",
+                            "picked": picked,
+                            "scans": scans,
+                            "quarantined": quarantined_zones,
+                            "out_of_bounds_seen": out_of_bounds_seen,
+                        }
+
+                picked += 1
+                self._emit_hud("CAP_SORTED", {"color": last_target["color"], "picked": picked})
+                self._emit_hud("AWAIT_NEXT", {"at_xy": (bin_x, bin_y), "picked": picked})
+
+                # Fallback capture if Mega signaled AWAIT_NEXT without prior SCAN_WINDOW_OPEN
+                if not scanned_at_bin:
+                    fresh = cap_source()
+                    scans += 1
+                    self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+                    self.uart.flush()
+                    fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
+                    out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
+                    retry_evaluated = self._update_retry_state(
+                        last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
+                    )
+                    self._emit_hud(
+                        "AWAIT_NEXT",
+                        {
+                            "at_xy": (bin_x, bin_y),
+                            "caps": fresh_caps,
+                            "scans": scans,
+                            "quarantined": quarantined_zones,
+                            "cam_frame": fresh,
+                        },
+                    )
+                    candidate_next = self.select_next_cap(
+                        fresh_caps, (bin_x, bin_y), retry_records, quarantined_zones
+                    )
+
+                if candidate_next is not None:
+                    next_cap = candidate_next
+                    continue
+
+                # 0 graspable caps visible outside bridge band -> clear-FOV verification park at (0,0)
+                self._emit_hud("PARK_FOR_SCAN", {})
+                self.uart.write(bytes([CMD_PARK_FOR_SCAN]))
+                self.uart.flush()
+                park_res = self._await_opcode_with_heartbeat(
+                    CMD_AWAIT_NEXT, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
+                )
+                if park_res != "OK":
+                    self._emit_hud(
+                        "LINK_LOST" if park_res == "LINK_LOST" else "FAULT",
+                        {"reason": f"PARK {park_res}"},
+                    )
+                    return {
+                        "status": park_res,
+                        "picked": picked,
+                        "scans": scans,
+                        "quarantined": quarantined_zones,
+                        "out_of_bounds_seen": out_of_bounds_seen,
+                    }
+
+                self._emit_hud("AWAIT_NEXT", {"at_xy": (0.0, 0.0)})
+                verify_frame = cap_source()
                 scans += 1
                 self.uart.write(bytes([CMD_HEARTBEAT_PING]))
                 self.uart.flush()
-                fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
-                out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
-                retry_evaluated = self._update_retry_state(
-                    last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
+                verify_caps = self.detect_caps(verify_frame, occluded_y_mm=None)
+                out_of_bounds_seen += sum(1 for c in verify_caps if not c.get("in_safe_bounds", True))
+                if not retry_evaluated:
+                    self._update_retry_state(
+                        last_target, verify_caps, retry_records, quarantined_zones, occluded_y_mm=None
+                    )
+                self._emit_hud(
+                    "AWAIT_NEXT",
+                    {
+                        "at_xy": (0.0, 0.0),
+                        "caps": verify_caps,
+                        "scans": scans,
+                        "quarantined": quarantined_zones,
+                        "cam_frame": verify_frame,
+                    },
                 )
-                candidate_next = self.select_next_cap(
-                    fresh_caps, (bin_x, bin_y), retry_records, quarantined_zones
+                revealed = self.select_next_cap(
+                    verify_caps, (0.0, 0.0), retry_records, quarantined_zones
                 )
+                if revealed is not None:
+                    next_cap = revealed
+                    continue
 
-            if candidate_next is not None:
-                next_cap = candidate_next
-                continue
-
-            # 0 graspable caps visible outside bridge band -> clear-FOV verification park at (0,0)
-            self.uart.write(bytes([CMD_PARK_FOR_SCAN]))
-            self.uart.flush()
-            park_res = self._await_opcode_with_heartbeat(
-                CMD_AWAIT_NEXT, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
-            )
-            if park_res != "OK":
+                # Confirmed empty (or only quarantined/out-of-bounds caps remain) -> finish cleanly
+                self._emit_hud("FINISH_SESSION", {})
+                self.uart.write(bytes([CMD_FINISH_SESSION]))
+                self.uart.flush()
+                done_res = self._await_opcode_with_heartbeat(
+                    CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
+                )
+                final_status = "COMPLETE" if done_res == "OK" else done_res
+                self._emit_hud(
+                    "SESSION_COMPLETE" if final_status == "COMPLETE" else (
+                        "LINK_LOST" if final_status == "LINK_LOST" else "FAULT"
+                    ),
+                    {"caps": verify_caps, "picked": picked, "scans": scans, "reason": final_status},
+                )
                 return {
-                    "status": park_res,
+                    "status": final_status,
                     "picked": picked,
                     "scans": scans,
                     "quarantined": quarantined_zones,
                     "out_of_bounds_seen": out_of_bounds_seen,
                 }
 
-            verify_frame = cap_source()
-            scans += 1
-            self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-            self.uart.flush()
-            verify_caps = self.detect_caps(verify_frame, occluded_y_mm=None)
-            out_of_bounds_seen += sum(1 for c in verify_caps if not c.get("in_safe_bounds", True))
-            if not retry_evaluated:
-                self._update_retry_state(
-                    last_target, verify_caps, retry_records, quarantined_zones, occluded_y_mm=None
-                )
-            revealed = self.select_next_cap(
-                verify_caps, (0.0, 0.0), retry_records, quarantined_zones
-            )
-            if revealed is not None:
-                next_cap = revealed
-                continue
-
-            # Confirmed empty (or only quarantined/out-of-bounds caps remain) -> finish cleanly
+            # Reached hard cycle limit -> park safely
+            self._emit_hud("FINISH_SESSION", {})
             self.uart.write(bytes([CMD_FINISH_SESSION]))
             self.uart.flush()
-            done_res = self._await_opcode_with_heartbeat(
+            self._await_opcode_with_heartbeat(
                 CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
             )
+            self._emit_hud("SESSION_COMPLETE", {"picked": picked, "scans": scans})
             return {
-                "status": "COMPLETE" if done_res == "OK" else done_res,
+                "status": "MAX_CYCLES",
                 "picked": picked,
                 "scans": scans,
                 "quarantined": quarantined_zones,
                 "out_of_bounds_seen": out_of_bounds_seen,
             }
-
-        # Reached hard cycle limit -> park safely
-        self.uart.write(bytes([CMD_FINISH_SESSION]))
-        self.uart.flush()
-        self._await_opcode_with_heartbeat(
-            CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
-        )
-        return {
-            "status": "MAX_CYCLES",
-            "picked": picked,
-            "scans": scans,
-            "quarantined": quarantined_zones,
-            "out_of_bounds_seen": out_of_bounds_seen,
-        }
+        except SERIAL_EXCEPTIONS as exc:
+            print(f"[UART] USB-TTL link dropped mid-session: {exc}", file=sys.stderr)
+            self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+            return {
+                "status": "LINK_LOST",
+                "picked": picked,
+                "scans": scans,
+                "quarantined": quarantined_zones,
+                "out_of_bounds_seen": out_of_bounds_seen,
+            }
 
     def transmit_batch_and_supervise(
         self,
@@ -1000,64 +1178,79 @@ class PiZeroVisionController:
         Transmits a CRC16-verified batch and maintains 250 ms heartbeat pings
         for the entire batch duration.
 
-        Returns one of: "COMPLETE", "NACK", "FAULT", "TIMEOUT".
+        Returns one of: "COMPLETE", "NACK", "FAULT", "TIMEOUT", "LINK_LOST".
         """
         if not ordered_caps or self.uart is None:
             return "NACK"
         packet = self.pack_batch_packet(ordered_caps)
 
-        ack_received = False
-        for _ in range(3):
-            self.uart.reset_input_buffer()
-            self.write_paced_uart(packet, sleep_fn=sleep_fn)
-            ack = self.uart.read(1)
-            if ack:
-                code = ack[0]
-                if code == CMD_BATCH_ACK:
-                    ack_received = True
-                    break
-                if code in (CMD_HARD_FAULT, CMD_RECOVERY_HALT, CMD_STATUS_FAULT):
-                    return "FAULT"
-            sleep_fn(0.05)
+        try:
+            ack_received = False
+            for _ in range(3):
+                self.uart.reset_input_buffer()
+                self.write_paced_uart(packet, sleep_fn=sleep_fn)
+                ack = self.uart.read(1)
+                if ack:
+                    code = ack[0]
+                    if code == CMD_BATCH_ACK:
+                        ack_received = True
+                        break
+                    if code in (CMD_HARD_FAULT, CMD_RECOVERY_HALT, CMD_STATUS_FAULT):
+                        return "FAULT"
+                sleep_fn(0.05)
 
-        if not ack_received:
-            return "NACK"
+            if not ack_received:
+                return "NACK"
 
-        start_t = clock()
-        last_progress_t = start_t
-        max_total_s = len(ordered_caps) * PER_CAP_BUDGET_S + BATCH_OVERHEAD_S
+            start_t = clock()
+            last_progress_t = start_t
+            max_total_s = len(ordered_caps) * PER_CAP_BUDGET_S + BATCH_OVERHEAD_S
 
-        while True:
-            self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-            self.uart.flush()
-            sleep_fn(HEARTBEAT_INTERVAL_S)
+            while True:
+                self.uart.write(bytes([CMD_HEARTBEAT_PING]))
+                self.uart.flush()
+                sleep_fn(HEARTBEAT_INTERVAL_S)
 
-            while self.uart.in_waiting > 0:
-                resp = self.uart.read(1)[0]
-                if resp == CMD_CAP_PROGRESS:
-                    last_progress_t = clock()
-                elif resp == CMD_BATCH_COMPLETE:
-                    return "COMPLETE"
-                elif resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
-                    return "FAULT"
+                while self.uart.in_waiting > 0:
+                    resp = self.uart.read(1)[0]
+                    if resp == CMD_CAP_PROGRESS:
+                        last_progress_t = clock()
+                    elif resp == CMD_BATCH_COMPLETE:
+                        return "COMPLETE"
+                    elif resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
+                        return "FAULT"
 
-            now = clock()
-            if (now - last_progress_t > MAX_SINGLE_CAP_S) or (now - start_t > max_total_s):
-                print(
-                    "[TIMEOUT] Mega stopped reporting progress or exceeded dynamic batch ceiling.",
-                    file=sys.stderr,
-                )
-                return "TIMEOUT"
+                now = clock()
+                if (now - last_progress_t > MAX_SINGLE_CAP_S) or (now - start_t > max_total_s):
+                    print(
+                        "[TIMEOUT] Mega stopped reporting progress or exceeded dynamic batch ceiling.",
+                        file=sys.stderr,
+                    )
+                    return "TIMEOUT"
+        except SERIAL_EXCEPTIONS as exc:
+            print(f"[UART] USB-TTL link dropped during batch supervision: {exc}", file=sys.stderr)
+            return "LINK_LOST"
 
 
 def main():
     parser = argparse.ArgumentParser(description="CapSorter V2 Raspberry Pi Zero 2 W Closed-Loop Vision Controller")
     parser.add_argument("--calib", help="Path to validated camera calibration .npz file")
     parser.add_argument("--camera-type", choices=("picamera2_imx219", "usb_v4l2"))
-    parser.add_argument("--serial-port", default="/dev/serial0")
+    parser.add_argument(
+        "--serial-port", default=DEFAULT_SERIAL_PORT,
+        help="Mega serial port or 'auto' (prefers /dev/capsorter_mega -> /dev/ttyUSB* -> /dev/ttyACM* -> /dev/serial0)",
+    )
     parser.add_argument("--bridge-occlusion-mm", type=float, default=BRIDGE_OCCLUSION_HALF_MM)
     parser.add_argument("--jaw-axis", choices=("X", "Y"), default=GRIPPER_JAW_AXIS)
+    parser.add_argument("--enable-lcd", action="store_true", help="Enable native 480x320 3.5-inch SPI LCD HUD")
+    parser.add_argument("--fb-device", default="/dev/fb0", help="Framebuffer device for 3.5-inch SPI LCD (default: /dev/fb0)")
+    parser.add_argument("--touch-device", default="auto", help="XPT2046 evdev input path or 'auto'")
     args = parser.parse_args()
+
+    hud = None
+    if args.enable_lcd:
+        from lcd_hud import CapSorterLCDHUD
+        hud = CapSorterLCDHUD(fb_device=args.fb_device, touch_device=args.touch_device)
 
     try:
         controller = PiZeroVisionController(
@@ -1067,38 +1260,67 @@ def main():
             init_hardware=True,
             bridge_occlusion_half_mm=args.bridge_occlusion_mm,
             jaw_axis=args.jaw_axis,
+            state_callback=hud.update_state if hud is not None else None,
         )
     except CalibrationError as exc:
         print(f"[FAIL-CLOSED CALIBRATION ERROR] {exc}", file=sys.stderr)
         sys.exit(2)
 
+    if hud is not None:
+        hud.on_pause_toggle = lambda is_paused: setattr(controller, "paused", bool(is_paused))
+        hud.on_rearm = controller.send_rearm_home
+        hud.start()
+
+    print(f"[V2] Using Mega serial link: {controller.resolved_serial_port} @ 115200 baud")
     print("[V2] Waiting for Arduino Mega CMD_STATUS_READY handshake...")
-    while not controller.wait_for_mega_ready(timeout_s=5.0):
-        print("[V2] Mega not READY (homing or fault latched); retrying status query...")
-        time.sleep(1.0)
-    print("[V2] Mega READY. Starting closed-loop bin-side re-imaging vision loop.")
-
-    while True:
-        if not controller.wait_for_mega_ready(timeout_s=2.0):
-            print("[V2] Mega unavailable or faulted; waiting for operator re-arm & READY...")
+    try:
+        while not controller.wait_for_mega_ready(timeout_s=5.0):
+            if controller.uart is None:
+                controller.reconnect_serial()
+            print("[V2] Mega not READY (homing, fault latched, or USB-TTL offline); retrying...")
             time.sleep(1.0)
-            continue
+        print("[V2] Mega READY. Starting closed-loop bin-side re-imaging vision loop.")
 
-        result = controller.run_closed_loop_sort_session()
-        if result["status"] != "COMPLETE":
-            print(
-                f"[V2] Session ended with status={result['status']} "
-                f"(picked={result['picked']}, scans={result['scans']}). "
-                "Inhibiting new scans until Mega is READY.",
-                file=sys.stderr,
-            )
-            time.sleep(1.0)
-        elif result["picked"] > 0:
-            print(
-                f"[V2] Session COMPLETE: picked={result['picked']}, scans={result['scans']}, "
-                f"quarantined={len(result['quarantined'])}."
-            )
-        time.sleep(0.5)
+        while True:
+            if controller.paused:
+                time.sleep(0.25)
+                continue
+
+            if controller.uart is None:
+                controller.reconnect_serial()
+                time.sleep(1.0)
+                continue
+
+            if not controller.wait_for_mega_ready(timeout_s=2.0):
+                print("[V2] Mega unavailable or faulted; waiting for operator re-arm & READY...")
+                time.sleep(1.0)
+                continue
+
+            result = controller.run_closed_loop_sort_session()
+            if result["status"] == "LINK_LOST":
+                print(
+                    "[V2] USB-TTL link dropped mid-session; reopening serial port & waiting for operator re-arm...",
+                    file=sys.stderr,
+                )
+                controller.reconnect_serial()
+                time.sleep(1.0)
+            elif result["status"] != "COMPLETE":
+                print(
+                    f"[V2] Session ended with status={result['status']} "
+                    f"(picked={result['picked']}, scans={result['scans']}). "
+                    "Inhibiting new scans until Mega is READY.",
+                    file=sys.stderr,
+                )
+                time.sleep(1.0)
+            elif result["picked"] > 0:
+                print(
+                    f"[V2] Session COMPLETE: picked={result['picked']}, scans={result['scans']}, "
+                    f"quarantined={len(result['quarantined'])}."
+                )
+            time.sleep(0.5)
+    finally:
+        if hud is not None:
+            hud.stop()
 
 
 if __name__ == "__main__":

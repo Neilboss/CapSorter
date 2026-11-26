@@ -451,7 +451,7 @@
       <h1>AUTONOMOUS BOTTLE-CAP<br><span style="color: #00d2ff;">SORTING MACHINE V2</span></h1>
       
       <div style="margin: 2mm 0; font-size: 9pt; color: #38bdf8; font-weight: 600;">
-        Raspberry Pi Zero 2 W (16 GB OpenCV) + 8MP IMX219 160° CSI + Arduino Mega 2560 Architecture
+        Raspberry Pi Zero 2 W (16 GB OpenCV + 3.5" SPI Touch LCD) + 8MP IMX219 160° CSI + OTG USB-TTL + Arduino Mega 2560
       </div>
 
       <!-- Authors -->
@@ -570,10 +570,16 @@
             <td><span class="badge badge-cyan">1.8V / 3.3V CSI</span></td>
           </tr>
           <tr>
-            <td><strong style="color: #38bdf8;">Pi Zero 2 W (16GB)</strong></td>
-            <td class="font-mono">Quad-Core Cortex-A53 @ 1 GHz, 512 MB RAM</td>
-            <td>Replaces Teensy 4.1 &amp; ESP32-CAM: Runs offline Python 3 + OpenCV, 160° fisheye undistortion, HSV segmentation, contour circularity, 3×3 homography, and path planning.</td>
-            <td><span class="badge badge-cyan">5V In / 3.3V GPIO</span></td>
+            <td><strong style="color: #38bdf8;">Pi Zero 2 W (16GB) + 3.5" LCD</strong></td>
+            <td class="font-mono">Quad-Core Cortex-A53 @ 1 GHz, 512 MB RAM + 480×320 SPI LCD V3.0</td>
+            <td>Runs offline Python 3 + OpenCV, 160° fisheye undistortion, HSV segmentation, 3×3 homography, and native 480×320 RGB565 HUD (GPIO 1–26 SPI0/XPT2046) on OS Lite.</td>
+            <td><span class="badge badge-cyan">5V PWR IN / 3.3V</span></td>
+          </tr>
+          <tr>
+            <td><strong style="color: #facc15;">OTG + CH9102 / CP2102 Bridge</strong></td>
+            <td class="font-mono">Official Micro-USB OTG + WCH CH9102/CP2102 USB-TTL</td>
+            <td>Routes 115,200-baud UART (<code style="font-size:6.5pt;">/dev/capsorter_mega</code>) from Pi inner USB port through 3.3V/5V shifter to Mega Serial1 while GPIO 1–26 drive the 3.5" LCD.</td>
+            <td><span class="badge badge-orange">3.3V TTL (No +5V)</span></td>
           </tr>
           <tr>
             <td><strong style="color: #34d399;">Arduino Mega 2560</strong></td>
@@ -610,10 +616,10 @@
           <div style="font-size: 6.5pt; color: #cbd5e1;">640×480 RGB888 Frames</div>
         </div>
         <div style="background: #0d121d; border: 1px solid rgba(0,210,255,0.4); border-radius: 4px; padding: 2.5mm;">
-          <div style="color: #38bdf8; font-weight: bold;">Raspberry Pi Zero 2 W</div>
-          <div style="font-size: 6.5pt; color: #94a3b8;">OpenCV Vision &amp; Planner</div>
-          <div style="margin: 1.5mm 0; font-size: 8pt; color: #34d399;">⇣ 115,200 Baud (Level Shifted) ⇣</div>
-          <div style="font-size: 6.5pt; color: #cbd5e1;">READY Handshake, CRC16 Batch &amp; Heartbeat</div>
+          <div style="color: #38bdf8; font-weight: bold;">Pi Zero 2 W + 3.5" SPI LCD</div>
+          <div style="font-size: 6.5pt; color: #94a3b8;">OpenCV Vision &amp; Native 480×320 HUD</div>
+          <div style="margin: 1.5mm 0; font-size: 8pt; color: #34d399;">⇣ OTG → CH9102/CP2102 → Shifter ⇣</div>
+          <div style="font-size: 6.5pt; color: #cbd5e1;">115,200 Baud • READY, CRC16 (0x5B) &amp; 0xF0</div>
         </div>
         <div style="background: #0d121d; border: 1px solid rgba(16,185,129,0.4); border-radius: 4px; padding: 2.5mm;">
           <div style="color: #34d399; font-weight: bold;">Arduino Mega 2560</div>
@@ -957,19 +963,19 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
           Separate regulated 5V logic rail (stays live during E-stop to protect the Pi SD card; common star GND).
         </p>
         <ul style="font-size: 6.8pt; color: #94a3b8; padding-left: 3.5mm; margin-top: 1mm; line-height: 1.35;">
-          <li>• Raspberry Pi Zero 2 W 5V (Pins 2/4 or USB PWR)</li>
-          <li>• 8MP IMX219 camera powered via Pi CSI port</li>
+          <li>• Pi Zero 2 W via <strong>Micro-USB PWR IN</strong> (Pins 1–26 covered by LCD)</li>
+          <li>• 3.5" SPI LCD (~160 mA), IMX219 CSI &amp; OTG CH9102 (~30 mA)</li>
           <li>• Arduino Mega 2560 5V pin (NOT VIN; avoid USB backfeed)</li>
-          <li>• PCA9685 VCC logic supply</li>
+          <li>• PCA9685 VCC logic supply (Branch C peak ≈ 1.4 A &lt; 3 A)</li>
         </ul>
       </div>
 
     </div>
 
-    <!-- Mandatory Level Shifter Safety Warning -->
+    <!-- Mandatory Level Shifter & CH9102 Safety Warning -->
     <div class="callout callout-danger">
-      <strong style="font-size: 8pt; display: block; margin-bottom: 1mm;">⚠️ MANDATORY LOGIC LEVEL SHIFTER SPECIFICATION (PI ZERO 2 W):</strong>
-      The Arduino Mega 2560 operates strictly on <strong>5.0V TTL logic</strong>. The Raspberry Pi Zero 2 W GPIO header operates strictly on <strong>3.3V LVCMOS logic — NO pins are 5V tolerant</strong>. Exposing Pi Pin 10 (GPIO15/RXD0) directly to Mega Pin 18 (TX1, 5V) will permanently damage the BCM2710A1 SoC. Route <strong>BOTH TXD0 and RXD0</strong> through a 4-channel bidirectional level shifter (HV=5V, LV=3.3V) so Mega RX1 also receives full 5V noise margin.
+      <strong style="font-size: 8pt; display: block; margin-bottom: 1mm;">⚠️ MANDATORY CH9102/CP2102 USB-TTL &amp; 3.3V ⇄ 5V LEVEL SHIFTER SAFETY RULES:</strong>
+      Because the 3.5" SPI LCD occupies Pi GPIO pins 1–26, UART routes over Pi's inner <strong>USB OTG port → CP2102/CH9102 USB-to-TTL module</strong>. Affordable CH9102/CP2102 modules run at <strong>3.3V UART logic</strong>, while Mega <code>Serial1</code> operates at <strong>5.0V TTL</strong> (<code>V_IH ≥ 3.0V</code>). Route <strong>BOTH TXD and RXD</strong> through the 4-channel bidirectional level shifter (<code>LV</code> ← converter <code>3V3</code> pin, <code>HV</code> ← Mega <code>5V</code>). <strong>NEVER connect the converter's <code>+5V</code> pin to Mega 5V</strong>—it ties directly to Pi USB OTG VBUS and causes power backfeed!
     </div>
 
     <!-- Power Tree Schematic ASCII / Visual Diagram -->
@@ -982,9 +988,9 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
 |  12V, 10A SMPS    | ── Master 10A Fuse ─┬─ [E-STOP POLE 1 (NC, >=10A)] ─┬─ [BRANCH A: 12V Direct, 5A Fuse] ───> TMC2208 VMOT (X &amp; Y)
 |  (120W DC Supply) |                     │                               └─ [BRANCH B: 12V->5V/5A Buck, 3A] ──> PCA9685 V+ (Servos)
 +-------------------+                     │
-         │                                └─ [BRANCH C: 12V->5V/3A Buck] ──┬─> Raspberry Pi Zero 2 W 5V (Pins 2/4 or PWR IN) + CSI Cam
+         │                                └─ [BRANCH C: 12V->5V/3A Buck] ──┬─> Pi Zero 2 W Micro-USB PWR IN (≥20 AWG) -> 3.5" LCD + CSI + OTG CH9102
     Common GND Star Point                                                  ├─> Arduino Mega 2560 5V Pin (NOT VIN; check USB backfeed)
-    (Non-Isolated Return)                                                  ├─> PCA9685 VCC Logic Pin &amp; Level Shifter HV Ref
+    (Non-Isolated Return)                                                  ├─> PCA9685 VCC Logic Pin &amp; Level Shifter HV Ref (LV ← CH9102 3V3)
     [E-STOP POLE 2 (NC)] ──────────────────────────────────────────────────┴─> Mega Pin 25 (PIN_ESTOP, INPUT_PULLUP -> STATE_HARD_FAULT)</div>
     </div>
 
@@ -1042,29 +1048,45 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
           </tr>
           <tr>
             <td><strong style="color: #38bdf8;">5V 3A Buck ⟶ Pi Zero 2W</strong></td>
-            <td class="font-mono">Buck 5V+ &amp; GND</td>
-            <td class="font-mono">Header Pins 2/4 (5V) &amp; 6 (GND)</td>
-            <td>Regulated 5V DC supply to Raspberry Pi Zero 2 W</td>
+            <td class="font-mono">Buck 5V+ &amp; GND (≥20 AWG)</td>
+            <td class="font-mono">Pi Micro-USB PWR IN (or PP1/PP6)</td>
+            <td>Regulated 5V DC supply to Pi Zero 2 W + 3.5" LCD + CSI + OTG</td>
             <td><span class="badge badge-cyan">5.0V Regulated</span></td>
-            <td>Common ground star topology with Mega &amp; Level Shifter</td>
+            <td>Header Pins 2/4/6 are covered by 3.5" LCD — MUST use PWR IN</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #38bdf8;">Pi Zero 2W ⇄ 3.5" SPI LCD</strong></td>
+            <td class="font-mono">GPIO Header Pins 1–26</td>
+            <td class="font-mono">LCD V3.0 26-Pin Female Header</td>
+            <td>ILI9486 SPI0 (MOSI 10, SCLK 11, CE0 8, RS 24, RST 25) + XPT2046 (MISO 9, CE1 7, IRQ 17)</td>
+            <td><span class="badge badge-cyan">3.3V SPI / 5V BL</span></td>
+            <td>Bookworm OS Lite: <code>dtoverlay=piscreen,drm,speed=18000000,rotate=90</code></td>
+          </tr>
+          <tr>
+            <td><strong style="color: #facc15;">Pi Zero 2W ⇄ CH9102/CP2102</strong></td>
+            <td class="font-mono">Inner Micro-USB DATA Port</td>
+            <td class="font-mono">Official OTG ⟶ CH9102/CP2102</td>
+            <td>USB-to-TTL serial bridge (<code>/dev/capsorter_mega</code> @ 115,200)</td>
+            <td><span class="badge badge-orange">5V USB / 3.3V TTL</span></td>
+            <td><strong>Leave converter +5V DISCONNECTED!</strong> Install udev rule</td>
           </tr>
 
-          <!-- Pi Zero 2 W to Mega -->
+          <!-- CH9102/CP2102 to Mega -->
           <tr>
-            <td><strong style="color: #38bdf8;">Pi Zero 2W ⟶ Mega</strong></td>
-            <td class="font-mono">Pin 8 (GPIO14 / TXD0)</td>
+            <td><strong style="color: #38bdf8;">CH9102/CP2102 ⟶ Mega</strong></td>
+            <td class="font-mono">Converter TXD (LV ← 3V3)</td>
             <td class="font-mono">Mega Pin 19 (RX1) via Shifter</td>
-            <td>Sorting plan batch instruction packets (/dev/serial0)</td>
+            <td>18B Single-Cap Targets (0x5B) &amp; 250 ms Heartbeat</td>
             <td><span class="badge badge-cyan">3.3V ⟶ Shifter ⟶ 5V</span></td>
-            <td>Disable Linux login shell on serial0 in raspi-config</td>
+            <td>Guarantees full 5V noise margin at ATmega2560 RX1</td>
           </tr>
           <tr>
-            <td><strong style="color: #34d399;">Mega ⟶ Pi Zero 2W</strong></td>
+            <td><strong style="color: #34d399;">Mega ⟶ CH9102/CP2102</strong></td>
             <td class="font-mono">Mega Pin 18 (TX1)</td>
-            <td class="font-mono">Pin 10 (GPIO15 / RXD0)</td>
-            <td>Motion execution ACK &amp; Status updates</td>
-            <td><span class="badge badge-red">5V ⟶ Level Shifter ⟶ 3.3V</span></td>
-            <td><strong>MUST route through logic level shifter!</strong></td>
+            <td class="font-mono">Converter RXD via Shifter</td>
+            <td>Motion execution ACK, SCAN_WINDOW_OPEN &amp; Faults</td>
+            <td><span class="badge badge-red">5V ⟶ Shifter ⟶ 3.3V</span></td>
+            <td><strong>Protects 3.3V CH9102 RXD; keeps Mega USB-B free!</strong></td>
           </tr>
 
           <!-- Mega to TMC2208 X-Axis -->
@@ -1481,9 +1503,9 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
           <tr>
             <td class="font-mono">15</td>
             <td><strong style="color: #38bdf8;">5V 3A Logic Buck</strong></td>
-            <td class="font-mono">Regulated step-down for Pi Zero 2 W &amp; Mega</td>
+            <td class="font-mono">Regulated step-down for Pi PWR IN &amp; Mega</td>
             <td class="font-mono">1</td>
-            <td>Separate regulated logic rail for Pi Zero 2 W, IMX219 &amp; Mega 5V pin</td>
+            <td>Separate regulated logic rail for Pi Zero 2 W (PWR IN), 3.5" LCD, IMX219, CH9102 &amp; Mega 5V</td>
             <td><span class="badge badge-orange">To Purchase</span></td>
           </tr>
           <tr>
@@ -1491,7 +1513,7 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
             <td><strong style="color: #f87171;">Logic Level Shifter</strong></td>
             <td class="font-mono">4-Channel bidirectional (5.0V ⇄ 3.3V)</td>
             <td class="font-mono">1</td>
-            <td>Shifts BOTH Pi Zero 2 W TXD0 &amp; RXD0 (no 5V-tolerant Pi pins)</td>
+            <td>Shifts CH9102/CP2102 TXD &amp; RXD (LV ← 3V3) to Mega 5V Serial1</td>
             <td><span class="badge badge-orange">To Purchase</span></td>
           </tr>
           <tr>
@@ -1501,6 +1523,30 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
             <td class="font-mono">3 + 1</td>
             <td>X/Y/Z NC limits, hardwired 12V actuator cutoff &amp; Pin 25 sense</td>
             <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">18</td>
+            <td><strong style="color: #38bdf8;">3.5" Touch Screen LCD (V3.0)</strong></td>
+            <td class="font-mono">480×320 HVGA TFT, ILI9486 SPI + XPT2046 (Robu SKU 76167)</td>
+            <td class="font-mono">1</td>
+            <td>Native 480×320 RGB565 live cap/gantry HUD &amp; Pause/Re-Arm touch UI on OS Lite</td>
+            <td><span class="badge badge-orange">To Purchase (~₹989)</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">19</td>
+            <td><strong style="color: #facc15;">Official Micro-USB OTG Adapter</strong></td>
+            <td class="font-mono">Raspberry Pi Micro USB-B Male to USB-A Female OTG</td>
+            <td class="font-mono">1</td>
+            <td>Connects Pi Zero 2 W inner USB data port to USB-TTL converter</td>
+            <td><span class="badge badge-orange">To Purchase</span></td>
+          </tr>
+          <tr>
+            <td class="font-mono">20</td>
+            <td><strong style="color: #facc15;">CP2102 / CH9102 USB-TTL Module</strong></td>
+            <td class="font-mono">KaarBuddy CH9102/CP2102 5-pin UART bridge (+5V unused)</td>
+            <td class="font-mono">1</td>
+            <td>Provides /dev/capsorter_mega UART link to Mega Serial1 while GPIO 1–26 drive LCD</td>
+            <td><span class="badge badge-orange">To Purchase (~₹180)</span></td>
           </tr>
         </tbody>
       </table>
@@ -1585,7 +1631,7 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
           <span class="badge badge-orange">Next</span>
         </div>
         <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
-          Connect Pi Zero 2 W UART0 (/dev/serial0) to Mega Serial1 via bidirectional level shifter. Verify READY handshake, CRC16 batch transfer, and fail-safe halt on link cut.
+          Connect Pi Zero 2 W Micro-USB OTG → CH9102/CP2102 (<code>/dev/capsorter_mega</code>) → bidirectional level shifter → Mega Serial1. Verify READY handshake, CRC16 targets, and fail-safe halt on USB-TTL unplug.
         </p>
         <div style="font-size: 6.5pt; color: #ff9142; font-weight: bold; margin-top: 1.5mm;">
           Milestone: Safe halt &amp; explicit operator re-arm verified when UART link is severed.
@@ -1633,7 +1679,7 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
         <strong>Step 1:</strong> Calibrate the exact installed camera (8MP IMX219 CSI fisheye or USB pinhole webcam) via <code>fisheye_calibrate.py</code> and verify grid error across board edges.<br>
         <strong>Step 2:</strong> Assemble the XY gantry, confirm TMC2208 carrier R_sense &amp; V_ref, and measure actual steps/mm and homing from max travel.<br>
         <strong>Step 3:</strong> Validate MG90S Z-axis counterbalance, servo SKU voltage, and safe Z settle when hardwired E-stop cuts actuator power.<br>
-        <strong>Step 4:</strong> Interconnect Pi Zero 2 W and Mega via the bidirectional level shifter, validating READY handshake, dynamic heartbeats, and fail-closed halt under link loss.
+        <strong>Step 4:</strong> Enable <code>dtoverlay=piscreen,drm</code> on OS Lite, install <code>99-capsorter-mega.rules</code>, wire OTG → CH9102/CP2102 → bidirectional level shifter → Mega Serial1 (with converter <code>+5V</code> disconnected), and validate live HUD, READY handshake, USB disconnect recovery, and touch Re-Arm.
       </p>
     </div>
 
@@ -1744,6 +1790,11 @@ Verify actual phase current &amp; heatsink temperature on the bench.</div>
             <td style="color: #f87171;">Stepper motor stutters or loses steps mid-travel</td>
             <td>TMC2208 thermal throttle or high acceleration</td>
             <td>Verify <code>ACCEL_STEPS = 6000</code> (150 mm/s²), <code>MAX_SPEED_STEPS = 2800</code> (70 mm/s), cooling airflow, and carrier V_ref.</td>
+          </tr>
+          <tr>
+            <td style="color: #f87171;">3.5" LCD stays white or CH9102 port changes on reboot</td>
+            <td>Legacy LCD-show/fbcp broken on Bookworm or ttyUSB/ttyACM index drift</td>
+            <td>Use native <code>dtoverlay=piscreen,drm,speed=18000000,rotate=90</code> in <code>/boot/firmware/config.txt</code> and install <code>99-capsorter-mega.rules</code> (<code>/dev/capsorter_mega</code>).</td>
           </tr>
           <tr>
             <td style="color: #f87171;">Red caps detected as yellow or missing</td>
@@ -1947,7 +1998,7 @@ status = controller.transmit_batch_and_supervise(caps)</div>
           <strong>Document Title:</strong> Autonomous Bottle-Cap Sorting Machine V2 Technical Dossier<br>
           <strong>Authored &amp; Engineered by:</strong> Neil Shettigar, Kahan, and Shourya<br>
           <strong>Principal Architecture, Firmware &amp; Design:</strong> Neil Shettigar<br>
-          <strong>Target Hardware (V2):</strong> Raspberry Pi Zero 2 W (16GB) • 8MP IMX219 160° CSI (or USB) • Arduino Mega 2560 R3
+          <strong>Target Hardware (V2):</strong> Raspberry Pi Zero 2 W (16GB OS Lite) • 3.5" SPI Touch LCD V3.0 • 8MP IMX219 160° CSI • OTG + CH9102/CP2102 • Arduino Mega 2560 R3
         </div>
         <div>
           <strong>GitHub Code Repository:</strong> github.com/Neilboss/CapSorter<br>

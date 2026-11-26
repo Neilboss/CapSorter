@@ -244,8 +244,8 @@
                 <span class="text-white sm:text-right">8MP IMX219 160° FOV (22-Pin CSI / USB)</span>
               </div>
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
-                <span class="text-cyan-300 shrink-0">2. Vision &amp; Capture SBC:</span>
-                <span class="text-white sm:text-right">Pi Zero 2 W (4× 1 GHz • 512 MB • 16 GB)</span>
+                <span class="text-cyan-300 shrink-0">2. Vision &amp; Local HMI:</span>
+                <span class="text-white sm:text-right">Pi Zero 2 W + 3.5" SPI Touch LCD (480×320 HUD)</span>
               </div>
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 sm:gap-2">
                 <span class="text-emerald-300 shrink-0">3. Motion Controller:</span>
@@ -345,10 +345,16 @@
                 <td>Zero added cycle delay per re-scan; handles bumped &amp; touching caps</td>
               </tr>
               <tr>
+                <td class="font-bold text-white">Local HMI Display</td>
+                <td class="font-mono text-xs text-slate-400">Headless (USB serial debug console)</td>
+                <td class="font-mono text-xs text-cyan-300">3.5" SPI Touch LCD V3.0 (480×320 Native RGB565 HUD on OS Lite)</td>
+                <td>Live cap map, animated gantry/gripper &amp; touch Re-Arm</td>
+              </tr>
+              <tr>
                 <td class="font-bold text-white">Mega 2560 Link &amp; Shifter</td>
                 <td class="font-mono text-xs">Teensy TX1/RX1 ⇄ 3.3V/5V Shifter ⇄ Mega Serial1</td>
-                <td class="font-mono text-xs">Pi GPIO 14/15 ⇄ 3.3V/5V Shifter ⇄ Mega Serial1</td>
-                <td>100% pin-compatible wire protocol (<code class="text-cyan-300">packet_protocol.h</code>)</td>
+                <td class="font-mono text-xs">Pi Micro-USB OTG → CH9102/CP2102 ⇄ 3.3V/5V Shifter ⇄ Mega Serial1</td>
+                <td>Leaves GPIO 1–26 free for 3.5" LCD; 100% <code class="text-cyan-300">packet_protocol.h</code> parity</td>
               </tr>
             </tbody>
           </table>
