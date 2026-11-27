@@ -12,6 +12,7 @@
 [![Research Paper PDF](https://img.shields.io/badge/Research_Paper-CVPR_PDF-6366f1?style=for-the-badge&logo=latex&logoColor=white)](research_paper/CapSorter_Research_Paper.pdf)
 [![Hardware Bring-Up Guide](https://img.shields.io/badge/Bring--Up_Guide-Stages_0--8-00d2ff?style=for-the-badge&logo=checklist&logoColor=white)](firmware/HARDWARE_BRINGUP_GUIDE.md)
 [![Technical Report PDF](https://img.shields.io/badge/Technical_Report-12--Page_PDF-10b981?style=for-the-badge&logo=adobeacrobatreader&logoColor=white)](website/Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)
+[![License: MIT](https://img.shields.io/badge/License-MIT-f59e0b?style=for-the-badge)](LICENSE)
 
 </div>
 
@@ -35,7 +36,7 @@ The system operates **100% offline** without external laptops, Wi-Fi, or cloud c
 - **Version 1 ([`website/v1.html`](website/v1.html))**: **Teensy 4.1 + ESP32-CAM (OV2640) + Arduino Mega 2560** — Bare-metal C++ dual-MCU + dedicated UART camera streamer architecture.
 - **Version 2 ([`website/v2.html`](website/v2.html))**: **Raspberry Pi Zero 2 W (16 GB microSD) + 3.5" SPI Touch LCD (480×320 Native HUD) + 8MP Sony IMX219 160° CSI Camera + Arduino Mega 2560** — Consolidated offline Linux + Python OpenCV vision SBC with local framebuffer HMI, bridged over Micro-USB OTG → CH9102/CP2102 USB-to-TTL → 3.3V/5V level shifter to deterministic real-time Mega motion control.
 
-> **Engineering Status:** Pre-validation engineering firmware and technical documentation. Static review fixes, full Mega+Pi+LCD end-to-end SIL simulations, and **28 automated validation test cases** are verified in [`firmware/tests/test_validation.py`](firmware/tests/test_validation.py). Follow the staged bench manual in [`firmware/HARDWARE_BRINGUP_GUIDE.md`](firmware/HARDWARE_BRINGUP_GUIDE.md) (Stages 0–8) before enabling autonomous motion.
+> **Engineering Status:** Pre-validation engineering firmware and technical documentation. Static review fixes, full Mega+Pi+LCD end-to-end SIL simulations, and **36 automated validation test cases** are verified in [`firmware/tests/test_validation.py`](firmware/tests/test_validation.py). Follow the staged bench manual in [`firmware/HARDWARE_BRINGUP_GUIDE.md`](firmware/HARDWARE_BRINGUP_GUIDE.md) (Stages 0–8) before enabling autonomous motion.
 
 ---
 
@@ -250,3 +251,11 @@ python -m unittest discover -s firmware/tests -v
 ## 👥 Credits
 - **Designed & Engineered by:** Neil Shettigar, Kahan, and Shourya
 - **Lead Embedded Architecture, Firmware & Documentation:** Neil Shettigar
+
+---
+
+## 📄 License
+
+This project is released under the **MIT License** — see [`LICENSE`](LICENSE) for full terms (`Copyright (c) 2026 Neil Shettigar, Kahan, and Shourya`). Third-party firmware and software dependencies remain under their respective upstream licenses.
+
+- **Launch Video Music (`brag-output/`):** *"Happy Beats / Business Moves Vol. 12"* by **Sascha Ende** ([ende.app](https://ende.app/en)), licensed under **CC BY 4.0** (not covered by the repository's MIT license).
