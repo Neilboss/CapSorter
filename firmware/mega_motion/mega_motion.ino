@@ -71,12 +71,20 @@
 #define PWM_GRIP_OPEN     210    // ~36 mm jaw gap (open)
 #define PWM_GRIP_CLOSE    385    // ~26 mm jaw gap (clamped on 28-32mm cap)
 
-// Safety, Settle & Watchdog Timeouts
-// Worst-case X homing: 370 mm / (800 / 40 = 20 mm/s) = 18.5 s -> 30 s timeout (~1.6x margin).
-#define BIN_SETTLE_MS        120UL  // Stationary XY settle at bin (Z raised) before bin-side camera shutter
-#define COMMS_TIMEOUT_MS    1200UL  // 1.2 s without 0xF0 heartbeat triggers fail-safe halt
-#define HOMING_TIMEOUT_MS  30000UL  // 30.0 s max homing seek duration
-#define BACKOFF_TIMEOUT_MS  3000UL  // 3.0 s max duration for pre-check / switch-release backoff
+// Safety, Homing Bounds, Debounce & Watchdog Timeouts
+// Bounded homing seek: X <= 395 mm (370 + 25 mm margin), Y <= 325 mm (300 + 25 mm margin).
+// Worst-case X seek duration: 395 mm / (800 / 40 = 20 mm/s) = 19.75 s -> derived 23 s timeout.
+#define HOMING_SEEK_MARGIN_MM   25.0f
+#define MAX_HOMING_SEEK_X_MM    (MAX_TRAVEL_X_MM + HOMING_SEEK_MARGIN_MM)
+#define MAX_HOMING_SEEK_Y_MM    (MAX_TRAVEL_Y_MM + HOMING_SEEK_MARGIN_MM)
+#define MAX_HOMING_SEEK_X_STEPS ((long)(MAX_HOMING_SEEK_X_MM * STEPS_PER_MM_X))
+#define MAX_HOMING_SEEK_Y_STEPS ((long)(MAX_HOMING_SEEK_Y_MM * STEPS_PER_MM_Y))
+#define ESTOP_DEBOUNCE_MS        4UL  // Continuous active duration before software fault latch (Pole 1 cuts 12V)
+#define LIMIT_DEBOUNCE_MS        8UL  // Continuous open-circuit duration rejecting contact bounce & EMI
+#define BIN_SETTLE_MS          120UL  // Stationary XY settle at bin (Z raised) before bin-side camera shutter
+#define COMMS_TIMEOUT_MS      1200UL  // 1.2 s without 0xF0 heartbeat triggers fail-safe halt
+#define HOMING_TIMEOUT_MS    23000UL  // Derived from bounded X seek (19.75 s) + 3.25 s margin
+#define BACKOFF_TIMEOUT_MS    3000UL  // 3.0 s max duration for pre-check / switch-release backoff
 
 AccelStepper stepperX(AccelStepper::DRIVER, PIN_X_STEP, PIN_X_DIR);
 AccelStepper stepperY(AccelStepper::DRIVER, PIN_Y_STEP, PIN_Y_DIR);
@@ -111,14 +119,17 @@ CapTarget     batchQueue[MAX_BATCH_CAPS];
 CapTarget     currentCap;
 uint8_t       batchTotal        = 0;
 uint8_t       currentIdx        = 0;
-bool          closedLoopMode    = false;
-bool          isHomed           = false;
-bool          hasInFlightCap    = false;
-bool          commsFaultLatched = false;
-uint8_t       limitFaultCount   = 0;
-uint8_t       estopFaultCount   = 0;
-unsigned long stateTimerMs      = 0;
-unsigned long lastHeartbeatMs   = 0;
+bool          closedLoopMode        = false;
+bool          isHomed               = false;
+bool          hasInFlightCap        = false;
+bool          capPossessionVerified = false;
+bool          commsFaultLatched     = false;
+uint8_t       limitFaultCount       = 0;
+uint8_t       estopFaultCount       = 0;
+unsigned long limitOpenSinceMs      = 0;
+unsigned long estopHighSinceMs      = 0;
+unsigned long stateTimerMs          = 0;
+unsigned long lastHeartbeatMs       = 0;
 
 bool isEstopActive() {
   return digitalRead(PIN_ESTOP) == HIGH;
@@ -145,12 +156,22 @@ bool isAnyOvertravelLimitOpen() {
   return false;
 }
 
-bool isZRetractedSafeForXY() {
+bool isZSafeForXYMotion() {
 #if !Z_LIMIT_IS_OVERTRAVEL
-  // In retracted-confirmation mode, NC switch opens (HIGH) when Z reaches top stop
+  // Retracted-confirmation mode: NC switch opens (HIGH) when Z physically reaches top retracted stop
   return digitalRead(PIN_Z_HOME) == HIGH;
 #else
+  // Overtravel-only mode: verifies Pin 24 overtravel circuit is intact/closed (LOW);
+  // NOTE: does NOT physically prove the Z servo reached its raised position.
   return !isAxisLimitOpen(PIN_Z_HOME);
+#endif
+}
+
+const __FlashStringHelper *zUnsafeReason() {
+#if !Z_LIMIT_IS_OVERTRAVEL
+  return F("Z-axis retracted-home switch not confirmed before XY travel");
+#else
+  return F("Z overtravel circuit open before XY travel (overtravel-only mode)");
 #endif
 }
 
@@ -221,11 +242,12 @@ void triggerHardFault(const __FlashStringHelper *reason) {
   stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Disable stepper coils immediately
   digitalWrite(PIN_SERVO_OE, HIGH);   // Disable PCA9685 PWM outputs (no commanded fault motion)
-  closedLoopMode    = false;
-  isHomed           = false;
-  hasInFlightCap    = false;
-  batchTotal        = 0;
-  currentIdx        = 0;
+  closedLoopMode        = false;
+  isHomed               = false;
+  hasInFlightCap        = false;
+  capPossessionVerified = false;
+  batchTotal            = 0;
+  currentIdx            = 0;
   currentState      = STATE_HARD_FAULT;
   Serial1.write(CMD_HARD_FAULT);
   Serial.print(F("[HARD_FAULT] "));
@@ -245,15 +267,18 @@ bool waitServicedDelayMs(unsigned long durationMs) {
 }
 
 void homeAxes() {
-  currentState      = STATE_HOMING;
-  closedLoopMode    = false;
-  isHomed           = false;
-  hasInFlightCap    = false;
-  commsFaultLatched = false;
-  limitFaultCount   = 0;
-  estopFaultCount   = 0;
-  batchTotal        = 0;
-  currentIdx        = 0;
+  currentState          = STATE_HOMING;
+  closedLoopMode        = false;
+  isHomed               = false;
+  hasInFlightCap        = false;
+  capPossessionVerified = false;
+  commsFaultLatched     = false;
+  limitFaultCount       = 0;
+  estopFaultCount       = 0;
+  limitOpenSinceMs      = 0;
+  estopHighSinceMs      = 0;
+  batchTotal            = 0;
+  currentIdx            = 0;
 
   // 0. Refuse homing if hardwired E-stop auxiliary contact is active or Z overtravel is open
   if (isEstopActive()) {
@@ -273,8 +298,8 @@ void homeAxes() {
   digitalWrite(PIN_SERVO_OE, LOW);    // Enable PCA9685 outputs after latching safe PWM
   if (!waitServicedDelayMs(450UL)) return;
 
-  if (!isZRetractedSafeForXY()) {
-    triggerHardFault(F("Z-axis did not confirm retracted safe state before XY homing"));
+  if (!isZSafeForXYMotion()) {
+    triggerHardFault(zUnsafeReason());
     return;
   }
 
@@ -300,6 +325,12 @@ void homeAxes() {
         triggerHardFault(F("E-Stop triggered during pre-homing backoff"));
         return;
       }
+#if ENABLE_MAX_ENDSTOPS
+      if (isAxisLimitOpen(PIN_X_MAX) || isAxisLimitOpen(PIN_Y_MAX)) {
+        triggerHardFault(F("Positive-end limit tripped during pre-homing backoff"));
+        return;
+      }
+#endif
       if (millis() - preStart > BACKOFF_TIMEOUT_MS) {
         triggerHardFault(F("Pre-homing backoff timeout"));
         return;
@@ -315,7 +346,10 @@ void homeAxes() {
     }
   }
 
-  // 3. Seek X & Y Normally-Closed home switches at 20 mm/s with 30 s worst-case timeout
+  // 3. Step- & time-bounded seek to X & Y Normally-Closed home switches at 20 mm/s
+  //    Guards against missing switches or belt slip exceeding MAX_TRAVEL + 25 mm margin.
+  stepperX.setCurrentPosition(0);
+  stepperY.setCurrentPosition(0);
   unsigned long homeStartMs = millis();
   while (!isAxisLimitOpen(PIN_X_HOME) || !isAxisLimitOpen(PIN_Y_HOME)) {
     if (isEstopActive()) {
@@ -328,8 +362,16 @@ void homeAxes() {
       return;
     }
 #endif
+    if (labs(stepperX.currentPosition()) > MAX_HOMING_SEEK_X_STEPS) {
+      triggerHardFault(F("Homing X seek exceeded MAX_HOMING_SEEK_X_MM (395 mm): switch/belt fault"));
+      return;
+    }
+    if (labs(stepperY.currentPosition()) > MAX_HOMING_SEEK_Y_STEPS) {
+      triggerHardFault(F("Homing Y seek exceeded MAX_HOMING_SEEK_Y_MM (325 mm): switch/belt fault"));
+      return;
+    }
     if (millis() - homeStartMs > HOMING_TIMEOUT_MS) {
-      triggerHardFault(F("Homing seek timeout (>30s): stall, belt slip, or switch failure"));
+      triggerHardFault(F("Homing seek timeout (>23s): stall, belt slip, or switch failure"));
       return;
     }
     if (!isAxisLimitOpen(PIN_X_HOME)) {
@@ -445,8 +487,8 @@ void pollVisionHostPackets() {
         Serial1.write(CMD_BATCH_NACK);
         continue;
       }
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before clear-FOV park"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
       closedLoopMode  = true;
@@ -463,8 +505,8 @@ void pollVisionHostPackets() {
         Serial1.write(CMD_BATCH_NACK);
         continue;
       }
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before session finish park"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
       closedLoopMode  = false;
@@ -499,19 +541,20 @@ void pollVisionHostPackets() {
         return;
       }
 
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before single-target start"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
 
       // Valid closed-loop target! Move directly from current pose (0,0 or bin) to cap
-      closedLoopMode    = true;
-      batchTotal        = 1;
-      currentIdx        = 0;
-      currentCap        = rxCap;
-      hasInFlightCap    = false;
-      commsFaultLatched = false;
-      lastHeartbeatMs   = millis();
+      closedLoopMode        = true;
+      batchTotal            = 1;
+      currentIdx            = 0;
+      currentCap            = rxCap;
+      hasInFlightCap        = false;
+      capPossessionVerified = false;
+      commsFaultLatched     = false;
+      lastHeartbeatMs       = millis();
       Serial1.write(CMD_BATCH_ACK);
 
       moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
@@ -555,18 +598,19 @@ void pollVisionHostPackets() {
         }
       }
 
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before batch start"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
 
       // Valid legacy batch received! Store locally & acknowledge
-      closedLoopMode    = false;
-      batchTotal        = hdr.totalCaps;
-      currentIdx        = 0;
-      hasInFlightCap    = false;
-      commsFaultLatched = false;
-      lastHeartbeatMs   = millis();
+      closedLoopMode        = false;
+      batchTotal            = hdr.totalCaps;
+      currentIdx            = 0;
+      hasInFlightCap        = false;
+      capPossessionVerified = false;
+      commsFaultLatched     = false;
+      lastHeartbeatMs       = millis();
       Serial1.write(CMD_BATCH_ACK);
 
       // Start Step 01 on first target cap
@@ -580,25 +624,36 @@ void pollVisionHostPackets() {
 void checkRuntimeSafetyInputs() {
   if (currentState == STATE_HOMING || currentState == STATE_HARD_FAULT) return;
 
-  // Priority 1: Auxiliary NC E-Stop contact (2 consecutive samples)
+  unsigned long nowMs = millis();
+
+  // Priority 1: Auxiliary NC E-Stop contact (timed persistence >= ESTOP_DEBOUNCE_MS + >= 2 samples)
+  // Note: Pole 1 already cuts 12V actuator power directly in hardware independent of loop timing.
   if (isEstopActive()) {
-    estopFaultCount++;
-    if (estopFaultCount >= 2) {
+    if (estopFaultCount == 0) {
+      estopHighSinceMs = nowMs;
+    }
+    if (estopFaultCount < 255) estopFaultCount++;
+    if (estopFaultCount >= 2 && (nowMs - estopHighSinceMs >= ESTOP_DEBOUNCE_MS)) {
       triggerHardFault(F("Physical E-Stop auxiliary contact open"));
       return;
     }
   } else {
-    estopFaultCount = 0;
+    estopFaultCount  = 0;
+    estopHighSinceMs = 0;
   }
 
-  // Priority 2: Polled NC limit switches for X, Y, and Z (3-sample debounce)
+  // Priority 2: Polled NC limit switches for X, Y, and Z (timed persistence >= LIMIT_DEBOUNCE_MS + >= 3 samples)
   if (isAnyOvertravelLimitOpen()) {
-    limitFaultCount++;
-    if (limitFaultCount >= 3) {
+    if (limitFaultCount == 0) {
+      limitOpenSinceMs = nowMs;
+    }
+    if (limitFaultCount < 255) limitFaultCount++;
+    if (limitFaultCount >= 3 && (nowMs - limitOpenSinceMs >= LIMIT_DEBOUNCE_MS)) {
       triggerHardFault(F("Runtime X/Y/Z NC limit switch open or broken wire"));
     }
   } else {
-    limitFaultCount = 0;
+    limitFaultCount  = 0;
+    limitOpenSinceMs = 0;
   }
 }
 
@@ -616,7 +671,7 @@ void executeSafeCommsLossPolicy() {
   Serial1.write(CMD_RECOVERY_HALT);
 
   // If a single scanned cap has already been dispatched and is currently in its
-  // pick-and-place cycle, finish depositing ONLY that one cap into its bin,
+  // active pick-and-place cycle, finish ONLY that active commanded cycle,
   // then park cleanly at (0, 0) via STATE_FAILSAFE_PARKING and latch halt.
   // (Hardwired E-stop Pin 25 and NC X/Y/Z limits remain active at all times.)
   bool inActiveCapCycle = (currentState == STATE_MOVING_TO_CAP ||
@@ -630,26 +685,31 @@ void executeSafeCommsLossPolicy() {
                            currentState == STATE_RETRACT_Z);
   if (inActiveCapCycle) {
     batchTotal = 0; // Do not start any further queued caps after this one
-    Serial.println(F("[COMMS_LOSS] Finishing current scanned cap into bin, then parking at (0,0) to halt."));
+#if HAS_GRIP_SENSOR
+    Serial.println(F("[COMMS_LOSS] Finishing active verified pick-place cycle, then parking at (0,0) to halt."));
+#else
+    Serial.println(F("[COMMS_LOSS] Finishing active commanded pick-place cycle (cap possession unverified without HAS_GRIP_SENSOR), then parking at (0,0) to halt."));
+#endif
     return;
   }
 
   // No cap currently active (e.g., awaiting next target at bin or parking):
-  // Confirm Z is safely retracted, park cleanly at (0, 0), disable steppers,
+  // Confirm Z safety state, park cleanly at (0, 0), disable steppers,
   // and latch STATE_FAILSAFE_HALT until explicit CMD_REARM_HOME + re-home.
   pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
   pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
-  if (!isZRetractedSafeForXY()) {
-    triggerHardFault(F("Z-axis not retracted on comms-loss park"));
+  if (!isZSafeForXYMotion()) {
+    triggerHardFault(zUnsafeReason());
     return;
   }
-  closedLoopMode = false;
-  hasInFlightCap = false;
-  batchTotal     = 0;
-  currentIdx     = 0;
+  closedLoopMode        = false;
+  hasInFlightCap        = false;
+  capPossessionVerified = false;
+  batchTotal            = 0;
+  currentIdx            = 0;
   moveMachineToMm(0.0f, 0.0f);
-  currentState   = STATE_FAILSAFE_PARKING;
-  Serial.println(F("[COMMS_LOSS] No active cap; parking at (0,0) then latching fail-safe halt."));
+  currentState          = STATE_FAILSAFE_PARKING;
+  Serial.println(F("[COMMS_LOSS] No active cycle; parking at (0,0) then latching fail-safe halt."));
 }
 
 void executeMotionStateMachine() {
@@ -682,20 +742,52 @@ void executeMotionStateMachine() {
     // Step 03: Clamp Gripper jaws (~26 mm)
     case STATE_GRIP_CAP:
       if (millis() - stateTimerMs >= 300) {
-        hasInFlightCap = true; // Commanded grip complete (unverified unless HAS_GRIP_SENSOR == 1)
+#if HAS_GRIP_SENSOR
+        hasInFlightCap = true;
+        if (isCapVerifiedHeld()) {
+          capPossessionVerified = true;
+          pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+          stateTimerMs = millis();
+          currentState = STATE_LIFT_Z;
+        } else {
+          // Verified empty grasp: open jaws, retract Z, skip false bin drop so vision retries/quarantines
+          hasInFlightCap        = false;
+          capPossessionVerified = false;
+          pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+          pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+          stateTimerMs = millis();
+          currentState = STATE_RETRACT_Z;
+          Serial.println(F("[GRIP_MISS] Cap-presence sensor not triggered; skipping bin drop."));
+        }
+#else
+        hasInFlightCap        = true; // Commanded grip cycle active (physical cap possession UNVERIFIED)
+        capPossessionVerified = false;
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
         stateTimerMs = millis();
         currentState = STATE_LIFT_Z;
+#endif
       }
       break;
 
     // Step 04: Lift Z linkage back to 0 mm overhead clearance
     case STATE_LIFT_Z:
       if (millis() - stateTimerMs >= 350) {
-        if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F("Z-axis failed retracted check before bin traverse"));
+        if (!isZSafeForXYMotion()) {
+          triggerHardFault(zUnsafeReason());
           return;
         }
+#if HAS_GRIP_SENSOR
+        if (!isCapVerifiedHeld()) {
+          // Cap slipped during Z lift: open jaws and abort bin transit cleanly
+          hasInFlightCap        = false;
+          capPossessionVerified = false;
+          pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+          stateTimerMs = millis();
+          currentState = STATE_RETRACT_Z;
+          Serial.println(F("[GRIP_SLIP] Cap-presence lost during Z lift; aborting bin transit."));
+          return;
+        }
+#endif
         uint8_t binId = currentCap.targetBinId;
         if (binId < 1 || binId > 4) binId = 1;
         moveMachineToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
@@ -741,7 +833,8 @@ void executeMotionStateMachine() {
     // Step 07: Release Gripper jaws (cap drops into bin)
     case STATE_RELEASE_CAP:
       if (millis() - stateTimerMs >= 250) {
-        hasInFlightCap = false;
+        hasInFlightCap        = false;
+        capPossessionVerified = false;
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
         stateTimerMs = millis();
         currentState = STATE_RETRACT_Z;
@@ -751,8 +844,8 @@ void executeMotionStateMachine() {
     // Step 08: Retract Z to 0 mm, emit progress pulse, await next closed-loop target or finish
     case STATE_RETRACT_Z:
       if (millis() - stateTimerMs >= 300) {
-        if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F("Z-axis failed retracted check after bin release"));
+        if (!isZSafeForXYMotion()) {
+          triggerHardFault(zUnsafeReason());
           return;
         }
 
@@ -811,11 +904,12 @@ void executeMotionStateMachine() {
     case STATE_FAILSAFE_PARKING:
       if (isGantryAtTarget()) {
         digitalWrite(PIN_STEPPER_EN, HIGH);
-        closedLoopMode = false;
-        isHomed        = false;
-        hasInFlightCap = false;
-        batchTotal     = 0;
-        currentIdx     = 0;
+        closedLoopMode        = false;
+        isHomed               = false;
+        hasInFlightCap        = false;
+        capPossessionVerified = false;
+        batchTotal            = 0;
+        currentIdx            = 0;
         currentState   = STATE_FAILSAFE_HALT;
         Serial1.write(CMD_RECOVERY_HALT);
         Serial.println(F("[COMMS_LOSS] Parked at (0,0) & halted. Explicit re-arm & re-home required."));
@@ -856,6 +950,12 @@ void setup() {
   if (TOOL_OFFSET_X_MM == 0.0f && TOOL_OFFSET_Y_MM == 0.0f) {
     Serial.println(F("[WARN] TOOL_OFFSET is (0,0) placeholder; measure physical alignment on bench."));
   }
+#if Z_LIMIT_IS_OVERTRAVEL
+  Serial.println(F("[INFO] Z_LIMIT_IS_OVERTRAVEL=1: Pin 24 verifies Z overtravel-circuit health only (not Z retracted position)."));
+#endif
+#if !HAS_GRIP_SENSOR
+  Serial.println(F("[INFO] HAS_GRIP_SENSOR=0: Cap possession is commanded/unverified until a grip sensor is fitted."));
+#endif
 
   Wire.begin();
   pca.begin();

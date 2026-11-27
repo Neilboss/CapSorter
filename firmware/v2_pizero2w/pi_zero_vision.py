@@ -80,12 +80,14 @@ MISSED_PICK_RADIUS_MM     = 14.0   # Same-color cap still within 14 mm after pic
 MAX_PICK_RETRIES          = 3      # Quarantine stuck/ungraspable cap zone after 3 failed attempts
 MAX_SESSION_CYCLES        = 200    # Hard safety bound on closed-loop pick cycles per session
 
-# Supervision Timeouts (dynamic batch ceiling + per-cap stall timer)
-HEARTBEAT_INTERVAL_S  = 0.25
-READY_POLL_INTERVAL_S = 0.5
-MAX_SINGLE_CAP_S      = 25.0  # Reset whenever Mega emits CMD_CAP_PROGRESS / CMD_AWAIT_NEXT
-PER_CAP_BUDGET_S      = 18.0  # Worst-case cap cycle + margin
-BATCH_OVERHEAD_S      = 30.0  # Parking & handshake margin
+# Supervision Timeouts (dynamic batch ceiling + per-cap stall timer + guarded vision heartbeat)
+HEARTBEAT_INTERVAL_S     = 0.25
+READY_POLL_INTERVAL_S    = 0.5
+MAX_SINGLE_CAP_S         = 25.0  # Reset whenever Mega emits CMD_CAP_PROGRESS / CMD_AWAIT_NEXT
+PER_CAP_BUDGET_S         = 18.0  # Worst-case cap cycle + margin
+BATCH_OVERHEAD_S         = 30.0  # Parking & handshake margin
+MAX_VISION_STAGE_STALL_S = 3.5   # Hard liveness budget: if vision freezes >3.5s, stop heartbeating so Mega halts!
+BIN_DROP_BUDGET_MS       = 800.0 # Warn when capture + OpenCV exceeds bin-drop parallel hiding window
 
 DEFAULT_CALIB_PATHS = {
     "picamera2_imx219": "/home/pi/capsorter/calibration_csi_imx219.npz",
@@ -111,6 +113,82 @@ HSV_RANGES = {
 
 class CalibrationError(RuntimeError):
     """Raised when camera calibration is missing, malformed, unverified, or mismatched."""
+
+
+class _GuardedHeartbeatSupervisor:
+    """
+    Dedicated guarded background heartbeat thread for V2 closed-loop sessions.
+
+    Prevents transient camera capture or OpenCV spikes (>1.2 s) from spuriously
+    tripping Mega's UART comms watchdog while refusing blind heartbeating:
+      - The main vision thread MUST refresh a bounded liveness deadline before
+        each capture/detect stage (<= max_stall_s, default 3.5 s).
+      - If the main thread genuinely stalls past that deadline, this thread
+        immediately stops sending CMD_HEARTBEAT_PING (0xF0) and sets
+        vision_stalled=True so Mega executes its safe park-and-halt policy.
+      - Any serial I/O failure sets link_lost=True and stops immediately.
+    """
+
+    def __init__(
+        self,
+        controller,
+        interval_s: float = HEARTBEAT_INTERVAL_S,
+        max_stall_s: float = MAX_VISION_STAGE_STALL_S,
+        clock=time.monotonic,
+    ):
+        self.controller = controller
+        self.interval_s = max(0.02, float(interval_s))
+        self.max_stall_s = max(0.1, float(max_stall_s))
+        self.clock = clock
+        self._stop_evt = threading.Event()
+        self._state_lock = threading.Lock()
+        self._liveness_deadline = self.clock() + self.max_stall_s
+        self._thread = None
+        self.vision_stalled = False
+        self.link_lost = False
+        self.pings_sent = 0
+
+    def refresh_liveness(self, budget_s: float = None):
+        budget = self.max_stall_s if budget_s is None else max(0.1, float(budget_s))
+        with self._state_lock:
+            self._liveness_deadline = self.clock() + budget
+
+    def _run(self):
+        while not self._stop_evt.is_set():
+            with self._state_lock:
+                deadline = self._liveness_deadline
+            if self.clock() > deadline:
+                self.vision_stalled = True
+                print(
+                    f"[WATCHDOG] Vision main thread exceeded {self.max_stall_s:.2f}s liveness budget; "
+                    "stopping heartbeat so Mega enters fail-safe halt.",
+                    file=sys.stderr,
+                )
+                self._stop_evt.set()
+                return
+            try:
+                self.controller._uart_write(bytes([CMD_HEARTBEAT_PING]))
+                self.pings_sent += 1
+            except SERIAL_EXCEPTIONS:
+                self.link_lost = True
+                self.controller._close_serial()
+                self._stop_evt.set()
+                return
+            self._stop_evt.wait(self.interval_s)
+
+    def start(self):
+        if self._thread is not None:
+            return
+        self.refresh_liveness()
+        self._stop_evt.clear()
+        self._thread = threading.Thread(target=self._run, name="mega_guarded_heartbeat", daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop_evt.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            self._thread = None
 
 
 def resolve_serial_port(
@@ -873,7 +951,11 @@ class PiZeroVisionController:
                     last_poll_t = now
 
                 while self.uart is not None and self.uart.in_waiting > 0:
-                    resp = self.uart.read(1)[0]
+                    with self._uart_lock:
+                        resp_b = self.uart.read(1) if self.uart is not None else b""
+                    if not resp_b:
+                        break
+                    resp = resp_b[0]
                     if resp == CMD_STATUS_READY:
                         self._emit_hud("READY", {"serial_port": self.resolved_serial_port})
                         return True
@@ -933,7 +1015,11 @@ class PiZeroVisionController:
                 sleep_fn(HEARTBEAT_INTERVAL_S)
 
                 while self.uart is not None and self.uart.in_waiting > 0:
-                    resp = self.uart.read(1)[0]
+                    with self._uart_lock:
+                        resp_b = self.uart.read(1) if self.uart is not None else b""
+                    if not resp_b:
+                        break
+                    resp = resp_b[0]
                     if resp == target_opcode:
                         return "OK"
                     if resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
@@ -952,20 +1038,27 @@ class PiZeroVisionController:
         clock=time.monotonic,
         sleep_fn=time.sleep,
         max_cycles: int = MAX_SESSION_CYCLES,
+        enable_bg_heartbeat: bool = None,
+        max_vision_stall_s: float = MAX_VISION_STAGE_STALL_S,
+        heartbeat_interval_s: float = HEARTBEAT_INTERVAL_S,
     ) -> dict:
         """
         Executes a full closed-loop sorting session:
           1. Captures Scan #0 at unobstructed (0, 0).
           2. Sends one clearance-ranked CapTarget at a time via CMD_PICK_SINGLE (0x5B).
           3. On Mega CMD_SCAN_WINDOW_OPEN (0xA5) at the color bin, captures & analyzes
-             the fresh board IN PARALLEL with the bin drop, updating bumped coordinates
-             and missed-pick retry/quarantine state.
+             the fresh board IN PARALLEL with the bin drop while a guarded background
+             heartbeat thread maintains Mega's 1.2 s UART watchdog (stopping automatically
+             if vision stalls beyond max_vision_stall_s).
           4. On CMD_AWAIT_NEXT (0xA6), immediately dispatches the next cap from the bin,
              or executes CMD_PARK_FOR_SCAN (0xB5) for an unobstructed clear-FOV check
              before terminating cleanly with CMD_FINISH_SESSION (0xB6).
         """
         if self.uart is None:
-            return {"status": "NACK", "picked": 0, "scans": 0, "quarantined": [], "out_of_bounds_seen": 0}
+            return {
+                "status": "NACK", "picked": 0, "scans": 0, "quarantined": [],
+                "out_of_bounds_seen": 0, "max_vision_ms": 0.0,
+            }
 
         cap_source = capture_fn or self.capture_rectified_frame
         retry_records = []
@@ -973,12 +1066,74 @@ class PiZeroVisionController:
         scans = 0
         picked = 0
         out_of_bounds_seen = 0
+        max_vision_ms = 0.0
+        total_bg_heartbeats = 0
 
-        # Scan #0: Unobstructed full-board scan while parked at (0, 0)
+        use_bg_hb = (
+            (clock is time.monotonic and sleep_fn is time.sleep)
+            if enable_bg_heartbeat is None
+            else bool(enable_bg_heartbeat)
+        )
+        hb_sup = None
+
+        def _stop_hb():
+            nonlocal hb_sup, total_bg_heartbeats
+            if hb_sup is not None:
+                hb_sup.stop()
+                total_bg_heartbeats += hb_sup.pings_sent
+                hb_sup = None
+
+        def _capture_and_detect_timed(occluded_y_mm):
+            nonlocal scans, out_of_bounds_seen, max_vision_ms
+            if hb_sup is not None:
+                hb_sup.refresh_liveness(max_vision_stall_s)
+            t0 = clock()
+            frame_img = cap_source()
+            t1 = clock()
+            scans += 1
+            if hb_sup is not None:
+                hb_sup.refresh_liveness(max_vision_stall_s)
+            else:
+                self._uart_write(bytes([CMD_HEARTBEAT_PING]))
+            detected_caps = self.detect_caps(frame_img, occluded_y_mm=occluded_y_mm)
+            t2 = clock()
+            cap_ms = max(0.0, (t1 - t0) * 1000.0)
+            det_ms = max(0.0, (t2 - t1) * 1000.0)
+            total_ms = cap_ms + det_ms
+            if total_ms > max_vision_ms:
+                max_vision_ms = total_ms
+            if total_ms > BIN_DROP_BUDGET_MS:
+                print(
+                    f"[VISION TIMING] Frame #{scans} took {total_ms:.1f} ms "
+                    f"(capture={cap_ms:.1f} ms, detect={det_ms:.1f} ms > {BIN_DROP_BUDGET_MS:.0f} ms bin budget)",
+                    file=sys.stderr,
+                )
+            out_of_bounds_seen += sum(1 for c in detected_caps if not c.get("in_safe_bounds", True))
+            if hb_sup is not None:
+                hb_sup.refresh_liveness(max_vision_stall_s)
+            return frame_img, detected_caps
+
+        def _make_result(status_str: str) -> dict:
+            active_pings = hb_sup.pings_sent if hb_sup is not None else 0
+            return {
+                "status": status_str,
+                "picked": picked,
+                "scans": scans,
+                "quarantined": quarantined_zones,
+                "out_of_bounds_seen": out_of_bounds_seen,
+                "max_vision_ms": round(max_vision_ms, 2),
+                "bg_heartbeats_sent": total_bg_heartbeats + active_pings,
+            }
+
+        # Scan #0: Unobstructed full-board scan while parked at (0, 0) (Mega is IDLE)
         self._emit_hud("SCAN_INITIAL", {"scans": scans})
+        t0 = clock()
         frame = cap_source()
+        t1 = clock()
         scans += 1
         caps = self.detect_caps(frame, occluded_y_mm=None)
+        t2 = clock()
+        max_vision_ms = max(max_vision_ms, max(0.0, (t2 - t0) * 1000.0))
         out_of_bounds_seen += sum(1 for c in caps if not c.get("in_safe_bounds", True))
         self._emit_hud(
             "SCAN_INITIAL",
@@ -988,29 +1143,28 @@ class PiZeroVisionController:
 
         if next_cap is None:
             self._emit_hud("SESSION_COMPLETE", {"caps": caps, "picked": 0, "scans": scans})
-            return {
-                "status": "COMPLETE",
-                "picked": 0,
-                "scans": scans,
-                "quarantined": quarantined_zones,
-                "out_of_bounds_seen": out_of_bounds_seen,
-            }
+            return _make_result("COMPLETE")
 
         try:
             for _ in range(max_cycles):
+                _stop_hb()
+
                 ack_status = self._send_single_target_with_ack(next_cap, sleep_fn=sleep_fn)
                 if ack_status != "ACK":
                     self._emit_hud(
                         "LINK_LOST" if ack_status == "LINK_LOST" else "FAULT",
                         {"reason": f"DISPATCH {ack_status}"},
                     )
-                    return {
-                        "status": ack_status,
-                        "picked": picked,
-                        "scans": scans,
-                        "quarantined": quarantined_zones,
-                        "out_of_bounds_seen": out_of_bounds_seen,
-                    }
+                    return _make_result(ack_status)
+
+                if use_bg_hb:
+                    hb_sup = _GuardedHeartbeatSupervisor(
+                        self,
+                        interval_s=heartbeat_interval_s,
+                        max_stall_s=max_vision_stall_s,
+                        clock=clock,
+                    )
+                    hb_sup.start()
 
                 last_target = next_cap
                 bin_x, bin_y, _ = BIN_COORDS[last_target["color"]]
@@ -1023,21 +1177,35 @@ class PiZeroVisionController:
                 candidate_next = None
 
                 while not await_received:
-                    self._uart_write(bytes([CMD_HEARTBEAT_PING]))
-                    sleep_fn(HEARTBEAT_INTERVAL_S)
+                    if hb_sup is not None:
+                        hb_sup.refresh_liveness(max_vision_stall_s)
+                        if hb_sup.link_lost:
+                            self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+                            return _make_result("LINK_LOST")
+                        if hb_sup.vision_stalled:
+                            self._emit_hud("FAULT", {"reason": "VISION STALL WATCHDOG"})
+                            return _make_result("VISION_STALL")
+                    else:
+                        self._uart_write(bytes([CMD_HEARTBEAT_PING]))
+                    sleep_fn(heartbeat_interval_s)
 
                     while self.uart is not None and self.uart.in_waiting > 0:
-                        resp = self.uart.read(1)[0]
+                        with self._uart_lock:
+                            resp_b = self.uart.read(1) if self.uart is not None else b""
+                        if not resp_b:
+                            break
+                        resp = resp_b[0]
                         if resp == CMD_SCAN_WINDOW_OPEN and not scanned_at_bin:
                             # Pipelined capture while Mega lowers/drops/retracts at color bin
                             self._emit_hud("SCAN_WINDOW_OPEN", {"bin_y": bin_y})
-                            fresh = cap_source()
-                            scans += 1
+                            fresh, fresh_caps = _capture_and_detect_timed(occluded_y_mm=bin_y)
                             scanned_at_bin = True
-                            self._uart_write(bytes([CMD_HEARTBEAT_PING]))
-
-                            fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
-                            out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
+                            if hb_sup is not None and hb_sup.vision_stalled:
+                                self._emit_hud("FAULT", {"reason": "VISION STALL WATCHDOG"})
+                                return _make_result("VISION_STALL")
+                            if hb_sup is not None and hb_sup.link_lost:
+                                self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+                                return _make_result("LINK_LOST")
                             retry_evaluated = self._update_retry_state(
                                 last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
                             )
@@ -1061,32 +1229,22 @@ class PiZeroVisionController:
                             break
                         elif resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
                             self._emit_hud("FAULT", {"reason": f"MEGA FAULT 0x{resp:02X}"})
-                            return {
-                                "status": "FAULT",
-                                "picked": picked,
-                                "scans": scans,
-                                "quarantined": quarantined_zones,
-                                "out_of_bounds_seen": out_of_bounds_seen,
-                            }
+                            return _make_result("FAULT")
 
                     if not await_received and (clock() - cycle_start > MAX_SINGLE_CAP_S):
                         print("[TIMEOUT] Mega stopped responding during closed-loop cap cycle.", file=sys.stderr)
                         self._emit_hud("TIMEOUT", {"reason": "CYCLE TIMEOUT"})
-                        return {
-                            "status": "TIMEOUT",
-                            "picked": picked,
-                            "scans": scans,
-                            "quarantined": quarantined_zones,
-                            "out_of_bounds_seen": out_of_bounds_seen,
-                        }
+                        return _make_result("TIMEOUT")
 
                 # Fallback capture if Mega signaled AWAIT_NEXT without prior SCAN_WINDOW_OPEN
                 if not scanned_at_bin:
-                    fresh = cap_source()
-                    scans += 1
-                    self._uart_write(bytes([CMD_HEARTBEAT_PING]))
-                    fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
-                    out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
+                    fresh, fresh_caps = _capture_and_detect_timed(occluded_y_mm=bin_y)
+                    if hb_sup is not None and hb_sup.vision_stalled:
+                        self._emit_hud("FAULT", {"reason": "VISION STALL WATCHDOG"})
+                        return _make_result("VISION_STALL")
+                    if hb_sup is not None and hb_sup.link_lost:
+                        self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+                        return _make_result("LINK_LOST")
                     retry_evaluated = self._update_retry_state(
                         last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
                     )
@@ -1111,6 +1269,7 @@ class PiZeroVisionController:
 
                 # Honor operator LCD PAUSE cleanly between caps by parking at (0,0) into STATE_IDLE
                 if self.paused:
+                    _stop_hb()
                     self._emit_hud("FINISH_SESSION", {})
                     self._uart_write(bytes([CMD_FINISH_SESSION]))
                     done_res = self._await_opcode_with_heartbeat(
@@ -1123,13 +1282,7 @@ class PiZeroVisionController:
                         ),
                         {"picked": picked, "scans": scans, "reason": final_status},
                     )
-                    return {
-                        "status": final_status,
-                        "picked": picked,
-                        "scans": scans,
-                        "quarantined": quarantined_zones,
-                        "out_of_bounds_seen": out_of_bounds_seen,
-                    }
+                    return _make_result(final_status)
 
                 if candidate_next is not None:
                     next_cap = candidate_next
@@ -1138,6 +1291,8 @@ class PiZeroVisionController:
                 # 0 graspable caps visible outside bridge band -> clear-FOV verification park at (0,0)
                 self._emit_hud("PARK_FOR_SCAN", {})
                 self._uart_write(bytes([CMD_PARK_FOR_SCAN]))
+                if hb_sup is not None:
+                    hb_sup.refresh_liveness(MAX_SINGLE_CAP_S)
                 park_res = self._await_opcode_with_heartbeat(
                     CMD_AWAIT_NEXT, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
                 )
@@ -1146,20 +1301,16 @@ class PiZeroVisionController:
                         "LINK_LOST" if park_res == "LINK_LOST" else "FAULT",
                         {"reason": f"PARK {park_res}"},
                     )
-                    return {
-                        "status": park_res,
-                        "picked": picked,
-                        "scans": scans,
-                        "quarantined": quarantined_zones,
-                        "out_of_bounds_seen": out_of_bounds_seen,
-                    }
+                    return _make_result(park_res)
 
                 self._emit_hud("AWAIT_NEXT", {"at_xy": (0.0, 0.0)})
-                verify_frame = cap_source()
-                scans += 1
-                self._uart_write(bytes([CMD_HEARTBEAT_PING]))
-                verify_caps = self.detect_caps(verify_frame, occluded_y_mm=None)
-                out_of_bounds_seen += sum(1 for c in verify_caps if not c.get("in_safe_bounds", True))
+                verify_frame, verify_caps = _capture_and_detect_timed(occluded_y_mm=None)
+                if hb_sup is not None and hb_sup.vision_stalled:
+                    self._emit_hud("FAULT", {"reason": "VISION STALL WATCHDOG"})
+                    return _make_result("VISION_STALL")
+                if hb_sup is not None and hb_sup.link_lost:
+                    self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+                    return _make_result("LINK_LOST")
                 if not retry_evaluated:
                     self._update_retry_state(
                         last_target, verify_caps, retry_records, quarantined_zones, occluded_y_mm=None
@@ -1182,6 +1333,7 @@ class PiZeroVisionController:
                     continue
 
                 # Confirmed empty (or only quarantined/out-of-bounds caps remain) -> finish cleanly
+                _stop_hb()
                 self._emit_hud("FINISH_SESSION", {})
                 self._uart_write(bytes([CMD_FINISH_SESSION]))
                 done_res = self._await_opcode_with_heartbeat(
@@ -1194,39 +1346,24 @@ class PiZeroVisionController:
                     ),
                     {"caps": verify_caps, "picked": picked, "scans": scans, "reason": final_status},
                 )
-                return {
-                    "status": final_status,
-                    "picked": picked,
-                    "scans": scans,
-                    "quarantined": quarantined_zones,
-                    "out_of_bounds_seen": out_of_bounds_seen,
-                }
+                return _make_result(final_status)
 
             # Reached hard cycle limit -> park safely
+            _stop_hb()
             self._emit_hud("FINISH_SESSION", {})
             self._uart_write(bytes([CMD_FINISH_SESSION]))
             self._await_opcode_with_heartbeat(
                 CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
             )
             self._emit_hud("SESSION_COMPLETE", {"picked": picked, "scans": scans})
-            return {
-                "status": "MAX_CYCLES",
-                "picked": picked,
-                "scans": scans,
-                "quarantined": quarantined_zones,
-                "out_of_bounds_seen": out_of_bounds_seen,
-            }
+            return _make_result("MAX_CYCLES")
         except SERIAL_EXCEPTIONS as exc:
             print(f"[UART] USB-TTL link dropped mid-session: {exc}", file=sys.stderr)
             self._close_serial()
             self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
-            return {
-                "status": "LINK_LOST",
-                "picked": picked,
-                "scans": scans,
-                "quarantined": quarantined_zones,
-                "out_of_bounds_seen": out_of_bounds_seen,
-            }
+            return _make_result("LINK_LOST")
+        finally:
+            _stop_hb()
 
     def transmit_batch_and_supervise(
         self,
@@ -1272,7 +1409,11 @@ class PiZeroVisionController:
                 sleep_fn(HEARTBEAT_INTERVAL_S)
 
                 while self.uart is not None and self.uart.in_waiting > 0:
-                    resp = self.uart.read(1)[0]
+                    with self._uart_lock:
+                        resp_b = self.uart.read(1) if self.uart is not None else b""
+                    if not resp_b:
+                        break
+                    resp = resp_b[0]
                     if resp == CMD_CAP_PROGRESS:
                         last_progress_t = clock()
                     elif resp == CMD_BATCH_COMPLETE:

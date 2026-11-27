@@ -139,8 +139,9 @@
      - Type `x -10` → X carriage **MUST** move **toward** the X-home switch!
      - Type `y -10` → Y bridge **MUST** move **toward** the Y-home switch!
      - *If an axis moved the wrong way:* turn OFF 12V, unplug that motor connector, reverse one coil pair (or flip the 4-pin motor plug 180°), and re-test `x -10` / `y -10`.
-   - **Step 3B — First Auto-Home:**
-     - Type `home`. Both axes seek their NC home switches at 20 mm/s, back off `3.0 mm`, confirm both switches re-close, and zero at machine `(0.00, 0.00)`.
+   - **Step 3B — First Auto-Home & Safety Interlock Check:**
+     - Before homing, verify safety interlocks: type `dis`, then `go 100 100` (must print `[BLOCKED]`), then `en` (motors must stay stationary — `dis` clears queued targets). Also confirm unhomed relative jogs clamp safely to `±50 mm` (`MAX_UNHOMED_JOG_MM`).
+     - Type `home`. Both axes execute a step- and time-bounded seek (`X ≤ 395 mm`, `Y ≤ 325 mm`, `23 s` timeout) to their NC home switches at 20 mm/s, back off `3.0 mm`, confirm both switches re-close, and zero at machine `(0.00, 0.00)`.
    - **Step 3C — Measure True `STEPS_PER_MM`:**
      - Mark carriage position with tape, type `go 100 0`, measure actual millimeter travel `D_x` with a steel ruler.
      - Repeat `go 0 100`, measure actual travel `D_y`.

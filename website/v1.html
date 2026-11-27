@@ -1947,7 +1947,7 @@
           </div>
           <h3 class="font-bold text-white text-base mb-2">NC Limit Switches &amp; Homing</h3>
           <p class="text-xs text-slate-300 leading-relaxed">
-            Three normally closed (NC) mechanical limit switches monitor X, Y, and Z (Pins 22–24, polled in <code class="text-cyan-300">loop()</code> with 3-sample debounce — Port A has no AVR ISR). Open-circuit or overtravel trips latch <code class="text-cyan-300">STATE_HARD_FAULT</code> and disable <code class="text-cyan-300">STEPPER_EN</code> and <code class="text-cyan-300">SERVO_OE</code>. Measure actual stopping distance on the machine.
+            Three normally closed (NC) mechanical limit switches monitor X, Y, and Z (Pins 22–24, polled in <code class="text-cyan-300">loop()</code> with <code class="text-cyan-300">8 ms</code> timed debounce — Port A has no AVR ISR) alongside step-bounded homing (395 mm X / 325 mm Y, 23 s timeout). Open-circuit or overtravel trips latch <code class="text-cyan-300">STATE_HARD_FAULT</code> and disable <code class="text-cyan-300">STEPPER_EN</code> and <code class="text-cyan-300">SERVO_OE</code>. Measure actual stopping distance on the machine.
           </p>
         </div>
 
@@ -2023,7 +2023,7 @@
 #define FRAME_HEIGHT              240
 #define FRAME_PIXELS              (FRAME_WIDTH * FRAME_HEIGHT)
 #define FRAME_BYTES               (FRAME_PIXELS * 2) // 153,600 bytes RGB565
-#define BFS_QUEUE_SIZE            4096
+#define BFS_QUEUE_SIZE            8192               // 32 KiB ring queue; overflow explicitly rejected
 #define SPLIT_ROI_MAX             160                // Max ROI dim for merged same-color split (25.6 KB DMAMEM)
 
 // Continuous 300x300 mm Open Flat Plywood Workspace &amp; X-Axis Gripper Geometry
@@ -2041,8 +2041,15 @@
 #define CAP_HEIGHT_MM             13.0f   // Nominal cap top height above board plane (mm)
 #define MISSED_PICK_RADIUS_MM     14.0f   // Same-color cap still within 14 mm =&gt; missed attempt
 #define MAX_PICK_RETRIES          3       // Quarantine stuck/unpickable spot after 3 failed attempts
-#define MAX_RETRY_RECORDS         16
+#define MAX_RETRY_RECORDS         MAX_BATCH_CAPS
 #define MAX_SESSION_CYCLES        200
+
+// Optional Physical Operator Re-Arm Pushbutton (active-LOW to GND, INPUT_PULLUP)
+// USB Serial command "REARM\n" is always active regardless of this flag.
+#define ENABLE_V1_REARM_BTN       0
+#define PIN_V1_REARM_BTN          2
+#define V1_REARM_BTN_DEBOUNCE_MS  50UL
+#define MEGA_REARM_WAIT_MS        28000UL // Bounded homing (23 s) + settle margin
 
 // Supervision &amp; Handshake Timeouts
 #define READY_POLL_INTERVAL_MS    500UL
@@ -2107,6 +2114,9 @@ bool      megaFaulted    = false;
 
 RetryZone retryZones[MAX_RETRY_RECORDS];
 uint8_t   retryZoneCount = 0;
+String    usbCmdBuf      = "";
+uint32_t  rearmBtnLowMs  = 0;
+bool      rearmBtnArmed  = true;
 
 // External Sorting Bin Coordinates (mm)
 const float BIN_X_MM[5] = { 0.0f, 355.0f, 355.0f, 355.0f, 355.0f };
@@ -2115,12 +2125,37 @@ const float BIN_Y_MM[5] = { 0.0f,  55.0f, 130.0f, 205.0f, 280.0f };
 enum BatchExecResult : uint8_t {
   EXEC_COMPLETE,
   EXEC_FAULT_HALT,
-  EXEC_TIMEOUT
+  EXEC_TIMEOUT,
+  EXEC_CAPTURE_FAULT
 };
 
 // Solve 3x3 planar homography H (h8 = 1) from 4 fiducial point pairs using
-// 8x8 Gaussian elimination with partial pivoting (returns false if singular).
+// 8x8 Gaussian elimination with partial pivoting (rejects invalid quad geometry or singular matrix).
 bool computeHomography4Pt(const float srcPx[4][2], const float dstMm[4][2], float outH[9]) {
+  // 0. Validate finite bounds, strict convexity, clockwise winding, and TL-&gt;TR-&gt;BR-&gt;BL order
+  double signedArea2 = 0.0;
+  for (int i = 0; i &lt; 4; i++) {
+    double u = srcPx[i][0], v = srcPx[i][1];
+    if (!isfinite(u) || !isfinite(v)) return false;
+    if (u &lt; 0.0 || u &gt;= (double)FRAME_WIDTH || v &lt; 0.0 || v &gt;= (double)FRAME_HEIGHT) return false;
+    int j = (i + 1) % 4;
+    int k = (i + 2) % 4;
+    double e1x = srcPx[j][0] - u;
+    double e1y = srcPx[j][1] - v;
+    double e2x = srcPx[k][0] - srcPx[j][0];
+    double e2y = srcPx[k][1] - srcPx[j][1];
+    double edgeLen = hypot(e1x, e1y);
+    if (edgeLen &lt; 20.0) return false;
+    // In image coords (+u right, +v down), clockwise TL-&gt;TR-&gt;BR-&gt;BL yields positive cross products
+    if ((e1x * e2y - e1y * e2x) &lt;= 0.0) return false;
+    signedArea2 += (u * srcPx[j][1] - srcPx[j][0] * v);
+  }
+  if ((0.5 * signedArea2) &lt; 1000.0) return false;
+  if (!(srcPx[0][0] &lt; srcPx[1][0] &amp;&amp; srcPx[3][0] &lt; srcPx[2][0] &amp;&amp;
+        srcPx[0][1] &lt; srcPx[3][1] &amp;&amp; srcPx[1][1] &lt; srcPx[2][1])) {
+    return false;
+  }
+
   double A[8][9];
   for (int i = 0; i &lt; 4; i++) {
     double u = srcPx[i][0], v = srcPx[i][1];
@@ -2538,6 +2573,7 @@ void segmentCapsHSV(
       uint32_t area = 0, perimeter = 0, sumX = 0, sumY = 0;
       uint16_t minX = x, maxX = x, minY = y, maxY = y;
       uint16_t qHead = 0, qTail = 0;
+      bool componentOverflow = false;
 
       colorMask[seedIdx] |= 0x80;
       bfsQueue[qTail++] = seedIdx;
@@ -2569,15 +2605,22 @@ void segmentCapsHSV(
           if ((nCol &amp; 0x7F) != targetColor) {
             isBoundary = true;
           } else if (!(nCol &amp; 0x80)) {
-            colorMask[nIdx] |= 0x80;
             uint16_t nextTail = (qTail + 1) &amp; (BFS_QUEUE_SIZE - 1);
-            if (nextTail != qHead) {
+            if (nextTail == qHead) {
+              componentOverflow = true;
+            } else {
+              colorMask[nIdx] |= 0x80;
               bfsQueue[qTail] = nIdx;
               qTail = nextTail;
             }
           }
         }
         if (isBoundary) perimeter++;
+      }
+
+      if (componentOverflow) {
+        Serial.println(F("[TEENSY WARN] BFS queue overflow; rejecting corrupted component."));
+        continue;
       }
 
       if (area &gt;= 220 &amp;&amp; perimeter &gt; 0 &amp;&amp; *outCount &lt; MAX_BATCH_CAPS) {
@@ -2682,8 +2725,10 @@ bool updateRetryState(
   const CapTarget *caps,
   uint8_t count,
   bool hasOccludedY,
-  float occludedY_mm
+  float occludedY_mm,
+  bool *outTableExhausted = nullptr
 ) {
+  if (outTableExhausted) *outTableExhausted = false;
   if (!lastTarget) return false;
   if (hasOccludedY &amp;&amp; BRIDGE_OCCLUSION_HALF_MM &gt; 0.0f &amp;&amp;
       fabsf(lastTarget-&gt;boardY_mm - occludedY_mm) &lt;= BRIDGE_OCCLUSION_HALF_MM) {
@@ -2700,12 +2745,12 @@ bool updateRetryState(
     }
   }
 
-  int8_t foundIdx = -1;
+  int16_t foundIdx = -1;
   for (uint8_t i = 0; i &lt; retryZoneCount; i++) {
     if (retryZones[i].color == lastTarget-&gt;color &amp;&amp;
         hypotf(retryZones[i].x_mm - lastTarget-&gt;boardX_mm,
                retryZones[i].y_mm - lastTarget-&gt;boardY_mm) &lt;= MISSED_PICK_RADIUS_MM) {
-      foundIdx = (int8_t)i;
+      foundIdx = (int16_t)i;
       break;
     }
   }
@@ -2715,20 +2760,33 @@ bool updateRetryState(
   }
 
   if (stillPresent) {
-    if (foundIdx &lt; 0 &amp;&amp; retryZoneCount &lt; MAX_RETRY_RECORDS) {
-      foundIdx = (int8_t)retryZoneCount++;
-      retryZones[foundIdx].attempts    = 0;
-      retryZones[foundIdx].quarantined = false;
-    }
-    if (foundIdx &gt;= 0) {
-      retryZones[foundIdx].x_mm  = lastTarget-&gt;boardX_mm;
-      retryZones[foundIdx].y_mm  = lastTarget-&gt;boardY_mm;
-      retryZones[foundIdx].color = lastTarget-&gt;color;
-      retryZones[foundIdx].attempts++;
-      if (retryZones[foundIdx].attempts &gt;= MAX_PICK_RETRIES) {
-        retryZones[foundIdx].quarantined = true;
-        Serial.println(F("[TEENSY WARN] Stuck/unpickable cap quarantined after 3 failed attempts."));
+    if (foundIdx &lt; 0) {
+      if (retryZoneCount &lt; MAX_RETRY_RECORDS) {
+        foundIdx = (int16_t)retryZoneCount++;
+        retryZones[foundIdx].attempts    = 0;
+        retryZones[foundIdx].quarantined = false;
+      } else {
+        // Recycle any cleared, non-quarantined slot before declaring exhaustion
+        for (uint8_t i = 0; i &lt; retryZoneCount; i++) {
+          if (!retryZones[i].quarantined &amp;&amp; retryZones[i].attempts == 0) {
+            foundIdx = (int16_t)i;
+            break;
+          }
+        }
       }
+    }
+    if (foundIdx &lt; 0) {
+      if (outTableExhausted) *outTableExhausted = true;
+      Serial.println(F("[TEENSY ERROR] Retry tracking table exhausted; aborting session safely."));
+      return false;
+    }
+    retryZones[foundIdx].x_mm  = lastTarget-&gt;boardX_mm;
+    retryZones[foundIdx].y_mm  = lastTarget-&gt;boardY_mm;
+    retryZones[foundIdx].color = lastTarget-&gt;color;
+    retryZones[foundIdx].attempts++;
+    if (retryZones[foundIdx].attempts &gt;= MAX_PICK_RETRIES) {
+      retryZones[foundIdx].quarantined = true;
+      Serial.println(F("[TEENSY WARN] Stuck/unpickable cap quarantined after 3 failed attempts."));
     }
   } else if (foundIdx &gt;= 0 &amp;&amp; !retryZones[foundIdx].quarantined) {
     retryZones[foundIdx].attempts = 0;
@@ -2848,12 +2906,78 @@ bool captureAndSegmentBoard(
   return true;
 }
 
+bool captureAndSegmentWithRetry(
+  bool hasOccludedY,
+  float occludedY_mm,
+  MegaLinkFlags *linkFlags,
+  uint8_t maxAttempts = 2
+) {
+  for (uint8_t attempt = 0; attempt &lt; maxAttempts; attempt++) {
+    if (captureAndSegmentBoard(hasOccludedY, occludedY_mm, linkFlags)) {
+      return true;
+    }
+    if (linkFlags &amp;&amp; linkFlags-&gt;gotFault) return false;
+    if (attempt + 1 &lt; maxAttempts) {
+      serviceMegaLinkDuringStream(linkFlags);
+      delay(40);
+      serviceMegaLinkDuringStream(linkFlags);
+    }
+  }
+  return false;
+}
+
+bool sendRearmToMega() {
+  Serial.println(F("[TEENSY] Sending explicit CMD_REARM_HOME (0xB4) to Mega..."));
+  while (Serial1.available() &gt; 0) Serial1.read();
+  Serial1.write(CMD_REARM_HOME);
+  Serial1.flush();
+  if (waitForMegaReady(MEGA_REARM_WAIT_MS)) {
+    Serial.println(F("[TEENSY] Mega re-armed, homed, and READY."));
+    return true;
+  }
+  Serial.println(F("[TEENSY WARN] Mega did not reach READY after CMD_REARM_HOME (check E-stop/limits)."));
+  return false;
+}
+
+bool pollOperatorRearmInput() {
+  // 1. USB Serial operator console command: type "REARM" + newline
+  while (Serial.available() &gt; 0) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      usbCmdBuf.trim();
+      bool matched = usbCmdBuf.equalsIgnoreCase(F("REARM"));
+      usbCmdBuf = "";
+      if (matched) return true;
+    } else if (usbCmdBuf.length() &lt; 32) {
+      usbCmdBuf += c;
+    }
+  }
+
+#if ENABLE_V1_REARM_BTN
+  // 2. Optional debounced physical panel pushbutton (active-LOW to GND)
+  if (digitalRead(PIN_V1_REARM_BTN) == LOW) {
+    if (rearmBtnLowMs == 0) {
+      rearmBtnLowMs = millis();
+    } else if (rearmBtnArmed &amp;&amp; (millis() - rearmBtnLowMs &gt;= V1_REARM_BTN_DEBOUNCE_MS)) {
+      rearmBtnArmed = false;
+      return true;
+    }
+  } else {
+    rearmBtnLowMs = 0;
+    rearmBtnArmed = true;
+  }
+#endif
+  return false;
+}
+
 BatchExecResult runClosedLoopSortSession() {
   retryZoneCount = 0;
 
   // Scan #0: Unobstructed full-board scan while parked at (0, 0)
-  if (!captureAndSegmentBoard(false, 0.0f, nullptr)) {
-    return EXEC_COMPLETE;
+  // NEVER return EXEC_COMPLETE on camera capture / CRC failure!
+  if (!captureAndSegmentWithRetry(false, 0.0f, nullptr, 2)) {
+    Serial.println(F("[TEENSY ERROR] Initial Scan #0 capture/CRC failed."));
+    return EXEC_CAPTURE_FAULT;
   }
 
   CapTarget nextCap;
@@ -2875,6 +2999,7 @@ BatchExecResult runClosedLoopSortSession() {
     MegaLinkFlags flags = { true, false, false, false, cycleStartMs };
     bool scannedAtBin = false;
     bool retryEvaluated = false;
+    bool retryTableExhausted = false;
     bool hasCandidateNext = false;
     CapTarget candidateNext;
 
@@ -2889,8 +3014,10 @@ BatchExecResult runClosedLoopSortSession() {
         if (resp == CMD_SCAN_WINDOW_OPEN &amp;&amp; !scannedAtBin) {
           // Capture &amp; stream fresh image in parallel with bin drop while heartbeating Mega!
           scannedAtBin = true;
-          if (captureAndSegmentBoard(true, binY, &amp;flags)) {
-            retryEvaluated = updateRetryState(&amp;lastTarget, detectedCaps, capCount, true, binY);
+          if (captureAndSegmentWithRetry(true, binY, &amp;flags, 2)) {
+            retryEvaluated = updateRetryState(
+              &amp;lastTarget, detectedCaps, capCount, true, binY, &amp;retryTableExhausted
+            );
             hasCandidateNext = selectNextCapClearanceAware(
               detectedCaps, detectedSafe, capCount, binX, binY, &amp;candidateNext
             );
@@ -2916,13 +3043,22 @@ BatchExecResult runClosedLoopSortSession() {
     }
 
     if (!scannedAtBin) {
-      if (captureAndSegmentBoard(true, binY, &amp;flags)) {
-        retryEvaluated = updateRetryState(&amp;lastTarget, detectedCaps, capCount, true, binY);
+      if (captureAndSegmentWithRetry(true, binY, &amp;flags, 2)) {
+        retryEvaluated = updateRetryState(
+          &amp;lastTarget, detectedCaps, capCount, true, binY, &amp;retryTableExhausted
+        );
         hasCandidateNext = selectNextCapClearanceAware(
           detectedCaps, detectedSafe, capCount, binX, binY, &amp;candidateNext
         );
       }
       if (flags.gotFault) return EXEC_FAULT_HALT;
+    }
+
+    if (retryTableExhausted) {
+      Serial1.write(CMD_FINISH_SESSION);
+      Serial1.flush();
+      awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
+      return EXEC_FAULT_HALT;
     }
 
     if (hasCandidateNext) {
@@ -2937,16 +3073,28 @@ BatchExecResult runClosedLoopSortSession() {
     if (parkRes != EXEC_COMPLETE) return parkRes;
 
     MegaLinkFlags verifyFlags = { true, false, false, false, millis() };
-    if (captureAndSegmentBoard(false, 0.0f, &amp;verifyFlags)) {
+    if (captureAndSegmentWithRetry(false, 0.0f, &amp;verifyFlags, 2)) {
       if (verifyFlags.gotFault) return EXEC_FAULT_HALT;
       if (!retryEvaluated) {
-        updateRetryState(&amp;lastTarget, detectedCaps, capCount, false, 0.0f);
+        updateRetryState(&amp;lastTarget, detectedCaps, capCount, false, 0.0f, &amp;retryTableExhausted);
+        if (retryTableExhausted) {
+          Serial1.write(CMD_FINISH_SESSION);
+          Serial1.flush();
+          awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
+          return EXEC_FAULT_HALT;
+        }
       }
       if (selectNextCapClearanceAware(detectedCaps, detectedSafe, capCount, 0.0f, 0.0f, &amp;nextCap)) {
         continue;
       }
-    } else if (verifyFlags.gotFault) {
-      return EXEC_FAULT_HALT;
+    } else {
+      if (verifyFlags.gotFault) return EXEC_FAULT_HALT;
+      // Clear-FOV verification capture failed: park Mega cleanly, but report EXEC_CAPTURE_FAULT!
+      Serial.println(F("[TEENSY ERROR] Clear-FOV verification capture failed; parking safely with fault status."));
+      Serial1.write(CMD_FINISH_SESSION);
+      Serial1.flush();
+      awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
+      return EXEC_CAPTURE_FAULT;
     }
 
     // Verified empty -&gt; finish cleanly and return Mega to STATE_IDLE
@@ -2961,15 +3109,18 @@ BatchExecResult runClosedLoopSortSession() {
 }
 
 void setup() {
-  Serial.begin(115200);   // USB Debug
+  Serial.begin(115200);   // USB Debug + Operator "REARM" command console
   Serial1.begin(115200);  // Arduino Mega Link (Bidirectional 3.3V &lt;-&gt; 5V Level Shifter)
   Serial2.addMemoryForRead(serial2RxBuf, sizeof(serial2RxBuf));
   Serial2.begin(921600);  // ESP32-CAM High-Speed Wired Link
   pinMode(LED_BUILTIN, OUTPUT);
+#if ENABLE_V1_REARM_BTN
+  pinMode(PIN_V1_REARM_BTN, INPUT_PULLUP);
+#endif
 
   homographyOk = computeHomography4Pt(BOARD_FIDUCIALS_PX, BOARD_FIDUCIALS_MM, H);
   if (!homographyOk) {
-    Serial.println(F("[TEENSY ERROR] Fiducial homography matrix is singular; motion inhibited."));
+    Serial.println(F("[TEENSY ERROR] Fiducial homography invalid or singular; motion inhibited."));
   }
 #if !V1_CALIBRATION_VERIFIED
   Serial.println(F("[TEENSY FAIL-CLOSED] V1_CALIBRATION_VERIFIED == 0."));
@@ -2987,11 +3138,17 @@ void loop() {
 #endif
 
   if (!homographyOk || megaFaulted) {
-    // Poll Mega status passively; operator must explicitly re-arm Mega before resuming
-    if (waitForMegaReady(1000)) {
+    // Allow explicit operator re-arm via USB Serial ("REARM") or optional physical button
+    if (homographyOk &amp;&amp; megaFaulted &amp;&amp; pollOperatorRearmInput()) {
+      sendRearmToMega();
+      delay(200);
+      return;
+    }
+    // Also passively observe Mega status in case an external console re-armed Mega
+    if (waitForMegaReady(500)) {
       Serial.println(F("[TEENSY] Mega re-armed and READY."));
     }
-    delay(500);
+    delay(200);
     return;
   }
 
@@ -3005,8 +3162,13 @@ void loop() {
   BatchExecResult res = runClosedLoopSortSession();
   digitalWrite(LED_BUILTIN, LOW);
 
+  if (res == EXEC_CAPTURE_FAULT) {
+    Serial.println(F("[TEENSY WARN] Vision capture fault (ESP32-CAM frame/CRC error); backing off before retry."));
+    delay(1000);
+    return;
+  }
   if (res != EXEC_COMPLETE) {
-    Serial.println(F("[TEENSY] Halting closed-loop session until Mega is re-armed and READY."));
+    Serial.println(F("[TEENSY] Halting closed-loop session. Send 'REARM' over USB Serial (or press re-arm button) once cleared."));
   }
   delay(500);
 }</code></pre>
@@ -3087,12 +3249,20 @@ void loop() {
 #define PWM_GRIP_OPEN     210    // ~36 mm jaw gap (open)
 #define PWM_GRIP_CLOSE    385    // ~26 mm jaw gap (clamped on 28-32mm cap)
 
-// Safety, Settle &amp; Watchdog Timeouts
-// Worst-case X homing: 370 mm / (800 / 40 = 20 mm/s) = 18.5 s -&gt; 30 s timeout (~1.6x margin).
-#define BIN_SETTLE_MS        120UL  // Stationary XY settle at bin (Z raised) before bin-side camera shutter
-#define COMMS_TIMEOUT_MS    1200UL  // 1.2 s without 0xF0 heartbeat triggers fail-safe halt
-#define HOMING_TIMEOUT_MS  30000UL  // 30.0 s max homing seek duration
-#define BACKOFF_TIMEOUT_MS  3000UL  // 3.0 s max duration for pre-check / switch-release backoff
+// Safety, Homing Bounds, Debounce &amp; Watchdog Timeouts
+// Bounded homing seek: X &lt;= 395 mm (370 + 25 mm margin), Y &lt;= 325 mm (300 + 25 mm margin).
+// Worst-case X seek duration: 395 mm / (800 / 40 = 20 mm/s) = 19.75 s -&gt; derived 23 s timeout.
+#define HOMING_SEEK_MARGIN_MM   25.0f
+#define MAX_HOMING_SEEK_X_MM    (MAX_TRAVEL_X_MM + HOMING_SEEK_MARGIN_MM)
+#define MAX_HOMING_SEEK_Y_MM    (MAX_TRAVEL_Y_MM + HOMING_SEEK_MARGIN_MM)
+#define MAX_HOMING_SEEK_X_STEPS ((long)(MAX_HOMING_SEEK_X_MM * STEPS_PER_MM_X))
+#define MAX_HOMING_SEEK_Y_STEPS ((long)(MAX_HOMING_SEEK_Y_MM * STEPS_PER_MM_Y))
+#define ESTOP_DEBOUNCE_MS        4UL  // Continuous active duration before software fault latch (Pole 1 cuts 12V)
+#define LIMIT_DEBOUNCE_MS        8UL  // Continuous open-circuit duration rejecting contact bounce &amp; EMI
+#define BIN_SETTLE_MS          120UL  // Stationary XY settle at bin (Z raised) before bin-side camera shutter
+#define COMMS_TIMEOUT_MS      1200UL  // 1.2 s without 0xF0 heartbeat triggers fail-safe halt
+#define HOMING_TIMEOUT_MS    23000UL  // Derived from bounded X seek (19.75 s) + 3.25 s margin
+#define BACKOFF_TIMEOUT_MS    3000UL  // 3.0 s max duration for pre-check / switch-release backoff
 
 AccelStepper stepperX(AccelStepper::DRIVER, PIN_X_STEP, PIN_X_DIR);
 AccelStepper stepperY(AccelStepper::DRIVER, PIN_Y_STEP, PIN_Y_DIR);
@@ -3127,14 +3297,17 @@ CapTarget     batchQueue[MAX_BATCH_CAPS];
 CapTarget     currentCap;
 uint8_t       batchTotal        = 0;
 uint8_t       currentIdx        = 0;
-bool          closedLoopMode    = false;
-bool          isHomed           = false;
-bool          hasInFlightCap    = false;
-bool          commsFaultLatched = false;
-uint8_t       limitFaultCount   = 0;
-uint8_t       estopFaultCount   = 0;
-unsigned long stateTimerMs      = 0;
-unsigned long lastHeartbeatMs   = 0;
+bool          closedLoopMode        = false;
+bool          isHomed               = false;
+bool          hasInFlightCap        = false;
+bool          capPossessionVerified = false;
+bool          commsFaultLatched     = false;
+uint8_t       limitFaultCount       = 0;
+uint8_t       estopFaultCount       = 0;
+unsigned long limitOpenSinceMs      = 0;
+unsigned long estopHighSinceMs      = 0;
+unsigned long stateTimerMs          = 0;
+unsigned long lastHeartbeatMs       = 0;
 
 bool isEstopActive() {
   return digitalRead(PIN_ESTOP) == HIGH;
@@ -3161,12 +3334,22 @@ bool isAnyOvertravelLimitOpen() {
   return false;
 }
 
-bool isZRetractedSafeForXY() {
+bool isZSafeForXYMotion() {
 #if !Z_LIMIT_IS_OVERTRAVEL
-  // In retracted-confirmation mode, NC switch opens (HIGH) when Z reaches top stop
+  // Retracted-confirmation mode: NC switch opens (HIGH) when Z physically reaches top retracted stop
   return digitalRead(PIN_Z_HOME) == HIGH;
 #else
+  // Overtravel-only mode: verifies Pin 24 overtravel circuit is intact/closed (LOW);
+  // NOTE: does NOT physically prove the Z servo reached its raised position.
   return !isAxisLimitOpen(PIN_Z_HOME);
+#endif
+}
+
+const __FlashStringHelper *zUnsafeReason() {
+#if !Z_LIMIT_IS_OVERTRAVEL
+  return F("Z-axis retracted-home switch not confirmed before XY travel");
+#else
+  return F("Z overtravel circuit open before XY travel (overtravel-only mode)");
 #endif
 }
 
@@ -3237,11 +3420,12 @@ void triggerHardFault(const __FlashStringHelper *reason) {
   stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Disable stepper coils immediately
   digitalWrite(PIN_SERVO_OE, HIGH);   // Disable PCA9685 PWM outputs (no commanded fault motion)
-  closedLoopMode    = false;
-  isHomed           = false;
-  hasInFlightCap    = false;
-  batchTotal        = 0;
-  currentIdx        = 0;
+  closedLoopMode        = false;
+  isHomed               = false;
+  hasInFlightCap        = false;
+  capPossessionVerified = false;
+  batchTotal            = 0;
+  currentIdx            = 0;
   currentState      = STATE_HARD_FAULT;
   Serial1.write(CMD_HARD_FAULT);
   Serial.print(F("[HARD_FAULT] "));
@@ -3261,15 +3445,18 @@ bool waitServicedDelayMs(unsigned long durationMs) {
 }
 
 void homeAxes() {
-  currentState      = STATE_HOMING;
-  closedLoopMode    = false;
-  isHomed           = false;
-  hasInFlightCap    = false;
-  commsFaultLatched = false;
-  limitFaultCount   = 0;
-  estopFaultCount   = 0;
-  batchTotal        = 0;
-  currentIdx        = 0;
+  currentState          = STATE_HOMING;
+  closedLoopMode        = false;
+  isHomed               = false;
+  hasInFlightCap        = false;
+  capPossessionVerified = false;
+  commsFaultLatched     = false;
+  limitFaultCount       = 0;
+  estopFaultCount       = 0;
+  limitOpenSinceMs      = 0;
+  estopHighSinceMs      = 0;
+  batchTotal            = 0;
+  currentIdx            = 0;
 
   // 0. Refuse homing if hardwired E-stop auxiliary contact is active or Z overtravel is open
   if (isEstopActive()) {
@@ -3289,8 +3476,8 @@ void homeAxes() {
   digitalWrite(PIN_SERVO_OE, LOW);    // Enable PCA9685 outputs after latching safe PWM
   if (!waitServicedDelayMs(450UL)) return;
 
-  if (!isZRetractedSafeForXY()) {
-    triggerHardFault(F("Z-axis did not confirm retracted safe state before XY homing"));
+  if (!isZSafeForXYMotion()) {
+    triggerHardFault(zUnsafeReason());
     return;
   }
 
@@ -3316,6 +3503,12 @@ void homeAxes() {
         triggerHardFault(F("E-Stop triggered during pre-homing backoff"));
         return;
       }
+#if ENABLE_MAX_ENDSTOPS
+      if (isAxisLimitOpen(PIN_X_MAX) || isAxisLimitOpen(PIN_Y_MAX)) {
+        triggerHardFault(F("Positive-end limit tripped during pre-homing backoff"));
+        return;
+      }
+#endif
       if (millis() - preStart &gt; BACKOFF_TIMEOUT_MS) {
         triggerHardFault(F("Pre-homing backoff timeout"));
         return;
@@ -3331,7 +3524,10 @@ void homeAxes() {
     }
   }
 
-  // 3. Seek X &amp; Y Normally-Closed home switches at 20 mm/s with 30 s worst-case timeout
+  // 3. Step- &amp; time-bounded seek to X &amp; Y Normally-Closed home switches at 20 mm/s
+  //    Guards against missing switches or belt slip exceeding MAX_TRAVEL + 25 mm margin.
+  stepperX.setCurrentPosition(0);
+  stepperY.setCurrentPosition(0);
   unsigned long homeStartMs = millis();
   while (!isAxisLimitOpen(PIN_X_HOME) || !isAxisLimitOpen(PIN_Y_HOME)) {
     if (isEstopActive()) {
@@ -3344,8 +3540,16 @@ void homeAxes() {
       return;
     }
 #endif
+    if (labs(stepperX.currentPosition()) &gt; MAX_HOMING_SEEK_X_STEPS) {
+      triggerHardFault(F("Homing X seek exceeded MAX_HOMING_SEEK_X_MM (395 mm): switch/belt fault"));
+      return;
+    }
+    if (labs(stepperY.currentPosition()) &gt; MAX_HOMING_SEEK_Y_STEPS) {
+      triggerHardFault(F("Homing Y seek exceeded MAX_HOMING_SEEK_Y_MM (325 mm): switch/belt fault"));
+      return;
+    }
     if (millis() - homeStartMs &gt; HOMING_TIMEOUT_MS) {
-      triggerHardFault(F("Homing seek timeout (&gt;30s): stall, belt slip, or switch failure"));
+      triggerHardFault(F("Homing seek timeout (&gt;23s): stall, belt slip, or switch failure"));
       return;
     }
     if (!isAxisLimitOpen(PIN_X_HOME)) {
@@ -3461,8 +3665,8 @@ void pollVisionHostPackets() {
         Serial1.write(CMD_BATCH_NACK);
         continue;
       }
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before clear-FOV park"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
       closedLoopMode  = true;
@@ -3479,8 +3683,8 @@ void pollVisionHostPackets() {
         Serial1.write(CMD_BATCH_NACK);
         continue;
       }
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before session finish park"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
       closedLoopMode  = false;
@@ -3515,19 +3719,20 @@ void pollVisionHostPackets() {
         return;
       }
 
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before single-target start"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
 
       // Valid closed-loop target! Move directly from current pose (0,0 or bin) to cap
-      closedLoopMode    = true;
-      batchTotal        = 1;
-      currentIdx        = 0;
-      currentCap        = rxCap;
-      hasInFlightCap    = false;
-      commsFaultLatched = false;
-      lastHeartbeatMs   = millis();
+      closedLoopMode        = true;
+      batchTotal            = 1;
+      currentIdx            = 0;
+      currentCap            = rxCap;
+      hasInFlightCap        = false;
+      capPossessionVerified = false;
+      commsFaultLatched     = false;
+      lastHeartbeatMs       = millis();
       Serial1.write(CMD_BATCH_ACK);
 
       moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
@@ -3571,18 +3776,19 @@ void pollVisionHostPackets() {
         }
       }
 
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before batch start"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
 
       // Valid legacy batch received! Store locally &amp; acknowledge
-      closedLoopMode    = false;
-      batchTotal        = hdr.totalCaps;
-      currentIdx        = 0;
-      hasInFlightCap    = false;
-      commsFaultLatched = false;
-      lastHeartbeatMs   = millis();
+      closedLoopMode        = false;
+      batchTotal            = hdr.totalCaps;
+      currentIdx            = 0;
+      hasInFlightCap        = false;
+      capPossessionVerified = false;
+      commsFaultLatched     = false;
+      lastHeartbeatMs       = millis();
       Serial1.write(CMD_BATCH_ACK);
 
       // Start Step 01 on first target cap
@@ -3596,25 +3802,36 @@ void pollVisionHostPackets() {
 void checkRuntimeSafetyInputs() {
   if (currentState == STATE_HOMING || currentState == STATE_HARD_FAULT) return;
 
-  // Priority 1: Auxiliary NC E-Stop contact (2 consecutive samples)
+  unsigned long nowMs = millis();
+
+  // Priority 1: Auxiliary NC E-Stop contact (timed persistence &gt;= ESTOP_DEBOUNCE_MS + &gt;= 2 samples)
+  // Note: Pole 1 already cuts 12V actuator power directly in hardware independent of loop timing.
   if (isEstopActive()) {
-    estopFaultCount++;
-    if (estopFaultCount &gt;= 2) {
+    if (estopFaultCount == 0) {
+      estopHighSinceMs = nowMs;
+    }
+    if (estopFaultCount &lt; 255) estopFaultCount++;
+    if (estopFaultCount &gt;= 2 &amp;&amp; (nowMs - estopHighSinceMs &gt;= ESTOP_DEBOUNCE_MS)) {
       triggerHardFault(F("Physical E-Stop auxiliary contact open"));
       return;
     }
   } else {
-    estopFaultCount = 0;
+    estopFaultCount  = 0;
+    estopHighSinceMs = 0;
   }
 
-  // Priority 2: Polled NC limit switches for X, Y, and Z (3-sample debounce)
+  // Priority 2: Polled NC limit switches for X, Y, and Z (timed persistence &gt;= LIMIT_DEBOUNCE_MS + &gt;= 3 samples)
   if (isAnyOvertravelLimitOpen()) {
-    limitFaultCount++;
-    if (limitFaultCount &gt;= 3) {
+    if (limitFaultCount == 0) {
+      limitOpenSinceMs = nowMs;
+    }
+    if (limitFaultCount &lt; 255) limitFaultCount++;
+    if (limitFaultCount &gt;= 3 &amp;&amp; (nowMs - limitOpenSinceMs &gt;= LIMIT_DEBOUNCE_MS)) {
       triggerHardFault(F("Runtime X/Y/Z NC limit switch open or broken wire"));
     }
   } else {
-    limitFaultCount = 0;
+    limitFaultCount  = 0;
+    limitOpenSinceMs = 0;
   }
 }
 
@@ -3632,7 +3849,7 @@ void executeSafeCommsLossPolicy() {
   Serial1.write(CMD_RECOVERY_HALT);
 
   // If a single scanned cap has already been dispatched and is currently in its
-  // pick-and-place cycle, finish depositing ONLY that one cap into its bin,
+  // active pick-and-place cycle, finish ONLY that active commanded cycle,
   // then park cleanly at (0, 0) via STATE_FAILSAFE_PARKING and latch halt.
   // (Hardwired E-stop Pin 25 and NC X/Y/Z limits remain active at all times.)
   bool inActiveCapCycle = (currentState == STATE_MOVING_TO_CAP ||
@@ -3646,26 +3863,31 @@ void executeSafeCommsLossPolicy() {
                            currentState == STATE_RETRACT_Z);
   if (inActiveCapCycle) {
     batchTotal = 0; // Do not start any further queued caps after this one
-    Serial.println(F("[COMMS_LOSS] Finishing current scanned cap into bin, then parking at (0,0) to halt."));
+#if HAS_GRIP_SENSOR
+    Serial.println(F("[COMMS_LOSS] Finishing active verified pick-place cycle, then parking at (0,0) to halt."));
+#else
+    Serial.println(F("[COMMS_LOSS] Finishing active commanded pick-place cycle (cap possession unverified without HAS_GRIP_SENSOR), then parking at (0,0) to halt."));
+#endif
     return;
   }
 
   // No cap currently active (e.g., awaiting next target at bin or parking):
-  // Confirm Z is safely retracted, park cleanly at (0, 0), disable steppers,
+  // Confirm Z safety state, park cleanly at (0, 0), disable steppers,
   // and latch STATE_FAILSAFE_HALT until explicit CMD_REARM_HOME + re-home.
   pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
   pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
-  if (!isZRetractedSafeForXY()) {
-    triggerHardFault(F("Z-axis not retracted on comms-loss park"));
+  if (!isZSafeForXYMotion()) {
+    triggerHardFault(zUnsafeReason());
     return;
   }
-  closedLoopMode = false;
-  hasInFlightCap = false;
-  batchTotal     = 0;
-  currentIdx     = 0;
+  closedLoopMode        = false;
+  hasInFlightCap        = false;
+  capPossessionVerified = false;
+  batchTotal            = 0;
+  currentIdx            = 0;
   moveMachineToMm(0.0f, 0.0f);
-  currentState   = STATE_FAILSAFE_PARKING;
-  Serial.println(F("[COMMS_LOSS] No active cap; parking at (0,0) then latching fail-safe halt."));
+  currentState          = STATE_FAILSAFE_PARKING;
+  Serial.println(F("[COMMS_LOSS] No active cycle; parking at (0,0) then latching fail-safe halt."));
 }
 
 void executeMotionStateMachine() {
@@ -3698,20 +3920,52 @@ void executeMotionStateMachine() {
     // Step 03: Clamp Gripper jaws (~26 mm)
     case STATE_GRIP_CAP:
       if (millis() - stateTimerMs &gt;= 300) {
-        hasInFlightCap = true; // Commanded grip complete (unverified unless HAS_GRIP_SENSOR == 1)
+#if HAS_GRIP_SENSOR
+        hasInFlightCap = true;
+        if (isCapVerifiedHeld()) {
+          capPossessionVerified = true;
+          pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+          stateTimerMs = millis();
+          currentState = STATE_LIFT_Z;
+        } else {
+          // Verified empty grasp: open jaws, retract Z, skip false bin drop so vision retries/quarantines
+          hasInFlightCap        = false;
+          capPossessionVerified = false;
+          pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+          pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+          stateTimerMs = millis();
+          currentState = STATE_RETRACT_Z;
+          Serial.println(F("[GRIP_MISS] Cap-presence sensor not triggered; skipping bin drop."));
+        }
+#else
+        hasInFlightCap        = true; // Commanded grip cycle active (physical cap possession UNVERIFIED)
+        capPossessionVerified = false;
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
         stateTimerMs = millis();
         currentState = STATE_LIFT_Z;
+#endif
       }
       break;
 
     // Step 04: Lift Z linkage back to 0 mm overhead clearance
     case STATE_LIFT_Z:
       if (millis() - stateTimerMs &gt;= 350) {
-        if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F("Z-axis failed retracted check before bin traverse"));
+        if (!isZSafeForXYMotion()) {
+          triggerHardFault(zUnsafeReason());
           return;
         }
+#if HAS_GRIP_SENSOR
+        if (!isCapVerifiedHeld()) {
+          // Cap slipped during Z lift: open jaws and abort bin transit cleanly
+          hasInFlightCap        = false;
+          capPossessionVerified = false;
+          pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+          stateTimerMs = millis();
+          currentState = STATE_RETRACT_Z;
+          Serial.println(F("[GRIP_SLIP] Cap-presence lost during Z lift; aborting bin transit."));
+          return;
+        }
+#endif
         uint8_t binId = currentCap.targetBinId;
         if (binId &lt; 1 || binId &gt; 4) binId = 1;
         moveMachineToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
@@ -3757,7 +4011,8 @@ void executeMotionStateMachine() {
     // Step 07: Release Gripper jaws (cap drops into bin)
     case STATE_RELEASE_CAP:
       if (millis() - stateTimerMs &gt;= 250) {
-        hasInFlightCap = false;
+        hasInFlightCap        = false;
+        capPossessionVerified = false;
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
         stateTimerMs = millis();
         currentState = STATE_RETRACT_Z;
@@ -3767,8 +4022,8 @@ void executeMotionStateMachine() {
     // Step 08: Retract Z to 0 mm, emit progress pulse, await next closed-loop target or finish
     case STATE_RETRACT_Z:
       if (millis() - stateTimerMs &gt;= 300) {
-        if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F("Z-axis failed retracted check after bin release"));
+        if (!isZSafeForXYMotion()) {
+          triggerHardFault(zUnsafeReason());
           return;
         }
 
@@ -3827,11 +4082,12 @@ void executeMotionStateMachine() {
     case STATE_FAILSAFE_PARKING:
       if (isGantryAtTarget()) {
         digitalWrite(PIN_STEPPER_EN, HIGH);
-        closedLoopMode = false;
-        isHomed        = false;
-        hasInFlightCap = false;
-        batchTotal     = 0;
-        currentIdx     = 0;
+        closedLoopMode        = false;
+        isHomed               = false;
+        hasInFlightCap        = false;
+        capPossessionVerified = false;
+        batchTotal            = 0;
+        currentIdx            = 0;
         currentState   = STATE_FAILSAFE_HALT;
         Serial1.write(CMD_RECOVERY_HALT);
         Serial.println(F("[COMMS_LOSS] Parked at (0,0) &amp; halted. Explicit re-arm &amp; re-home required."));
@@ -3872,6 +4128,12 @@ void setup() {
   if (TOOL_OFFSET_X_MM == 0.0f &amp;&amp; TOOL_OFFSET_Y_MM == 0.0f) {
     Serial.println(F("[WARN] TOOL_OFFSET is (0,0) placeholder; measure physical alignment on bench."));
   }
+#if Z_LIMIT_IS_OVERTRAVEL
+  Serial.println(F("[INFO] Z_LIMIT_IS_OVERTRAVEL=1: Pin 24 verifies Z overtravel-circuit health only (not Z retracted position)."));
+#endif
+#if !HAS_GRIP_SENSOR
+  Serial.println(F("[INFO] HAS_GRIP_SENSOR=0: Cap possession is commanded/unverified until a grip sensor is fitted."));
+#endif
 
   Wire.begin();
   pca.begin();
@@ -4218,7 +4480,7 @@ static inline uint16_t computeCRC16(const uint8_t* data, uint32_t length) {
             <span>6. Physical Emergency Stop &amp; NC Wire-Break Guard</span>
           </div>
           <p class="text-xs text-slate-300 leading-relaxed">
-            A dual-pole latching mushroom E-Stop cuts 12V actuator power (Branch A steppers + Branch B servo buck input) independently of firmware while signaling Mega Pin 25. <code class="text-red-300">mega_motion.ino</code> polls X/Y/Z NC limits (3-sample debounce) and E-stop (2-sample debounce) in <code class="text-red-300">loop()</code>, disabling outputs until explicit re-arm &amp; re-homing.
+            A dual-pole latching mushroom E-Stop cuts 12V actuator power (Branch A steppers + Branch B servo buck input) independently of firmware while signaling Mega Pin 25. <code class="text-red-300">mega_motion.ino</code> polls X/Y/Z NC limits (8 ms timed debounce) and E-stop (4 ms timed debounce) in <code class="text-red-300">loop()</code>, disabling outputs until explicit operator <code class="text-red-300">REARM</code> &amp; step-bounded re-homing.
           </p>
         </div>
 

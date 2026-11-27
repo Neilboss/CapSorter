@@ -498,7 +498,9 @@ class TestV1AlgorithmsAndFirmwareInvariants(unittest.TestCase):
         mega = _read_text(os.path.join(REPO_ROOT, "firmware", "mega_motion", "mega_motion.ino"))
         self.assertIn("PIN_ESTOP", mega)
         self.assertIn("isAxisLimitOpen(PIN_Z_HOME)", mega)
-        self.assertIn("HOMING_TIMEOUT_MS  30000UL", mega)
+        self.assertIn("HOMING_TIMEOUT_MS    23000UL", mega)
+        self.assertIn("MAX_HOMING_SEEK_X_STEPS", mega)
+        self.assertIn("MAX_HOMING_SEEK_Y_STEPS", mega)
         self.assertNotIn("recoveryPingCount", mega)
         self.assertIn("CMD_REARM_HOME", mega)
         self.assertIn("CMD_STATUS_READY", mega)
@@ -1603,6 +1605,310 @@ class TestHTMLCodeVaultSyncAndDocsAudit(unittest.TestCase):
                 re.search(v1_leftover, v2_dossier, re.I),
                 f"V1 leftover ({v1_leftover}) still present in pdf_dossier_v2.html"
             )
+
+
+class TestRemediationHardening(unittest.TestCase):
+    """Dedicated regression suite verifying all 12 audited firmware/safety/tooling remediations."""
+
+    def _make_controller(self, td):
+        cal_path = os.path.join(td, "cal.npz")
+        H = fc.compute_homography_from_fiducials(
+            [[92, 34], [548, 34], [548, 446], [92, 446]], image_size=(640, 480)
+        )
+        fc.save_validated_calibration(
+            cal_path,
+            np.array([[320.0, 0, 320.0], [0, 320.0, 240.0], [0, 0, 1.0]]),
+            np.zeros((4, 1)), H, "picamera2_imx219", "fisheye", (640, 480), 0.1,
+        )
+        return pzv.PiZeroVisionController(
+            calib_file=cal_path, camera_type="picamera2_imx219", init_hardware=False
+        )
+
+    def test_mega_bounded_homing_timed_debounce_z_and_grip_guards(self):
+        mega = _read_text(os.path.join(REPO_ROOT, "firmware", "mega_motion", "mega_motion.ino"))
+        # Issue #1: Step- & distance-bounded homing seek + derived 23 s timeout
+        self.assertIn("#define MAX_HOMING_SEEK_X_MM    (MAX_TRAVEL_X_MM + HOMING_SEEK_MARGIN_MM)", mega)
+        self.assertIn("#define MAX_HOMING_SEEK_Y_MM    (MAX_TRAVEL_Y_MM + HOMING_SEEK_MARGIN_MM)", mega)
+        self.assertIn("labs(stepperX.currentPosition()) > MAX_HOMING_SEEK_X_STEPS", mega)
+        self.assertIn("labs(stepperY.currentPosition()) > MAX_HOMING_SEEK_Y_STEPS", mega)
+        self.assertIn("HOMING_TIMEOUT_MS    23000UL", mega)
+        # Issue #2: Deterministic millis()-timed persistence debounce
+        self.assertIn("#define ESTOP_DEBOUNCE_MS        4UL", mega)
+        self.assertIn("#define LIMIT_DEBOUNCE_MS        8UL", mega)
+        self.assertIn("nowMs - estopHighSinceMs >= ESTOP_DEBOUNCE_MS", mega)
+        self.assertIn("nowMs - limitOpenSinceMs >= LIMIT_DEBOUNCE_MS", mega)
+        # Issue #3: Honest Z-safety check naming & mode-specific fault reasons
+        self.assertIn("bool isZSafeForXYMotion()", mega)
+        self.assertIn("zUnsafeReason()", mega)
+        self.assertNotIn("isZRetractedSafeForXY", mega)
+        # Issue #4: Active isCapVerifiedHeld() wiring in STATE_GRIP_CAP & STATE_LIFT_Z
+        self.assertIn("bool          capPossessionVerified = false;", mega)
+        self.assertGreaterEqual(mega.count("isCapVerifiedHeld()"), 3)
+        self.assertIn("[GRIP_MISS]", mega)
+        self.assertIn("[GRIP_SLIP]", mega)
+
+    def test_stage3_jog_safety_clamps_and_disable_clears_targets(self):
+        s3 = _read_text(os.path.join(
+            REPO_ROOT, "firmware", "bringup", "mega_03_stepper_homing_test", "mega_03_stepper_homing_test.ino"
+        ))
+        self.assertIn("bool canAcceptMotionCmd()", s3)
+        self.assertIn("#define MAX_UNHOMED_JOG_MM      50.0f", s3)
+        self.assertIn("MAX_HOMING_SEEK_X_STEPS", s3)
+        self.assertIn("MAX_HOMING_SEEK_Y_STEPS", s3)
+        self.assertIn("HOMING_TIMEOUT_MS      23000UL", s3)
+        # Ensure dis clears pending targets & disables servo OE, and en syncs targets
+        dis_match = re.search(r'else if \(line == "dis"\)\s*\{(.*?)\}\s*else if \(line == "en"\)', s3, re.S)
+        self.assertIsNotNone(dis_match)
+        dis_body = dis_match.group(1)
+        self.assertIn("stepperX.moveTo(stepperX.currentPosition());", dis_body)
+        self.assertIn("stepperY.moveTo(stepperY.currentPosition());", dis_body)
+        self.assertIn("digitalWrite(PIN_SERVO_OE, HIGH);", dis_body)
+        en_match = re.search(r'else if \(line == "en"\)\s*\{(.*?)\}\s*else if \(line == "home"\)', s3, re.S)
+        self.assertIsNotNone(en_match)
+        self.assertIn("stepperX.moveTo(stepperX.currentPosition());", en_match.group(1))
+        # Ensure x, y, go, and servo commands all call canAcceptMotionCmd()
+        self.assertGreaterEqual(s3.count("if (!canAcceptMotionCmd()) return;"), 8)
+
+    def test_v1_bfs_overflow_capture_fault_retry_limit_and_rearm(self):
+        teensy = _read_text(os.path.join(REPO_ROOT, "firmware", "v1_teensy41", "teensy_vision.cpp"))
+        # Issue #6: Expanded 8192 BFS queue + capacity check before marking visited + overflow rejection
+        self.assertIn("#define BFS_QUEUE_SIZE            8192", teensy)
+        self.assertIn("bool componentOverflow = false;", teensy)
+        self.assertIn("if (componentOverflow)", teensy)
+        # Ensure visited flag is set inside the else (non-overflow) branch, not before checking nextTail
+        bfs_block = teensy[teensy.index("if (nextTail == qHead)"):teensy.index("if (componentOverflow)")]
+        self.assertIn("componentOverflow = true;", bfs_block)
+        self.assertIn("colorMask[nIdx] |= 0x80;", bfs_block)
+        # Issue #7: Distinct EXEC_CAPTURE_FAULT on Scan #0 and clear-FOV verification failure
+        self.assertIn("EXEC_CAPTURE_FAULT", teensy)
+        self.assertIn("captureAndSegmentWithRetry", teensy)
+        self.assertNotIn("if (!captureAndSegmentBoard(false, 0.0f, nullptr)) {\n    return EXEC_COMPLETE;", teensy)
+        # Issue #8: Expanded retry tracking table (MAX_BATCH_CAPS = 100) + bounded exhaustion abort
+        self.assertIn("#define MAX_RETRY_RECORDS         MAX_BATCH_CAPS", teensy)
+        self.assertIn("retryTableExhausted", teensy)
+        # Issue #9: Explicit operator re-arm via USB Serial "REARM" + optional Pin 2 button
+        self.assertIn("#define ENABLE_V1_REARM_BTN       0", teensy)
+        self.assertIn("#define PIN_V1_REARM_BTN          2", teensy)
+        self.assertIn("bool sendRearmToMega()", teensy)
+        self.assertIn("bool pollOperatorRearmInput()", teensy)
+        self.assertIn("Serial1.write(CMD_REARM_HOME);", teensy)
+
+    def test_v1_bfs_overflow_and_retry_table_algorithmic_mirrors(self):
+        # Mirror Issue #6: tiny queue triggers overflow flag and drops corrupted blob without false emit
+        def bfs_with_cap(mask_2d, queue_cap):
+            h, w = mask_2d.shape
+            visited = np.zeros_like(mask_2d, dtype=bool)
+            q = [0] * queue_cap
+            emitted = []
+            overflows = 0
+            for y in range(h):
+                for x in range(w):
+                    if not mask_2d[y, x] or visited[y, x]:
+                        continue
+                    qh = qt = 0
+                    visited[y, x] = True
+                    q[qt] = (x, y)
+                    qt = (qt + 1) % queue_cap
+                    overflow = False
+                    area = 0
+                    while qh != qt:
+                        cx, cy = q[qh]
+                        qh = (qh + 1) % queue_cap
+                        area += 1
+                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            nx, ny = cx + dx, cy + dy
+                            if 0 <= nx < w and 0 <= ny < h and mask_2d[ny, nx] and not visited[ny, nx]:
+                                next_t = (qt + 1) % queue_cap
+                                if next_t == qh:
+                                    overflow = True
+                                else:
+                                    visited[ny, nx] = True
+                                    q[qt] = (nx, ny)
+                                    qt = next_t
+                    if overflow:
+                        overflows += 1
+                    else:
+                        emitted.append(area)
+            return emitted, overflows
+
+        grid = np.zeros((20, 20), dtype=bool)
+        grid[2:14, 2:14] = True  # 144-pixel square
+        emitted_small, ovf_small = bfs_with_cap(grid, queue_cap=8)
+        self.assertGreater(ovf_small, 0)
+        self.assertEqual(len(emitted_small), 0, "Overflowed component must be rejected, not silently emitted")
+        emitted_ok, ovf_ok = bfs_with_cap(grid, queue_cap=256)
+        self.assertEqual(ovf_ok, 0)
+        self.assertEqual(emitted_ok, [144])
+
+    def test_v2_guarded_heartbeat_survives_slow_capture_and_halts_on_stall(self):
+        import time as _time
+
+        with tempfile.TemporaryDirectory() as td:
+            ctrl = self._make_controller(td)
+            world_caps = [[120.0, 140.0, pzv.COLOR_RED]]
+            board_with_cap = _draw_synthetic_board(ctrl.H_inv, [(120.0, 140.0, pzv.COLOR_RED)])
+            board_empty = _draw_synthetic_board(ctrl.H_inv, [])
+
+            # Part A: Slow bin-side capture (0.35 s) with 0.05 s bg heartbeat MUST keep emitting 0xF0!
+            capture_calls = [0]
+            ping_times = []
+
+            def slow_capture():
+                capture_calls[0] += 1
+                if capture_calls[0] == 1:
+                    return board_with_cap
+                _time.sleep(0.35)
+                return board_empty
+
+            def mega_script(raw, rx):
+                if raw[0] == pzv.PROTOCOL_SINGLE_MAGIC:
+                    rx.append(pzv.CMD_BATCH_ACK)
+                    rx.append(pzv.CMD_SCAN_WINDOW_OPEN)
+                elif raw == bytes([pzv.CMD_HEARTBEAT_PING]):
+                    ping_times.append(_time.monotonic())
+                    if capture_calls[0] >= 2 and len(ping_times) >= 4:
+                        rx.append(pzv.CMD_CAP_PROGRESS)
+                        rx.append(pzv.CMD_AWAIT_NEXT)
+                elif raw == bytes([pzv.CMD_PARK_FOR_SCAN]):
+                    rx.append(pzv.CMD_AWAIT_NEXT)
+                elif raw == bytes([pzv.CMD_FINISH_SESSION]):
+                    rx.append(pzv.CMD_BATCH_COMPLETE)
+
+            ctrl.uart = FakeUART(mega_script)
+            res = ctrl.run_closed_loop_sort_session(
+                capture_fn=slow_capture,
+                enable_bg_heartbeat=True,
+                heartbeat_interval_s=0.05,
+                max_vision_stall_s=1.5,
+            )
+            self.assertEqual(res["status"], "COMPLETE")
+            self.assertGreaterEqual(res["bg_heartbeats_sent"], 4)
+            self.assertGreater(res["max_vision_ms"], 300.0)
+
+            # Part B: True vision deadlock (> max_vision_stall_s) MUST stop heartbeating & return VISION_STALL!
+            stall_calls = [0]
+            stall_pings = []
+
+            def deadlocked_capture():
+                stall_calls[0] += 1
+                if stall_calls[0] == 1:
+                    return board_with_cap
+                _time.sleep(0.55)  # Exceeds max_vision_stall_s=0.18 s
+                return board_empty
+
+            def stall_mega(raw, rx):
+                if raw[0] == pzv.PROTOCOL_SINGLE_MAGIC:
+                    rx.append(pzv.CMD_BATCH_ACK)
+                    rx.append(pzv.CMD_SCAN_WINDOW_OPEN)
+                elif raw == bytes([pzv.CMD_HEARTBEAT_PING]):
+                    stall_pings.append(_time.monotonic())
+
+            ctrl.uart = FakeUART(stall_mega)
+            res_stall = ctrl.run_closed_loop_sort_session(
+                capture_fn=deadlocked_capture,
+                enable_bg_heartbeat=True,
+                heartbeat_interval_s=0.04,
+                max_vision_stall_s=0.18,
+            )
+            self.assertEqual(res_stall["status"], "VISION_STALL")
+            # Heartbeats must have stopped once the 0.18 s liveness budget expired (not ran for full 0.55 s)
+            self.assertLess(len(stall_pings), 8)
+
+    def test_lcd_framebuffer_stride_resize_and_channel_packing(self):
+        # Construct solid pure-red BGR image (B=0, G=0, R=255) at 480x320
+        red_bgr = np.zeros((320, 480, 3), dtype=np.uint8)
+        red_bgr[:, :, 2] = 255
+
+        # 1. Padded 16-bpp RGB565 stride (line_length = 480*2 + 64 = 1024 B)
+        fb_rgb565_pad = hud_mod.FramebufferInfo(
+            width=480, height=320, bpp=16, line_length=1024,
+            red_offset=11, red_len=5, green_offset=5, green_len=6, blue_offset=0, blue_len=5,
+        )
+        raw_pad = hud_mod.pack_bgr_for_framebuffer(red_bgr, fb_rgb565_pad)
+        self.assertEqual(len(raw_pad), 320 * 1024)
+        # First pixel = 0xF800 (little-endian b"\x00\xf8"); trailing 64 pad bytes are zero
+        self.assertEqual(raw_pad[0:2], b"\x00\xf8")
+        self.assertEqual(raw_pad[960:1024], b"\x00" * 64)
+
+        # 2. BGR565 channel order (red_offset=0, blue_offset=11) + non-default resize (320x240)
+        fb_bgr565 = hud_mod.FramebufferInfo(
+            width=320, height=240, bpp=16, line_length=640,
+            red_offset=0, red_len=5, green_offset=5, green_len=6, blue_offset=11, blue_len=5,
+        )
+        raw_bgr565 = hud_mod.pack_bgr_for_framebuffer(red_bgr, fb_bgr565)
+        self.assertEqual(len(raw_bgr565), 240 * 640)
+        self.assertEqual(raw_bgr565[0:2], b"\x1f\x00")  # Red in low 5 bits = 0x001F
+
+        # 3. 32-bpp RGBA8888 (red_offset=0, green_offset=8, blue_offset=16) with padded stride
+        fb_rgba32 = hud_mod.FramebufferInfo(
+            width=480, height=320, bpp=32, line_length=2048,
+            red_offset=0, red_len=8, green_offset=8, green_len=8, blue_offset=16, blue_len=8,
+        )
+        raw_rgba = hud_mod.pack_bgr_for_framebuffer(red_bgr, fb_rgba32)
+        self.assertEqual(len(raw_rgba), 320 * 2048)
+        self.assertEqual(raw_rgba[0:4], b"\xff\x00\x00\xff")  # R=255, G=0, B=0, A=255
+
+        # 4. Verify _blit_framebuffer writes exact stride-padded bytes to a target file
+        with tempfile.TemporaryDirectory() as td:
+            fb_file = os.path.join(td, "mock_fb0")
+            hud = hud_mod.CapSorterLCDHUD(fb_device=fb_file)
+            hud._fb_info = fb_rgb565_pad
+            hud._blit_framebuffer(red_bgr)
+            with open(fb_file, "rb") as fh:
+                written = fh.read()
+            self.assertEqual(len(written), 320 * 1024)
+            self.assertEqual(written[0:2], b"\x00\xf8")
+
+    def test_homography_rejects_bowtie_mirrored_rotated_oob_sliver_and_bad_interior_points(self):
+        valid = [[92, 34], [548, 34], [548, 446], [92, 446]]
+        H = fc.compute_homography_from_fiducials(
+            valid,
+            image_size=(640, 480),
+            check_points_px=[[320.0, 240.0]],
+            check_points_mm=[[150.0, 150.0]],
+            max_check_err_mm=1.0,
+        )
+        self.assertEqual(H.shape, (3, 3))
+
+        # 1. Bow-tie / self-intersecting (swapped BR & BL)
+        with self.assertRaises(ValueError):
+            fc.compute_homography_from_fiducials([[92, 34], [548, 34], [92, 446], [548, 446]], image_size=(640, 480))
+        # 2. Counter-clockwise / mirrored winding (TL -> BL -> BR -> TR)
+        with self.assertRaises(ValueError):
+            fc.compute_homography_from_fiducials([[92, 34], [92, 446], [548, 446], [548, 34]], image_size=(640, 480))
+        # 3. 180-degree rotated corner sequence (BR -> BL -> TL -> TR)
+        with self.assertRaises(ValueError):
+            fc.compute_homography_from_fiducials([[548, 446], [92, 446], [92, 34], [548, 34]], image_size=(640, 480))
+        # 4. Out-of-bounds pixel coordinate
+        with self.assertRaises(ValueError):
+            fc.compute_homography_from_fiducials([[-5, 34], [548, 34], [548, 446], [92, 446]], image_size=(640, 480))
+        # 5. Degenerate narrow sliver (extreme angle / small height)
+        with self.assertRaises(ValueError):
+            fc.compute_homography_from_fiducials([[92, 200], [548, 200], [548, 215], [92, 215]], image_size=(640, 480))
+        # 6. Bad interior check point exceeds tolerance
+        with self.assertRaises(RuntimeError):
+            fc.compute_homography_from_fiducials(
+                valid,
+                image_size=(640, 480),
+                check_points_px=[[320.0, 240.0]],
+                check_points_mm=[[190.0, 150.0]],
+                max_check_err_mm=2.5,
+            )
+
+    def test_v2_poster_and_remediation_plan_verified(self):
+        poster_path = os.path.join(REPO_ROOT, "website", "assets", "system_poster_v2.jpg")
+        img = cv2.imread(poster_path)
+        self.assertIsNotNone(img, "Regenerated website/assets/system_poster_v2.jpg must be readable")
+        h, w = img.shape[:2]
+        self.assertGreaterEqual(w, 2000)
+        self.assertGreaterEqual(h, 1200)
+
+        plan_path = os.path.join(REPO_ROOT, "firmware", "REMEDIATION_PLAN.md")
+        plan_txt = _read_text(plan_path)
+        self.assertIn("MAX_HOMING_SEEK_X_MM", plan_txt)
+        self.assertIn("_GuardedHeartbeatSupervisor", plan_txt)
+        self.assertIn("FBIOGET_VSCREENINFO", plan_txt)
+        self.assertIn("EXEC_CAPTURE_FAULT", plan_txt)
 
 
 if __name__ == "__main__":

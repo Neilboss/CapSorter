@@ -15,7 +15,7 @@
 #define FRAME_HEIGHT              240
 #define FRAME_PIXELS              (FRAME_WIDTH * FRAME_HEIGHT)
 #define FRAME_BYTES               (FRAME_PIXELS * 2) // 153,600 bytes RGB565
-#define BFS_QUEUE_SIZE            4096
+#define BFS_QUEUE_SIZE            8192               // 32 KiB ring queue; overflow explicitly rejected
 #define SPLIT_ROI_MAX             160                // Max ROI dim for merged same-color split (25.6 KB DMAMEM)
 
 // Continuous 300x300 mm Open Flat Plywood Workspace & X-Axis Gripper Geometry
@@ -33,8 +33,15 @@
 #define CAP_HEIGHT_MM             13.0f   // Nominal cap top height above board plane (mm)
 #define MISSED_PICK_RADIUS_MM     14.0f   // Same-color cap still within 14 mm => missed attempt
 #define MAX_PICK_RETRIES          3       // Quarantine stuck/unpickable spot after 3 failed attempts
-#define MAX_RETRY_RECORDS         16
+#define MAX_RETRY_RECORDS         MAX_BATCH_CAPS
 #define MAX_SESSION_CYCLES        200
+
+// Optional Physical Operator Re-Arm Pushbutton (active-LOW to GND, INPUT_PULLUP)
+// USB Serial command "REARM\n" is always active regardless of this flag.
+#define ENABLE_V1_REARM_BTN       0
+#define PIN_V1_REARM_BTN          2
+#define V1_REARM_BTN_DEBOUNCE_MS  50UL
+#define MEGA_REARM_WAIT_MS        28000UL // Bounded homing (23 s) + settle margin
 
 // Supervision & Handshake Timeouts
 #define READY_POLL_INTERVAL_MS    500UL
@@ -99,6 +106,9 @@ bool      megaFaulted    = false;
 
 RetryZone retryZones[MAX_RETRY_RECORDS];
 uint8_t   retryZoneCount = 0;
+String    usbCmdBuf      = "";
+uint32_t  rearmBtnLowMs  = 0;
+bool      rearmBtnArmed  = true;
 
 // External Sorting Bin Coordinates (mm)
 const float BIN_X_MM[5] = { 0.0f, 355.0f, 355.0f, 355.0f, 355.0f };
@@ -107,12 +117,37 @@ const float BIN_Y_MM[5] = { 0.0f,  55.0f, 130.0f, 205.0f, 280.0f };
 enum BatchExecResult : uint8_t {
   EXEC_COMPLETE,
   EXEC_FAULT_HALT,
-  EXEC_TIMEOUT
+  EXEC_TIMEOUT,
+  EXEC_CAPTURE_FAULT
 };
 
 // Solve 3x3 planar homography H (h8 = 1) from 4 fiducial point pairs using
-// 8x8 Gaussian elimination with partial pivoting (returns false if singular).
+// 8x8 Gaussian elimination with partial pivoting (rejects invalid quad geometry or singular matrix).
 bool computeHomography4Pt(const float srcPx[4][2], const float dstMm[4][2], float outH[9]) {
+  // 0. Validate finite bounds, strict convexity, clockwise winding, and TL->TR->BR->BL order
+  double signedArea2 = 0.0;
+  for (int i = 0; i < 4; i++) {
+    double u = srcPx[i][0], v = srcPx[i][1];
+    if (!isfinite(u) || !isfinite(v)) return false;
+    if (u < 0.0 || u >= (double)FRAME_WIDTH || v < 0.0 || v >= (double)FRAME_HEIGHT) return false;
+    int j = (i + 1) % 4;
+    int k = (i + 2) % 4;
+    double e1x = srcPx[j][0] - u;
+    double e1y = srcPx[j][1] - v;
+    double e2x = srcPx[k][0] - srcPx[j][0];
+    double e2y = srcPx[k][1] - srcPx[j][1];
+    double edgeLen = hypot(e1x, e1y);
+    if (edgeLen < 20.0) return false;
+    // In image coords (+u right, +v down), clockwise TL->TR->BR->BL yields positive cross products
+    if ((e1x * e2y - e1y * e2x) <= 0.0) return false;
+    signedArea2 += (u * srcPx[j][1] - srcPx[j][0] * v);
+  }
+  if ((0.5 * signedArea2) < 1000.0) return false;
+  if (!(srcPx[0][0] < srcPx[1][0] && srcPx[3][0] < srcPx[2][0] &&
+        srcPx[0][1] < srcPx[3][1] && srcPx[1][1] < srcPx[2][1])) {
+    return false;
+  }
+
   double A[8][9];
   for (int i = 0; i < 4; i++) {
     double u = srcPx[i][0], v = srcPx[i][1];
@@ -530,6 +565,7 @@ void segmentCapsHSV(
       uint32_t area = 0, perimeter = 0, sumX = 0, sumY = 0;
       uint16_t minX = x, maxX = x, minY = y, maxY = y;
       uint16_t qHead = 0, qTail = 0;
+      bool componentOverflow = false;
 
       colorMask[seedIdx] |= 0x80;
       bfsQueue[qTail++] = seedIdx;
@@ -561,15 +597,22 @@ void segmentCapsHSV(
           if ((nCol & 0x7F) != targetColor) {
             isBoundary = true;
           } else if (!(nCol & 0x80)) {
-            colorMask[nIdx] |= 0x80;
             uint16_t nextTail = (qTail + 1) & (BFS_QUEUE_SIZE - 1);
-            if (nextTail != qHead) {
+            if (nextTail == qHead) {
+              componentOverflow = true;
+            } else {
+              colorMask[nIdx] |= 0x80;
               bfsQueue[qTail] = nIdx;
               qTail = nextTail;
             }
           }
         }
         if (isBoundary) perimeter++;
+      }
+
+      if (componentOverflow) {
+        Serial.println(F("[TEENSY WARN] BFS queue overflow; rejecting corrupted component."));
+        continue;
       }
 
       if (area >= 220 && perimeter > 0 && *outCount < MAX_BATCH_CAPS) {
@@ -674,8 +717,10 @@ bool updateRetryState(
   const CapTarget *caps,
   uint8_t count,
   bool hasOccludedY,
-  float occludedY_mm
+  float occludedY_mm,
+  bool *outTableExhausted = nullptr
 ) {
+  if (outTableExhausted) *outTableExhausted = false;
   if (!lastTarget) return false;
   if (hasOccludedY && BRIDGE_OCCLUSION_HALF_MM > 0.0f &&
       fabsf(lastTarget->boardY_mm - occludedY_mm) <= BRIDGE_OCCLUSION_HALF_MM) {
@@ -692,12 +737,12 @@ bool updateRetryState(
     }
   }
 
-  int8_t foundIdx = -1;
+  int16_t foundIdx = -1;
   for (uint8_t i = 0; i < retryZoneCount; i++) {
     if (retryZones[i].color == lastTarget->color &&
         hypotf(retryZones[i].x_mm - lastTarget->boardX_mm,
                retryZones[i].y_mm - lastTarget->boardY_mm) <= MISSED_PICK_RADIUS_MM) {
-      foundIdx = (int8_t)i;
+      foundIdx = (int16_t)i;
       break;
     }
   }
@@ -707,20 +752,33 @@ bool updateRetryState(
   }
 
   if (stillPresent) {
-    if (foundIdx < 0 && retryZoneCount < MAX_RETRY_RECORDS) {
-      foundIdx = (int8_t)retryZoneCount++;
-      retryZones[foundIdx].attempts    = 0;
-      retryZones[foundIdx].quarantined = false;
-    }
-    if (foundIdx >= 0) {
-      retryZones[foundIdx].x_mm  = lastTarget->boardX_mm;
-      retryZones[foundIdx].y_mm  = lastTarget->boardY_mm;
-      retryZones[foundIdx].color = lastTarget->color;
-      retryZones[foundIdx].attempts++;
-      if (retryZones[foundIdx].attempts >= MAX_PICK_RETRIES) {
-        retryZones[foundIdx].quarantined = true;
-        Serial.println(F("[TEENSY WARN] Stuck/unpickable cap quarantined after 3 failed attempts."));
+    if (foundIdx < 0) {
+      if (retryZoneCount < MAX_RETRY_RECORDS) {
+        foundIdx = (int16_t)retryZoneCount++;
+        retryZones[foundIdx].attempts    = 0;
+        retryZones[foundIdx].quarantined = false;
+      } else {
+        // Recycle any cleared, non-quarantined slot before declaring exhaustion
+        for (uint8_t i = 0; i < retryZoneCount; i++) {
+          if (!retryZones[i].quarantined && retryZones[i].attempts == 0) {
+            foundIdx = (int16_t)i;
+            break;
+          }
+        }
       }
+    }
+    if (foundIdx < 0) {
+      if (outTableExhausted) *outTableExhausted = true;
+      Serial.println(F("[TEENSY ERROR] Retry tracking table exhausted; aborting session safely."));
+      return false;
+    }
+    retryZones[foundIdx].x_mm  = lastTarget->boardX_mm;
+    retryZones[foundIdx].y_mm  = lastTarget->boardY_mm;
+    retryZones[foundIdx].color = lastTarget->color;
+    retryZones[foundIdx].attempts++;
+    if (retryZones[foundIdx].attempts >= MAX_PICK_RETRIES) {
+      retryZones[foundIdx].quarantined = true;
+      Serial.println(F("[TEENSY WARN] Stuck/unpickable cap quarantined after 3 failed attempts."));
     }
   } else if (foundIdx >= 0 && !retryZones[foundIdx].quarantined) {
     retryZones[foundIdx].attempts = 0;
@@ -840,12 +898,78 @@ bool captureAndSegmentBoard(
   return true;
 }
 
+bool captureAndSegmentWithRetry(
+  bool hasOccludedY,
+  float occludedY_mm,
+  MegaLinkFlags *linkFlags,
+  uint8_t maxAttempts = 2
+) {
+  for (uint8_t attempt = 0; attempt < maxAttempts; attempt++) {
+    if (captureAndSegmentBoard(hasOccludedY, occludedY_mm, linkFlags)) {
+      return true;
+    }
+    if (linkFlags && linkFlags->gotFault) return false;
+    if (attempt + 1 < maxAttempts) {
+      serviceMegaLinkDuringStream(linkFlags);
+      delay(40);
+      serviceMegaLinkDuringStream(linkFlags);
+    }
+  }
+  return false;
+}
+
+bool sendRearmToMega() {
+  Serial.println(F("[TEENSY] Sending explicit CMD_REARM_HOME (0xB4) to Mega..."));
+  while (Serial1.available() > 0) Serial1.read();
+  Serial1.write(CMD_REARM_HOME);
+  Serial1.flush();
+  if (waitForMegaReady(MEGA_REARM_WAIT_MS)) {
+    Serial.println(F("[TEENSY] Mega re-armed, homed, and READY."));
+    return true;
+  }
+  Serial.println(F("[TEENSY WARN] Mega did not reach READY after CMD_REARM_HOME (check E-stop/limits)."));
+  return false;
+}
+
+bool pollOperatorRearmInput() {
+  // 1. USB Serial operator console command: type "REARM" + newline
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      usbCmdBuf.trim();
+      bool matched = usbCmdBuf.equalsIgnoreCase(F("REARM"));
+      usbCmdBuf = "";
+      if (matched) return true;
+    } else if (usbCmdBuf.length() < 32) {
+      usbCmdBuf += c;
+    }
+  }
+
+#if ENABLE_V1_REARM_BTN
+  // 2. Optional debounced physical panel pushbutton (active-LOW to GND)
+  if (digitalRead(PIN_V1_REARM_BTN) == LOW) {
+    if (rearmBtnLowMs == 0) {
+      rearmBtnLowMs = millis();
+    } else if (rearmBtnArmed && (millis() - rearmBtnLowMs >= V1_REARM_BTN_DEBOUNCE_MS)) {
+      rearmBtnArmed = false;
+      return true;
+    }
+  } else {
+    rearmBtnLowMs = 0;
+    rearmBtnArmed = true;
+  }
+#endif
+  return false;
+}
+
 BatchExecResult runClosedLoopSortSession() {
   retryZoneCount = 0;
 
   // Scan #0: Unobstructed full-board scan while parked at (0, 0)
-  if (!captureAndSegmentBoard(false, 0.0f, nullptr)) {
-    return EXEC_COMPLETE;
+  // NEVER return EXEC_COMPLETE on camera capture / CRC failure!
+  if (!captureAndSegmentWithRetry(false, 0.0f, nullptr, 2)) {
+    Serial.println(F("[TEENSY ERROR] Initial Scan #0 capture/CRC failed."));
+    return EXEC_CAPTURE_FAULT;
   }
 
   CapTarget nextCap;
@@ -867,6 +991,7 @@ BatchExecResult runClosedLoopSortSession() {
     MegaLinkFlags flags = { true, false, false, false, cycleStartMs };
     bool scannedAtBin = false;
     bool retryEvaluated = false;
+    bool retryTableExhausted = false;
     bool hasCandidateNext = false;
     CapTarget candidateNext;
 
@@ -881,8 +1006,10 @@ BatchExecResult runClosedLoopSortSession() {
         if (resp == CMD_SCAN_WINDOW_OPEN && !scannedAtBin) {
           // Capture & stream fresh image in parallel with bin drop while heartbeating Mega!
           scannedAtBin = true;
-          if (captureAndSegmentBoard(true, binY, &flags)) {
-            retryEvaluated = updateRetryState(&lastTarget, detectedCaps, capCount, true, binY);
+          if (captureAndSegmentWithRetry(true, binY, &flags, 2)) {
+            retryEvaluated = updateRetryState(
+              &lastTarget, detectedCaps, capCount, true, binY, &retryTableExhausted
+            );
             hasCandidateNext = selectNextCapClearanceAware(
               detectedCaps, detectedSafe, capCount, binX, binY, &candidateNext
             );
@@ -908,13 +1035,22 @@ BatchExecResult runClosedLoopSortSession() {
     }
 
     if (!scannedAtBin) {
-      if (captureAndSegmentBoard(true, binY, &flags)) {
-        retryEvaluated = updateRetryState(&lastTarget, detectedCaps, capCount, true, binY);
+      if (captureAndSegmentWithRetry(true, binY, &flags, 2)) {
+        retryEvaluated = updateRetryState(
+          &lastTarget, detectedCaps, capCount, true, binY, &retryTableExhausted
+        );
         hasCandidateNext = selectNextCapClearanceAware(
           detectedCaps, detectedSafe, capCount, binX, binY, &candidateNext
         );
       }
       if (flags.gotFault) return EXEC_FAULT_HALT;
+    }
+
+    if (retryTableExhausted) {
+      Serial1.write(CMD_FINISH_SESSION);
+      Serial1.flush();
+      awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
+      return EXEC_FAULT_HALT;
     }
 
     if (hasCandidateNext) {
@@ -929,16 +1065,28 @@ BatchExecResult runClosedLoopSortSession() {
     if (parkRes != EXEC_COMPLETE) return parkRes;
 
     MegaLinkFlags verifyFlags = { true, false, false, false, millis() };
-    if (captureAndSegmentBoard(false, 0.0f, &verifyFlags)) {
+    if (captureAndSegmentWithRetry(false, 0.0f, &verifyFlags, 2)) {
       if (verifyFlags.gotFault) return EXEC_FAULT_HALT;
       if (!retryEvaluated) {
-        updateRetryState(&lastTarget, detectedCaps, capCount, false, 0.0f);
+        updateRetryState(&lastTarget, detectedCaps, capCount, false, 0.0f, &retryTableExhausted);
+        if (retryTableExhausted) {
+          Serial1.write(CMD_FINISH_SESSION);
+          Serial1.flush();
+          awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
+          return EXEC_FAULT_HALT;
+        }
       }
       if (selectNextCapClearanceAware(detectedCaps, detectedSafe, capCount, 0.0f, 0.0f, &nextCap)) {
         continue;
       }
-    } else if (verifyFlags.gotFault) {
-      return EXEC_FAULT_HALT;
+    } else {
+      if (verifyFlags.gotFault) return EXEC_FAULT_HALT;
+      // Clear-FOV verification capture failed: park Mega cleanly, but report EXEC_CAPTURE_FAULT!
+      Serial.println(F("[TEENSY ERROR] Clear-FOV verification capture failed; parking safely with fault status."));
+      Serial1.write(CMD_FINISH_SESSION);
+      Serial1.flush();
+      awaitMegaOpcodeWithHeartbeat(CMD_BATCH_COMPLETE, MAX_SINGLE_CAP_MS);
+      return EXEC_CAPTURE_FAULT;
     }
 
     // Verified empty -> finish cleanly and return Mega to STATE_IDLE
@@ -953,15 +1101,18 @@ BatchExecResult runClosedLoopSortSession() {
 }
 
 void setup() {
-  Serial.begin(115200);   // USB Debug
+  Serial.begin(115200);   // USB Debug + Operator "REARM" command console
   Serial1.begin(115200);  // Arduino Mega Link (Bidirectional 3.3V <-> 5V Level Shifter)
   Serial2.addMemoryForRead(serial2RxBuf, sizeof(serial2RxBuf));
   Serial2.begin(921600);  // ESP32-CAM High-Speed Wired Link
   pinMode(LED_BUILTIN, OUTPUT);
+#if ENABLE_V1_REARM_BTN
+  pinMode(PIN_V1_REARM_BTN, INPUT_PULLUP);
+#endif
 
   homographyOk = computeHomography4Pt(BOARD_FIDUCIALS_PX, BOARD_FIDUCIALS_MM, H);
   if (!homographyOk) {
-    Serial.println(F("[TEENSY ERROR] Fiducial homography matrix is singular; motion inhibited."));
+    Serial.println(F("[TEENSY ERROR] Fiducial homography invalid or singular; motion inhibited."));
   }
 #if !V1_CALIBRATION_VERIFIED
   Serial.println(F("[TEENSY FAIL-CLOSED] V1_CALIBRATION_VERIFIED == 0."));
@@ -979,11 +1130,17 @@ void loop() {
 #endif
 
   if (!homographyOk || megaFaulted) {
-    // Poll Mega status passively; operator must explicitly re-arm Mega before resuming
-    if (waitForMegaReady(1000)) {
+    // Allow explicit operator re-arm via USB Serial ("REARM") or optional physical button
+    if (homographyOk && megaFaulted && pollOperatorRearmInput()) {
+      sendRearmToMega();
+      delay(200);
+      return;
+    }
+    // Also passively observe Mega status in case an external console re-armed Mega
+    if (waitForMegaReady(500)) {
       Serial.println(F("[TEENSY] Mega re-armed and READY."));
     }
-    delay(500);
+    delay(200);
     return;
   }
 
@@ -997,8 +1154,13 @@ void loop() {
   BatchExecResult res = runClosedLoopSortSession();
   digitalWrite(LED_BUILTIN, LOW);
 
+  if (res == EXEC_CAPTURE_FAULT) {
+    Serial.println(F("[TEENSY WARN] Vision capture fault (ESP32-CAM frame/CRC error); backing off before retry."));
+    delay(1000);
+    return;
+  }
   if (res != EXEC_COMPLETE) {
-    Serial.println(F("[TEENSY] Halting closed-loop session until Mega is re-armed and READY."));
+    Serial.println(F("[TEENSY] Halting closed-loop session. Send 'REARM' over USB Serial (or press re-arm button) once cleared."));
   }
   delay(500);
 }

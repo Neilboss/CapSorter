@@ -9,6 +9,7 @@
 #           in <20 MB RAM without ever blocking the 250 ms Mega heartbeat.
 # =========================================================================
 import argparse
+from dataclasses import dataclass
 import glob
 import math
 import os
@@ -19,8 +20,30 @@ import time
 import cv2
 import numpy as np
 
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
+FBIOGET_VSCREENINFO = 0x4600
+FBIOGET_FSCREENINFO = 0x4602
+
 LCD_WIDTH  = 480
 LCD_HEIGHT = 320
+
+
+@dataclass
+class FramebufferInfo:
+    width: int = LCD_WIDTH
+    height: int = LCD_HEIGHT
+    bpp: int = 16
+    line_length: int = LCD_WIDTH * 2
+    red_offset: int = 11
+    red_len: int = 5
+    green_offset: int = 5
+    green_len: int = 6
+    blue_offset: int = 0
+    blue_len: int = 5
 
 BOARD_SIZE_MM             = 300.0
 SAFE_PICK_MIN_MM          = 18.0
@@ -139,6 +162,139 @@ def bgr_to_bgra32_bytes(bgr: np.ndarray) -> bytes:
         bgr = cv2.resize(bgr, (LCD_WIDTH, LCD_HEIGHT), interpolation=cv2.INTER_AREA)
     bgra = cv2.cvtColor(bgr, cv2.COLOR_BGR2BGRA)
     return np.ascontiguousarray(bgra, dtype=np.uint8).tobytes()
+
+
+def probe_framebuffer_info(fb_device: str) -> FramebufferInfo:
+    """
+    Queries true Linux fbdev resolution, bits-per-pixel, row stride (line_length),
+    and RGB/BGR bitfield offsets via FBIOGET_VSCREENINFO / FBIOGET_FSCREENINFO,
+    falling back gracefully to sysfs and packed 480x320 RGB565 defaults.
+    """
+    info = FramebufferInfo()
+    if not fb_device:
+        return info
+
+    # 1. Preferred: direct Linux fbdev ioctl query
+    if fcntl is not None and os.path.exists(fb_device):
+        try:
+            with open(fb_device, "rb") as fb:
+                vbuf = bytearray(160)
+                fcntl.ioctl(fb.fileno(), FBIOGET_VSCREENINFO, vbuf, True)
+                xres, yres = struct.unpack_from("<II", vbuf, 0)
+                bpp = struct.unpack_from("<I", vbuf, 24)[0]
+                r_off, r_len, _ = struct.unpack_from("<III", vbuf, 36)
+                g_off, g_len, _ = struct.unpack_from("<III", vbuf, 48)
+                b_off, b_len, _ = struct.unpack_from("<III", vbuf, 60)
+
+                fbuf = bytearray(80)
+                fcntl.ioctl(fb.fileno(), FBIOGET_FSCREENINFO, fbuf, True)
+                fix_fmt = "@16sLIIIIHHHI"
+                line_len = struct.unpack_from(fix_fmt, fbuf, 0)[-1]
+
+                if xres > 0 and yres > 0 and bpp in (16, 32):
+                    min_stride = xres * (bpp // 8)
+                    return FramebufferInfo(
+                        width=int(xres),
+                        height=int(yres),
+                        bpp=int(bpp),
+                        line_length=max(int(line_len), min_stride),
+                        red_offset=int(r_off),
+                        red_len=int(r_len) or (8 if bpp == 32 else 5),
+                        green_offset=int(g_off),
+                        green_len=int(g_len) or (8 if bpp == 32 else 6),
+                        blue_offset=int(b_off),
+                        blue_len=int(b_len) or (8 if bpp == 32 else 5),
+                    )
+        except (OSError, struct.error, ValueError):
+            pass
+
+    # 2. Secondary fallback: Linux sysfs attributes
+    fb_name = os.path.basename(fb_device)
+    sys_dir = f"/sys/class/graphics/{fb_name}"
+    try:
+        with open(os.path.join(sys_dir, "bits_per_pixel"), "r", encoding="utf-8") as fh:
+            val = int(fh.read().strip())
+            if val in (16, 32):
+                info.bpp = val
+                if val == 32:
+                    info.red_offset, info.red_len = 16, 8
+                    info.green_offset, info.green_len = 8, 8
+                    info.blue_offset, info.blue_len = 0, 8
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(os.path.join(sys_dir, "virtual_size"), "r", encoding="utf-8") as fh:
+            w_s, h_s = fh.read().strip().split(",")
+            w_i, h_i = int(w_s), int(h_s)
+            if w_i > 0 and h_i > 0:
+                info.width, info.height = w_i, h_i
+    except (OSError, ValueError):
+        pass
+    min_stride = info.width * (info.bpp // 8)
+    info.line_length = min_stride
+    try:
+        with open(os.path.join(sys_dir, "stride"), "r", encoding="utf-8") as fh:
+            st_i = int(fh.read().strip())
+            if st_i >= min_stride:
+                info.line_length = st_i
+    except (OSError, ValueError):
+        pass
+    return info
+
+
+def pack_bgr_for_framebuffer(bgr: np.ndarray, fb_info: FramebufferInfo) -> bytes:
+    """
+    Resizes if needed, packs BGR uint8 pixels according to the framebuffer's exact
+    bpp and red/green/blue bitfield offsets/lengths, and pads each scanline to
+    fb_info.line_length bytes so padded DRM/SPI strides never skew or corrupt pixels.
+    """
+    w = int(fb_info.width)
+    h = int(fb_info.height)
+    if bgr.shape[:2] != (h, w):
+        bgr = cv2.resize(bgr, (w, h), interpolation=cv2.INTER_AREA)
+
+    b_u8 = bgr[:, :, 0]
+    g_u8 = bgr[:, :, 1]
+    r_u8 = bgr[:, :, 2]
+
+    if fb_info.bpp == 32:
+        bytes_per_px = 4
+        r_shift = max(0, 8 - fb_info.red_len)
+        g_shift = max(0, 8 - fb_info.green_len)
+        b_shift = max(0, 8 - fb_info.blue_len)
+        packed = (
+            ((r_u8.astype(np.uint32) >> r_shift) << fb_info.red_offset)
+            | ((g_u8.astype(np.uint32) >> g_shift) << fb_info.green_offset)
+            | ((b_u8.astype(np.uint32) >> b_shift) << fb_info.blue_offset)
+        )
+        # Preserve opaque alpha byte in whichever 8-bit lane is unused (typically bit 24)
+        used_offsets = {fb_info.red_offset, fb_info.green_offset, fb_info.blue_offset}
+        for alpha_off in (24, 0):
+            if alpha_off not in used_offsets:
+                packed |= np.uint32(0xFF) << alpha_off
+                break
+        row_bytes_arr = np.ascontiguousarray(packed, dtype="<u4").view(np.uint8).reshape(h, w * bytes_per_px)
+    elif fb_info.bpp == 16:
+        bytes_per_px = 2
+        r_shift = max(0, 8 - fb_info.red_len)
+        g_shift = max(0, 8 - fb_info.green_len)
+        b_shift = max(0, 8 - fb_info.blue_len)
+        packed = (
+            ((r_u8.astype(np.uint16) >> r_shift) << fb_info.red_offset)
+            | ((g_u8.astype(np.uint16) >> g_shift) << fb_info.green_offset)
+            | ((b_u8.astype(np.uint16) >> b_shift) << fb_info.blue_offset)
+        )
+        row_bytes_arr = np.ascontiguousarray(packed, dtype="<u2").view(np.uint8).reshape(h, w * bytes_per_px)
+    else:
+        raise ValueError(f"Unsupported framebuffer bpp={fb_info.bpp}; expected 16 or 32.")
+
+    row_width_bytes = w * bytes_per_px
+    stride = max(int(fb_info.line_length), row_width_bytes)
+    if stride > row_width_bytes:
+        padded = np.zeros((h, stride), dtype=np.uint8)
+        padded[:, :row_width_bytes] = row_bytes_arr
+        return padded.tobytes()
+    return row_bytes_arr.tobytes()
 
 
 def hit_test_touch_button(x_px: int, y_px: int):
@@ -341,7 +497,8 @@ class CapSorterLCDHUD:
         self.touch_swap_xy = bool(touch_swap_xy)
         self.touch_invert_x = bool(touch_invert_x)
         self.touch_invert_y = bool(touch_invert_y)
-        self._fb_bpp = self._detect_fb_bpp()
+        self._fb_info = probe_framebuffer_info(self.fb_device)
+        self._fb_bpp = self._fb_info.bpp
 
         self._lock = threading.Lock()
         self._stop_evt = threading.Event()
@@ -650,23 +807,18 @@ class CapSorterLCDHUD:
         return img
 
     def _detect_fb_bpp(self) -> int:
-        if not self.fb_device:
-            return 16
-        fb_name = os.path.basename(self.fb_device)
-        bpp_path = f"/sys/class/graphics/{fb_name}/bits_per_pixel"
-        try:
-            with open(bpp_path, "r", encoding="utf-8") as fh:
-                val = int(fh.read().strip())
-                if val in (16, 32):
-                    return val
-        except (OSError, ValueError):
-            pass
-        return 16
+        self._fb_info = probe_framebuffer_info(self.fb_device)
+        return self._fb_info.bpp
 
     def _blit_framebuffer(self, frame_bgr: np.ndarray):
-        payload = bgr_to_bgra32_bytes(frame_bgr) if self._fb_bpp == 32 else bgr_to_rgb565_bytes(frame_bgr)
-        with open(self.fb_device, "wb") as fb:
-            fb.write(payload)
+        payload = pack_bgr_for_framebuffer(frame_bgr, self._fb_info)
+        try:
+            with open(self.fb_device, "r+b", buffering=0) as fb:
+                fb.seek(0)
+                fb.write(payload)
+        except OSError:
+            with open(self.fb_device, "wb") as fb:
+                fb.write(payload)
 
     def _render_loop(self):
         while not self._stop_evt.is_set():

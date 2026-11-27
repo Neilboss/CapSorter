@@ -2050,7 +2050,7 @@
           </div>
           <h3 class="font-bold text-white text-base mb-2">NC Limit Switches &amp; Homing</h3>
           <p class="text-xs text-slate-300 leading-relaxed">
-            Three normally closed (NC) mechanical limit switches monitor X, Y, and Z (Pins 22–24, polled in <code class="text-cyan-300">loop()</code> with 3-sample debounce — Port A has no AVR ISR). Open-circuit or overtravel trips latch <code class="text-cyan-300">STATE_HARD_FAULT</code> and disable <code class="text-cyan-300">STEPPER_EN</code> and <code class="text-cyan-300">SERVO_OE</code>. Measure actual stop time &amp; distance on the machine.
+            Three normally closed (NC) mechanical limit switches monitor X, Y, and Z (Pins 22–24, polled in <code class="text-cyan-300">loop()</code> with <code class="text-cyan-300">8 ms</code> timed debounce — Port A has no AVR ISR) alongside step-bounded homing (395 mm X / 325 mm Y, 23 s timeout). Open-circuit or overtravel trips latch <code class="text-cyan-300">STATE_HARD_FAULT</code> and disable <code class="text-cyan-300">STEPPER_EN</code> and <code class="text-cyan-300">SERVO_OE</code>. Measure actual stop time &amp; distance on the machine.
           </p>
         </div>
 
@@ -2194,12 +2194,14 @@ MISSED_PICK_RADIUS_MM     = 14.0   # Same-color cap still within 14 mm after pic
 MAX_PICK_RETRIES          = 3      # Quarantine stuck/ungraspable cap zone after 3 failed attempts
 MAX_SESSION_CYCLES        = 200    # Hard safety bound on closed-loop pick cycles per session
 
-# Supervision Timeouts (dynamic batch ceiling + per-cap stall timer)
-HEARTBEAT_INTERVAL_S  = 0.25
-READY_POLL_INTERVAL_S = 0.5
-MAX_SINGLE_CAP_S      = 25.0  # Reset whenever Mega emits CMD_CAP_PROGRESS / CMD_AWAIT_NEXT
-PER_CAP_BUDGET_S      = 18.0  # Worst-case cap cycle + margin
-BATCH_OVERHEAD_S      = 30.0  # Parking &amp; handshake margin
+# Supervision Timeouts (dynamic batch ceiling + per-cap stall timer + guarded vision heartbeat)
+HEARTBEAT_INTERVAL_S     = 0.25
+READY_POLL_INTERVAL_S    = 0.5
+MAX_SINGLE_CAP_S         = 25.0  # Reset whenever Mega emits CMD_CAP_PROGRESS / CMD_AWAIT_NEXT
+PER_CAP_BUDGET_S         = 18.0  # Worst-case cap cycle + margin
+BATCH_OVERHEAD_S         = 30.0  # Parking &amp; handshake margin
+MAX_VISION_STAGE_STALL_S = 3.5   # Hard liveness budget: if vision freezes &gt;3.5s, stop heartbeating so Mega halts!
+BIN_DROP_BUDGET_MS       = 800.0 # Warn when capture + OpenCV exceeds bin-drop parallel hiding window
 
 DEFAULT_CALIB_PATHS = {
     "picamera2_imx219": "/home/pi/capsorter/calibration_csi_imx219.npz",
@@ -2225,6 +2227,82 @@ HSV_RANGES = {
 
 class CalibrationError(RuntimeError):
     """Raised when camera calibration is missing, malformed, unverified, or mismatched."""
+
+
+class _GuardedHeartbeatSupervisor:
+    """
+    Dedicated guarded background heartbeat thread for V2 closed-loop sessions.
+
+    Prevents transient camera capture or OpenCV spikes (&gt;1.2 s) from spuriously
+    tripping Mega's UART comms watchdog while refusing blind heartbeating:
+      - The main vision thread MUST refresh a bounded liveness deadline before
+        each capture/detect stage (&lt;= max_stall_s, default 3.5 s).
+      - If the main thread genuinely stalls past that deadline, this thread
+        immediately stops sending CMD_HEARTBEAT_PING (0xF0) and sets
+        vision_stalled=True so Mega executes its safe park-and-halt policy.
+      - Any serial I/O failure sets link_lost=True and stops immediately.
+    """
+
+    def __init__(
+        self,
+        controller,
+        interval_s: float = HEARTBEAT_INTERVAL_S,
+        max_stall_s: float = MAX_VISION_STAGE_STALL_S,
+        clock=time.monotonic,
+    ):
+        self.controller = controller
+        self.interval_s = max(0.02, float(interval_s))
+        self.max_stall_s = max(0.1, float(max_stall_s))
+        self.clock = clock
+        self._stop_evt = threading.Event()
+        self._state_lock = threading.Lock()
+        self._liveness_deadline = self.clock() + self.max_stall_s
+        self._thread = None
+        self.vision_stalled = False
+        self.link_lost = False
+        self.pings_sent = 0
+
+    def refresh_liveness(self, budget_s: float = None):
+        budget = self.max_stall_s if budget_s is None else max(0.1, float(budget_s))
+        with self._state_lock:
+            self._liveness_deadline = self.clock() + budget
+
+    def _run(self):
+        while not self._stop_evt.is_set():
+            with self._state_lock:
+                deadline = self._liveness_deadline
+            if self.clock() &gt; deadline:
+                self.vision_stalled = True
+                print(
+                    f"[WATCHDOG] Vision main thread exceeded {self.max_stall_s:.2f}s liveness budget; "
+                    "stopping heartbeat so Mega enters fail-safe halt.",
+                    file=sys.stderr,
+                )
+                self._stop_evt.set()
+                return
+            try:
+                self.controller._uart_write(bytes([CMD_HEARTBEAT_PING]))
+                self.pings_sent += 1
+            except SERIAL_EXCEPTIONS:
+                self.link_lost = True
+                self.controller._close_serial()
+                self._stop_evt.set()
+                return
+            self._stop_evt.wait(self.interval_s)
+
+    def start(self):
+        if self._thread is not None:
+            return
+        self.refresh_liveness()
+        self._stop_evt.clear()
+        self._thread = threading.Thread(target=self._run, name="mega_guarded_heartbeat", daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop_evt.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            self._thread = None
 
 
 def resolve_serial_port(
@@ -2987,7 +3065,11 @@ class PiZeroVisionController:
                     last_poll_t = now
 
                 while self.uart is not None and self.uart.in_waiting &gt; 0:
-                    resp = self.uart.read(1)[0]
+                    with self._uart_lock:
+                        resp_b = self.uart.read(1) if self.uart is not None else b""
+                    if not resp_b:
+                        break
+                    resp = resp_b[0]
                     if resp == CMD_STATUS_READY:
                         self._emit_hud("READY", {"serial_port": self.resolved_serial_port})
                         return True
@@ -3047,7 +3129,11 @@ class PiZeroVisionController:
                 sleep_fn(HEARTBEAT_INTERVAL_S)
 
                 while self.uart is not None and self.uart.in_waiting &gt; 0:
-                    resp = self.uart.read(1)[0]
+                    with self._uart_lock:
+                        resp_b = self.uart.read(1) if self.uart is not None else b""
+                    if not resp_b:
+                        break
+                    resp = resp_b[0]
                     if resp == target_opcode:
                         return "OK"
                     if resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
@@ -3066,20 +3152,27 @@ class PiZeroVisionController:
         clock=time.monotonic,
         sleep_fn=time.sleep,
         max_cycles: int = MAX_SESSION_CYCLES,
+        enable_bg_heartbeat: bool = None,
+        max_vision_stall_s: float = MAX_VISION_STAGE_STALL_S,
+        heartbeat_interval_s: float = HEARTBEAT_INTERVAL_S,
     ) -&gt; dict:
         """
         Executes a full closed-loop sorting session:
           1. Captures Scan #0 at unobstructed (0, 0).
           2. Sends one clearance-ranked CapTarget at a time via CMD_PICK_SINGLE (0x5B).
           3. On Mega CMD_SCAN_WINDOW_OPEN (0xA5) at the color bin, captures &amp; analyzes
-             the fresh board IN PARALLEL with the bin drop, updating bumped coordinates
-             and missed-pick retry/quarantine state.
+             the fresh board IN PARALLEL with the bin drop while a guarded background
+             heartbeat thread maintains Mega's 1.2 s UART watchdog (stopping automatically
+             if vision stalls beyond max_vision_stall_s).
           4. On CMD_AWAIT_NEXT (0xA6), immediately dispatches the next cap from the bin,
              or executes CMD_PARK_FOR_SCAN (0xB5) for an unobstructed clear-FOV check
              before terminating cleanly with CMD_FINISH_SESSION (0xB6).
         """
         if self.uart is None:
-            return {"status": "NACK", "picked": 0, "scans": 0, "quarantined": [], "out_of_bounds_seen": 0}
+            return {
+                "status": "NACK", "picked": 0, "scans": 0, "quarantined": [],
+                "out_of_bounds_seen": 0, "max_vision_ms": 0.0,
+            }
 
         cap_source = capture_fn or self.capture_rectified_frame
         retry_records = []
@@ -3087,12 +3180,74 @@ class PiZeroVisionController:
         scans = 0
         picked = 0
         out_of_bounds_seen = 0
+        max_vision_ms = 0.0
+        total_bg_heartbeats = 0
 
-        # Scan #0: Unobstructed full-board scan while parked at (0, 0)
+        use_bg_hb = (
+            (clock is time.monotonic and sleep_fn is time.sleep)
+            if enable_bg_heartbeat is None
+            else bool(enable_bg_heartbeat)
+        )
+        hb_sup = None
+
+        def _stop_hb():
+            nonlocal hb_sup, total_bg_heartbeats
+            if hb_sup is not None:
+                hb_sup.stop()
+                total_bg_heartbeats += hb_sup.pings_sent
+                hb_sup = None
+
+        def _capture_and_detect_timed(occluded_y_mm):
+            nonlocal scans, out_of_bounds_seen, max_vision_ms
+            if hb_sup is not None:
+                hb_sup.refresh_liveness(max_vision_stall_s)
+            t0 = clock()
+            frame_img = cap_source()
+            t1 = clock()
+            scans += 1
+            if hb_sup is not None:
+                hb_sup.refresh_liveness(max_vision_stall_s)
+            else:
+                self._uart_write(bytes([CMD_HEARTBEAT_PING]))
+            detected_caps = self.detect_caps(frame_img, occluded_y_mm=occluded_y_mm)
+            t2 = clock()
+            cap_ms = max(0.0, (t1 - t0) * 1000.0)
+            det_ms = max(0.0, (t2 - t1) * 1000.0)
+            total_ms = cap_ms + det_ms
+            if total_ms &gt; max_vision_ms:
+                max_vision_ms = total_ms
+            if total_ms &gt; BIN_DROP_BUDGET_MS:
+                print(
+                    f"[VISION TIMING] Frame #{scans} took {total_ms:.1f} ms "
+                    f"(capture={cap_ms:.1f} ms, detect={det_ms:.1f} ms &gt; {BIN_DROP_BUDGET_MS:.0f} ms bin budget)",
+                    file=sys.stderr,
+                )
+            out_of_bounds_seen += sum(1 for c in detected_caps if not c.get("in_safe_bounds", True))
+            if hb_sup is not None:
+                hb_sup.refresh_liveness(max_vision_stall_s)
+            return frame_img, detected_caps
+
+        def _make_result(status_str: str) -&gt; dict:
+            active_pings = hb_sup.pings_sent if hb_sup is not None else 0
+            return {
+                "status": status_str,
+                "picked": picked,
+                "scans": scans,
+                "quarantined": quarantined_zones,
+                "out_of_bounds_seen": out_of_bounds_seen,
+                "max_vision_ms": round(max_vision_ms, 2),
+                "bg_heartbeats_sent": total_bg_heartbeats + active_pings,
+            }
+
+        # Scan #0: Unobstructed full-board scan while parked at (0, 0) (Mega is IDLE)
         self._emit_hud("SCAN_INITIAL", {"scans": scans})
+        t0 = clock()
         frame = cap_source()
+        t1 = clock()
         scans += 1
         caps = self.detect_caps(frame, occluded_y_mm=None)
+        t2 = clock()
+        max_vision_ms = max(max_vision_ms, max(0.0, (t2 - t0) * 1000.0))
         out_of_bounds_seen += sum(1 for c in caps if not c.get("in_safe_bounds", True))
         self._emit_hud(
             "SCAN_INITIAL",
@@ -3102,29 +3257,28 @@ class PiZeroVisionController:
 
         if next_cap is None:
             self._emit_hud("SESSION_COMPLETE", {"caps": caps, "picked": 0, "scans": scans})
-            return {
-                "status": "COMPLETE",
-                "picked": 0,
-                "scans": scans,
-                "quarantined": quarantined_zones,
-                "out_of_bounds_seen": out_of_bounds_seen,
-            }
+            return _make_result("COMPLETE")
 
         try:
             for _ in range(max_cycles):
+                _stop_hb()
+
                 ack_status = self._send_single_target_with_ack(next_cap, sleep_fn=sleep_fn)
                 if ack_status != "ACK":
                     self._emit_hud(
                         "LINK_LOST" if ack_status == "LINK_LOST" else "FAULT",
                         {"reason": f"DISPATCH {ack_status}"},
                     )
-                    return {
-                        "status": ack_status,
-                        "picked": picked,
-                        "scans": scans,
-                        "quarantined": quarantined_zones,
-                        "out_of_bounds_seen": out_of_bounds_seen,
-                    }
+                    return _make_result(ack_status)
+
+                if use_bg_hb:
+                    hb_sup = _GuardedHeartbeatSupervisor(
+                        self,
+                        interval_s=heartbeat_interval_s,
+                        max_stall_s=max_vision_stall_s,
+                        clock=clock,
+                    )
+                    hb_sup.start()
 
                 last_target = next_cap
                 bin_x, bin_y, _ = BIN_COORDS[last_target["color"]]
@@ -3137,21 +3291,35 @@ class PiZeroVisionController:
                 candidate_next = None
 
                 while not await_received:
-                    self._uart_write(bytes([CMD_HEARTBEAT_PING]))
-                    sleep_fn(HEARTBEAT_INTERVAL_S)
+                    if hb_sup is not None:
+                        hb_sup.refresh_liveness(max_vision_stall_s)
+                        if hb_sup.link_lost:
+                            self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+                            return _make_result("LINK_LOST")
+                        if hb_sup.vision_stalled:
+                            self._emit_hud("FAULT", {"reason": "VISION STALL WATCHDOG"})
+                            return _make_result("VISION_STALL")
+                    else:
+                        self._uart_write(bytes([CMD_HEARTBEAT_PING]))
+                    sleep_fn(heartbeat_interval_s)
 
                     while self.uart is not None and self.uart.in_waiting &gt; 0:
-                        resp = self.uart.read(1)[0]
+                        with self._uart_lock:
+                            resp_b = self.uart.read(1) if self.uart is not None else b""
+                        if not resp_b:
+                            break
+                        resp = resp_b[0]
                         if resp == CMD_SCAN_WINDOW_OPEN and not scanned_at_bin:
                             # Pipelined capture while Mega lowers/drops/retracts at color bin
                             self._emit_hud("SCAN_WINDOW_OPEN", {"bin_y": bin_y})
-                            fresh = cap_source()
-                            scans += 1
+                            fresh, fresh_caps = _capture_and_detect_timed(occluded_y_mm=bin_y)
                             scanned_at_bin = True
-                            self._uart_write(bytes([CMD_HEARTBEAT_PING]))
-
-                            fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
-                            out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
+                            if hb_sup is not None and hb_sup.vision_stalled:
+                                self._emit_hud("FAULT", {"reason": "VISION STALL WATCHDOG"})
+                                return _make_result("VISION_STALL")
+                            if hb_sup is not None and hb_sup.link_lost:
+                                self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+                                return _make_result("LINK_LOST")
                             retry_evaluated = self._update_retry_state(
                                 last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
                             )
@@ -3175,32 +3343,22 @@ class PiZeroVisionController:
                             break
                         elif resp in (CMD_RECOVERY_HALT, CMD_HARD_FAULT, CMD_STATUS_FAULT):
                             self._emit_hud("FAULT", {"reason": f"MEGA FAULT 0x{resp:02X}"})
-                            return {
-                                "status": "FAULT",
-                                "picked": picked,
-                                "scans": scans,
-                                "quarantined": quarantined_zones,
-                                "out_of_bounds_seen": out_of_bounds_seen,
-                            }
+                            return _make_result("FAULT")
 
                     if not await_received and (clock() - cycle_start &gt; MAX_SINGLE_CAP_S):
                         print("[TIMEOUT] Mega stopped responding during closed-loop cap cycle.", file=sys.stderr)
                         self._emit_hud("TIMEOUT", {"reason": "CYCLE TIMEOUT"})
-                        return {
-                            "status": "TIMEOUT",
-                            "picked": picked,
-                            "scans": scans,
-                            "quarantined": quarantined_zones,
-                            "out_of_bounds_seen": out_of_bounds_seen,
-                        }
+                        return _make_result("TIMEOUT")
 
                 # Fallback capture if Mega signaled AWAIT_NEXT without prior SCAN_WINDOW_OPEN
                 if not scanned_at_bin:
-                    fresh = cap_source()
-                    scans += 1
-                    self._uart_write(bytes([CMD_HEARTBEAT_PING]))
-                    fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
-                    out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
+                    fresh, fresh_caps = _capture_and_detect_timed(occluded_y_mm=bin_y)
+                    if hb_sup is not None and hb_sup.vision_stalled:
+                        self._emit_hud("FAULT", {"reason": "VISION STALL WATCHDOG"})
+                        return _make_result("VISION_STALL")
+                    if hb_sup is not None and hb_sup.link_lost:
+                        self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+                        return _make_result("LINK_LOST")
                     retry_evaluated = self._update_retry_state(
                         last_target, fresh_caps, retry_records, quarantined_zones, occluded_y_mm=bin_y
                     )
@@ -3225,6 +3383,7 @@ class PiZeroVisionController:
 
                 # Honor operator LCD PAUSE cleanly between caps by parking at (0,0) into STATE_IDLE
                 if self.paused:
+                    _stop_hb()
                     self._emit_hud("FINISH_SESSION", {})
                     self._uart_write(bytes([CMD_FINISH_SESSION]))
                     done_res = self._await_opcode_with_heartbeat(
@@ -3237,13 +3396,7 @@ class PiZeroVisionController:
                         ),
                         {"picked": picked, "scans": scans, "reason": final_status},
                     )
-                    return {
-                        "status": final_status,
-                        "picked": picked,
-                        "scans": scans,
-                        "quarantined": quarantined_zones,
-                        "out_of_bounds_seen": out_of_bounds_seen,
-                    }
+                    return _make_result(final_status)
 
                 if candidate_next is not None:
                     next_cap = candidate_next
@@ -3252,6 +3405,8 @@ class PiZeroVisionController:
                 # 0 graspable caps visible outside bridge band -&gt; clear-FOV verification park at (0,0)
                 self._emit_hud("PARK_FOR_SCAN", {})
                 self._uart_write(bytes([CMD_PARK_FOR_SCAN]))
+                if hb_sup is not None:
+                    hb_sup.refresh_liveness(MAX_SINGLE_CAP_S)
                 park_res = self._await_opcode_with_heartbeat(
                     CMD_AWAIT_NEXT, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
                 )
@@ -3260,20 +3415,16 @@ class PiZeroVisionController:
                         "LINK_LOST" if park_res == "LINK_LOST" else "FAULT",
                         {"reason": f"PARK {park_res}"},
                     )
-                    return {
-                        "status": park_res,
-                        "picked": picked,
-                        "scans": scans,
-                        "quarantined": quarantined_zones,
-                        "out_of_bounds_seen": out_of_bounds_seen,
-                    }
+                    return _make_result(park_res)
 
                 self._emit_hud("AWAIT_NEXT", {"at_xy": (0.0, 0.0)})
-                verify_frame = cap_source()
-                scans += 1
-                self._uart_write(bytes([CMD_HEARTBEAT_PING]))
-                verify_caps = self.detect_caps(verify_frame, occluded_y_mm=None)
-                out_of_bounds_seen += sum(1 for c in verify_caps if not c.get("in_safe_bounds", True))
+                verify_frame, verify_caps = _capture_and_detect_timed(occluded_y_mm=None)
+                if hb_sup is not None and hb_sup.vision_stalled:
+                    self._emit_hud("FAULT", {"reason": "VISION STALL WATCHDOG"})
+                    return _make_result("VISION_STALL")
+                if hb_sup is not None and hb_sup.link_lost:
+                    self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
+                    return _make_result("LINK_LOST")
                 if not retry_evaluated:
                     self._update_retry_state(
                         last_target, verify_caps, retry_records, quarantined_zones, occluded_y_mm=None
@@ -3296,6 +3447,7 @@ class PiZeroVisionController:
                     continue
 
                 # Confirmed empty (or only quarantined/out-of-bounds caps remain) -&gt; finish cleanly
+                _stop_hb()
                 self._emit_hud("FINISH_SESSION", {})
                 self._uart_write(bytes([CMD_FINISH_SESSION]))
                 done_res = self._await_opcode_with_heartbeat(
@@ -3308,39 +3460,24 @@ class PiZeroVisionController:
                     ),
                     {"caps": verify_caps, "picked": picked, "scans": scans, "reason": final_status},
                 )
-                return {
-                    "status": final_status,
-                    "picked": picked,
-                    "scans": scans,
-                    "quarantined": quarantined_zones,
-                    "out_of_bounds_seen": out_of_bounds_seen,
-                }
+                return _make_result(final_status)
 
             # Reached hard cycle limit -&gt; park safely
+            _stop_hb()
             self._emit_hud("FINISH_SESSION", {})
             self._uart_write(bytes([CMD_FINISH_SESSION]))
             self._await_opcode_with_heartbeat(
                 CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
             )
             self._emit_hud("SESSION_COMPLETE", {"picked": picked, "scans": scans})
-            return {
-                "status": "MAX_CYCLES",
-                "picked": picked,
-                "scans": scans,
-                "quarantined": quarantined_zones,
-                "out_of_bounds_seen": out_of_bounds_seen,
-            }
+            return _make_result("MAX_CYCLES")
         except SERIAL_EXCEPTIONS as exc:
             print(f"[UART] USB-TTL link dropped mid-session: {exc}", file=sys.stderr)
             self._close_serial()
             self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
-            return {
-                "status": "LINK_LOST",
-                "picked": picked,
-                "scans": scans,
-                "quarantined": quarantined_zones,
-                "out_of_bounds_seen": out_of_bounds_seen,
-            }
+            return _make_result("LINK_LOST")
+        finally:
+            _stop_hb()
 
     def transmit_batch_and_supervise(
         self,
@@ -3386,7 +3523,11 @@ class PiZeroVisionController:
                 sleep_fn(HEARTBEAT_INTERVAL_S)
 
                 while self.uart is not None and self.uart.in_waiting &gt; 0:
-                    resp = self.uart.read(1)[0]
+                    with self._uart_lock:
+                        resp_b = self.uart.read(1) if self.uart is not None else b""
+                    if not resp_b:
+                        break
+                    resp = resp_b[0]
                     if resp == CMD_CAP_PROGRESS:
                         last_progress_t = clock()
                     elif resp == CMD_BATCH_COMPLETE:
@@ -3530,6 +3671,7 @@ if __name__ == "__main__":
 #           in &lt;20 MB RAM without ever blocking the 250 ms Mega heartbeat.
 # =========================================================================
 import argparse
+from dataclasses import dataclass
 import glob
 import math
 import os
@@ -3540,8 +3682,30 @@ import time
 import cv2
 import numpy as np
 
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
+FBIOGET_VSCREENINFO = 0x4600
+FBIOGET_FSCREENINFO = 0x4602
+
 LCD_WIDTH  = 480
 LCD_HEIGHT = 320
+
+
+@dataclass
+class FramebufferInfo:
+    width: int = LCD_WIDTH
+    height: int = LCD_HEIGHT
+    bpp: int = 16
+    line_length: int = LCD_WIDTH * 2
+    red_offset: int = 11
+    red_len: int = 5
+    green_offset: int = 5
+    green_len: int = 6
+    blue_offset: int = 0
+    blue_len: int = 5
 
 BOARD_SIZE_MM             = 300.0
 SAFE_PICK_MIN_MM          = 18.0
@@ -3660,6 +3824,139 @@ def bgr_to_bgra32_bytes(bgr: np.ndarray) -&gt; bytes:
         bgr = cv2.resize(bgr, (LCD_WIDTH, LCD_HEIGHT), interpolation=cv2.INTER_AREA)
     bgra = cv2.cvtColor(bgr, cv2.COLOR_BGR2BGRA)
     return np.ascontiguousarray(bgra, dtype=np.uint8).tobytes()
+
+
+def probe_framebuffer_info(fb_device: str) -&gt; FramebufferInfo:
+    """
+    Queries true Linux fbdev resolution, bits-per-pixel, row stride (line_length),
+    and RGB/BGR bitfield offsets via FBIOGET_VSCREENINFO / FBIOGET_FSCREENINFO,
+    falling back gracefully to sysfs and packed 480x320 RGB565 defaults.
+    """
+    info = FramebufferInfo()
+    if not fb_device:
+        return info
+
+    # 1. Preferred: direct Linux fbdev ioctl query
+    if fcntl is not None and os.path.exists(fb_device):
+        try:
+            with open(fb_device, "rb") as fb:
+                vbuf = bytearray(160)
+                fcntl.ioctl(fb.fileno(), FBIOGET_VSCREENINFO, vbuf, True)
+                xres, yres = struct.unpack_from("&lt;II", vbuf, 0)
+                bpp = struct.unpack_from("&lt;I", vbuf, 24)[0]
+                r_off, r_len, _ = struct.unpack_from("&lt;III", vbuf, 36)
+                g_off, g_len, _ = struct.unpack_from("&lt;III", vbuf, 48)
+                b_off, b_len, _ = struct.unpack_from("&lt;III", vbuf, 60)
+
+                fbuf = bytearray(80)
+                fcntl.ioctl(fb.fileno(), FBIOGET_FSCREENINFO, fbuf, True)
+                fix_fmt = "@16sLIIIIHHHI"
+                line_len = struct.unpack_from(fix_fmt, fbuf, 0)[-1]
+
+                if xres &gt; 0 and yres &gt; 0 and bpp in (16, 32):
+                    min_stride = xres * (bpp // 8)
+                    return FramebufferInfo(
+                        width=int(xres),
+                        height=int(yres),
+                        bpp=int(bpp),
+                        line_length=max(int(line_len), min_stride),
+                        red_offset=int(r_off),
+                        red_len=int(r_len) or (8 if bpp == 32 else 5),
+                        green_offset=int(g_off),
+                        green_len=int(g_len) or (8 if bpp == 32 else 6),
+                        blue_offset=int(b_off),
+                        blue_len=int(b_len) or (8 if bpp == 32 else 5),
+                    )
+        except (OSError, struct.error, ValueError):
+            pass
+
+    # 2. Secondary fallback: Linux sysfs attributes
+    fb_name = os.path.basename(fb_device)
+    sys_dir = f"/sys/class/graphics/{fb_name}"
+    try:
+        with open(os.path.join(sys_dir, "bits_per_pixel"), "r", encoding="utf-8") as fh:
+            val = int(fh.read().strip())
+            if val in (16, 32):
+                info.bpp = val
+                if val == 32:
+                    info.red_offset, info.red_len = 16, 8
+                    info.green_offset, info.green_len = 8, 8
+                    info.blue_offset, info.blue_len = 0, 8
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(os.path.join(sys_dir, "virtual_size"), "r", encoding="utf-8") as fh:
+            w_s, h_s = fh.read().strip().split(",")
+            w_i, h_i = int(w_s), int(h_s)
+            if w_i &gt; 0 and h_i &gt; 0:
+                info.width, info.height = w_i, h_i
+    except (OSError, ValueError):
+        pass
+    min_stride = info.width * (info.bpp // 8)
+    info.line_length = min_stride
+    try:
+        with open(os.path.join(sys_dir, "stride"), "r", encoding="utf-8") as fh:
+            st_i = int(fh.read().strip())
+            if st_i &gt;= min_stride:
+                info.line_length = st_i
+    except (OSError, ValueError):
+        pass
+    return info
+
+
+def pack_bgr_for_framebuffer(bgr: np.ndarray, fb_info: FramebufferInfo) -&gt; bytes:
+    """
+    Resizes if needed, packs BGR uint8 pixels according to the framebuffer's exact
+    bpp and red/green/blue bitfield offsets/lengths, and pads each scanline to
+    fb_info.line_length bytes so padded DRM/SPI strides never skew or corrupt pixels.
+    """
+    w = int(fb_info.width)
+    h = int(fb_info.height)
+    if bgr.shape[:2] != (h, w):
+        bgr = cv2.resize(bgr, (w, h), interpolation=cv2.INTER_AREA)
+
+    b_u8 = bgr[:, :, 0]
+    g_u8 = bgr[:, :, 1]
+    r_u8 = bgr[:, :, 2]
+
+    if fb_info.bpp == 32:
+        bytes_per_px = 4
+        r_shift = max(0, 8 - fb_info.red_len)
+        g_shift = max(0, 8 - fb_info.green_len)
+        b_shift = max(0, 8 - fb_info.blue_len)
+        packed = (
+            ((r_u8.astype(np.uint32) &gt;&gt; r_shift) &lt;&lt; fb_info.red_offset)
+            | ((g_u8.astype(np.uint32) &gt;&gt; g_shift) &lt;&lt; fb_info.green_offset)
+            | ((b_u8.astype(np.uint32) &gt;&gt; b_shift) &lt;&lt; fb_info.blue_offset)
+        )
+        # Preserve opaque alpha byte in whichever 8-bit lane is unused (typically bit 24)
+        used_offsets = {fb_info.red_offset, fb_info.green_offset, fb_info.blue_offset}
+        for alpha_off in (24, 0):
+            if alpha_off not in used_offsets:
+                packed |= np.uint32(0xFF) &lt;&lt; alpha_off
+                break
+        row_bytes_arr = np.ascontiguousarray(packed, dtype="&lt;u4").view(np.uint8).reshape(h, w * bytes_per_px)
+    elif fb_info.bpp == 16:
+        bytes_per_px = 2
+        r_shift = max(0, 8 - fb_info.red_len)
+        g_shift = max(0, 8 - fb_info.green_len)
+        b_shift = max(0, 8 - fb_info.blue_len)
+        packed = (
+            ((r_u8.astype(np.uint16) &gt;&gt; r_shift) &lt;&lt; fb_info.red_offset)
+            | ((g_u8.astype(np.uint16) &gt;&gt; g_shift) &lt;&lt; fb_info.green_offset)
+            | ((b_u8.astype(np.uint16) &gt;&gt; b_shift) &lt;&lt; fb_info.blue_offset)
+        )
+        row_bytes_arr = np.ascontiguousarray(packed, dtype="&lt;u2").view(np.uint8).reshape(h, w * bytes_per_px)
+    else:
+        raise ValueError(f"Unsupported framebuffer bpp={fb_info.bpp}; expected 16 or 32.")
+
+    row_width_bytes = w * bytes_per_px
+    stride = max(int(fb_info.line_length), row_width_bytes)
+    if stride &gt; row_width_bytes:
+        padded = np.zeros((h, stride), dtype=np.uint8)
+        padded[:, :row_width_bytes] = row_bytes_arr
+        return padded.tobytes()
+    return row_bytes_arr.tobytes()
 
 
 def hit_test_touch_button(x_px: int, y_px: int):
@@ -3862,7 +4159,8 @@ class CapSorterLCDHUD:
         self.touch_swap_xy = bool(touch_swap_xy)
         self.touch_invert_x = bool(touch_invert_x)
         self.touch_invert_y = bool(touch_invert_y)
-        self._fb_bpp = self._detect_fb_bpp()
+        self._fb_info = probe_framebuffer_info(self.fb_device)
+        self._fb_bpp = self._fb_info.bpp
 
         self._lock = threading.Lock()
         self._stop_evt = threading.Event()
@@ -4171,23 +4469,18 @@ class CapSorterLCDHUD:
         return img
 
     def _detect_fb_bpp(self) -&gt; int:
-        if not self.fb_device:
-            return 16
-        fb_name = os.path.basename(self.fb_device)
-        bpp_path = f"/sys/class/graphics/{fb_name}/bits_per_pixel"
-        try:
-            with open(bpp_path, "r", encoding="utf-8") as fh:
-                val = int(fh.read().strip())
-                if val in (16, 32):
-                    return val
-        except (OSError, ValueError):
-            pass
-        return 16
+        self._fb_info = probe_framebuffer_info(self.fb_device)
+        return self._fb_info.bpp
 
     def _blit_framebuffer(self, frame_bgr: np.ndarray):
-        payload = bgr_to_bgra32_bytes(frame_bgr) if self._fb_bpp == 32 else bgr_to_rgb565_bytes(frame_bgr)
-        with open(self.fb_device, "wb") as fb:
-            fb.write(payload)
+        payload = pack_bgr_for_framebuffer(frame_bgr, self._fb_info)
+        try:
+            with open(self.fb_device, "r+b", buffering=0) as fb:
+                fb.seek(0)
+                fb.write(payload)
+        except OSError:
+            with open(self.fb_device, "wb") as fb:
+                fb.write(payload)
 
     def _render_loop(self):
         while not self._stop_evt.is_set():
@@ -4466,15 +4759,109 @@ def calibrate_intrinsics_from_checkerboards(
 def compute_homography_from_fiducials(
     rectified_pixel_corners: np.ndarray,
     max_corner_err_mm: float = 1.0,
+    image_size: tuple = None,
+    check_points_px: np.ndarray = None,
+    check_points_mm: np.ndarray = None,
+    max_check_err_mm: float = 2.5,
 ) -&gt; np.ndarray:
     """
     Computes 3x3 planar homography matrix H mapping rectified image pixels
-    (u, v) to physical sorting board coordinates (X_mm, Y_mm) and validates
-    corner round-trip accuracy.
+    (u, v) to physical sorting board coordinates (X_mm, Y_mm) after validating
+    strict quadrilateral geometry (image bounds, convexity, clockwise winding,
+    minimum area, side ratios, interior angles, TL-&gt;TR-&gt;BR-&gt;BL orientation),
+    corner round-trip accuracy, and optional interior check-point accuracy.
     """
     rect_pts = np.asarray(rectified_pixel_corners, dtype=np.float32).reshape((4, 2))
     if not np.all(np.isfinite(rect_pts)):
         raise ValueError("Rectified fiducial pixel corners contain non-finite values.")
+
+    # 1. Image bounds check (if image dimensions are known)
+    if image_size is not None:
+        img_w, img_h = float(image_size[0]), float(image_size[1])
+        if img_w &lt;= 0 or img_h &lt;= 0:
+            raise ValueError(f"Invalid image_size={image_size}")
+        if (
+            np.any(rect_pts[:, 0] &lt; 0.0)
+            or np.any(rect_pts[:, 0] &gt;= img_w)
+            or np.any(rect_pts[:, 1] &lt; 0.0)
+            or np.any(rect_pts[:, 1] &gt;= img_h)
+        ):
+            raise ValueError(
+                f"Fiducial corners fall outside image bounds {image_size}: {rect_pts.tolist()}"
+            )
+
+    # 2. Edge lengths, strict convexity, and clockwise winding (in image coords: +u right, +v down)
+    edges = np.roll(rect_pts, -1, axis=0) - rect_pts
+    edge_lens = np.linalg.norm(edges, axis=1)
+    if float(np.min(edge_lens)) &lt; 40.0:
+        raise ValueError(
+            f"Degenerate fiducial quadrilateral: shortest edge is {float(np.min(edge_lens)):.1f} px (&lt;40 px)."
+        )
+    horiz_ratio = float(edge_lens[0] / edge_lens[2])
+    vert_ratio = float(edge_lens[1] / edge_lens[3])
+    if not (0.4 &lt;= horiz_ratio &lt;= 2.5 and 0.4 &lt;= vert_ratio &lt;= 2.5):
+        raise ValueError(
+            f"Fiducial quadrilateral has extreme perspective/edge-length distortion "
+            f"(top/bottom={horiz_ratio:.2f}, right/left={vert_ratio:.2f})."
+        )
+
+    cross_z = []
+    for i in range(4):
+        e1 = edges[i]
+        e2 = edges[(i + 1) % 4]
+        cross_z.append(float(e1[0] * e2[1] - e1[1] * e2[0]))
+
+    if not cv2.isContourConvex(rect_pts) or any(c == 0.0 for c in cross_z):
+        raise ValueError(
+            "Fiducial quadrilateral is non-convex or self-intersecting (bow-tie/crossed clicks)."
+        )
+    if any(c &lt; 0.0 for c in cross_z):
+        if all(c &lt; 0.0 for c in cross_z):
+            raise ValueError(
+                "Fiducial corners have counter-clockwise/mirrored winding; expected clockwise TL-&gt;TR-&gt;BR-&gt;BL."
+            )
+        raise ValueError(
+            "Fiducial quadrilateral is concave or self-intersecting (bow-tie/crossed clicks)."
+        )
+
+    # 3. Signed area &amp; interior angle sanity (reject slivers / near-collinear quads)
+    u = rect_pts[:, 0].astype(np.float64)
+    v = rect_pts[:, 1].astype(np.float64)
+    area_px2 = 0.5 * float(np.sum(u * np.roll(v, -1) - np.roll(u, -1) * v))
+    min_area = 2500.0
+    if image_size is not None:
+        min_area = max(min_area, 0.05 * float(image_size[0]) * float(image_size[1]))
+    if area_px2 &lt; min_area:
+        raise ValueError(
+            f"Fiducial quadrilateral area {area_px2:.1f} px^2 is too small (min {min_area:.1f} px^2)."
+        )
+
+    for i in range(4):
+        v_prev = rect_pts[(i - 1) % 4] - rect_pts[i]
+        v_next = rect_pts[(i + 1) % 4] - rect_pts[i]
+        cos_ang = float(np.dot(v_prev, v_next) / (np.linalg.norm(v_prev) * np.linalg.norm(v_next)))
+        ang_deg = float(np.degrees(np.arccos(np.clip(cos_ang, -1.0, 1.0))))
+        if not (40.0 &lt;= ang_deg &lt;= 140.0):
+            raise ValueError(
+                f"Fiducial corner #{i + 1} interior angle {ang_deg:.1f} deg outside [40, 140] deg."
+            )
+
+    # 4. Spatial TL/TR/BR/BL ordering consistency (rejects 90/180/270-degree rotated corner sequences)
+    v_top_mid = 0.5 * (v[0] + v[1])
+    v_bot_mid = 0.5 * (v[2] + v[3])
+    u_left_mid = 0.5 * (u[0] + u[3])
+    u_right_mid = 0.5 * (u[1] + u[2])
+    if not (
+        v_top_mid &lt; v_bot_mid - 10.0
+        and u_left_mid &lt; u_right_mid - 10.0
+        and u[0] &lt; u[1]
+        and u[3] &lt; u[2]
+        and v[0] &lt; v[3]
+        and v[1] &lt; v[2]
+    ):
+        raise ValueError(
+            "Fiducial corner order is rotated or inconsistent; expected TL -&gt; TR -&gt; BR -&gt; BL."
+        )
 
     H, _ = cv2.findHomography(rect_pts, BOARD_CORNERS_MM, method=0)
     if H is None or not np.all(np.isfinite(H)) or abs(np.linalg.det(H)) &lt; 1e-12:
@@ -4487,6 +4874,24 @@ def compute_homography_from_fiducials(
         raise RuntimeError(
             f"Homography corner mapping error {max_err:.4f} mm exceeds limit {max_corner_err_mm:.4f} mm."
         )
+
+    # 5. Optional independent interior check-point verification (e.g., board center or test grid)
+    if check_points_px is not None or check_points_mm is not None:
+        if check_points_px is None or check_points_mm is None:
+            raise ValueError("Provide both check_points_px and check_points_mm together.")
+        chk_px = np.asarray(check_points_px, dtype=np.float32).reshape((-1, 2))
+        chk_mm = np.asarray(check_points_mm, dtype=np.float64).reshape((-1, 2))
+        if chk_px.shape != chk_mm.shape or chk_px.shape[0] == 0:
+            raise ValueError("check_points_px and check_points_mm must be non-empty Nx2 arrays of matching shape.")
+        if not (np.all(np.isfinite(chk_px)) and np.all(np.isfinite(chk_mm))):
+            raise ValueError("Interior check points contain non-finite values.")
+        mapped_chk = cv2.perspectiveTransform(chk_px.reshape(1, -1, 2), H).reshape(-1, 2)
+        max_chk_err = float(np.max(np.linalg.norm(mapped_chk - chk_mm, axis=1)))
+        if max_chk_err &gt; max_check_err_mm:
+            raise RuntimeError(
+                f"Interior check-point mapping error {max_chk_err:.3f} mm exceeds limit {max_check_err_mm:.3f} mm."
+            )
+
     return H
 
 
@@ -4552,15 +4957,22 @@ def save_uncalibrated_placeholder(out_path: str):
     )
 
 
-def _parse_corners_arg(corners_str: str) -&gt; np.ndarray:
-    pairs = [p.strip() for p in corners_str.split(";") if p.strip()]
-    if len(pairs) != 4:
-        raise ValueError("Expected 4 semicolon-separated 'u,v' corners (TL;TR;BR;BL).")
+def _parse_points_list_arg(points_str: str) -&gt; np.ndarray:
+    pairs = [p.strip() for p in points_str.split(";") if p.strip()]
+    if not pairs:
+        raise ValueError("Expected one or more semicolon-separated 'x,y' point pairs.")
     pts = []
     for p in pairs:
-        u_str, v_str = p.split(",")
-        pts.append([float(u_str.strip()), float(v_str.strip())])
+        x_str, y_str = p.split(",")
+        pts.append([float(x_str.strip()), float(y_str.strip())])
     return np.array(pts, dtype=np.float32)
+
+
+def _parse_corners_arg(corners_str: str) -&gt; np.ndarray:
+    pts = _parse_points_list_arg(corners_str)
+    if pts.shape != (4, 2):
+        raise ValueError("Expected 4 semicolon-separated 'u,v' corners (TL;TR;BR;BL).")
+    return pts
 
 
 def main():
@@ -4606,6 +5018,18 @@ def main():
         help="Nominal bottle-cap height in mm used with --camera-height-mm parallax compensation (default: 13.0)",
     )
     parser.add_argument(
+        "--check-points-px",
+        help="Optional interior rectified check points as 'u0,v0;u1,v1;...' to verify homography accuracy",
+    )
+    parser.add_argument(
+        "--check-points-mm",
+        help="Known physical board coordinates 'x0,y0;x1,y1;...' matching --check-points-px",
+    )
+    parser.add_argument(
+        "--max-check-err-mm", type=float, default=2.5,
+        help="Maximum allowed interior check-point mapping error in mm (default: 2.5)",
+    )
+    parser.add_argument(
         "--out",
         help="Output .npz path (defaults to calibration_csi_imx219.npz or calibration_usb.npz)",
     )
@@ -4631,7 +5055,16 @@ def main():
         with open(args.corners_json, "r", encoding="utf-8") as fh:
             corners_px = np.array(json.load(fh), dtype=np.float32)
 
-    H = compute_homography_from_fiducials(corners_px)
+    check_px = _parse_points_list_arg(args.check_points_px) if args.check_points_px else None
+    check_mm = _parse_points_list_arg(args.check_points_mm) if args.check_points_mm else None
+
+    H = compute_homography_from_fiducials(
+        corners_px,
+        image_size=image_size,
+        check_points_px=check_px,
+        check_points_mm=check_mm,
+        max_check_err_mm=args.max_check_err_mm,
+    )
     default_out = (
         "calibration_csi_imx219.npz"
         if args.camera_type == "picamera2_imx219"
@@ -4728,12 +5161,20 @@ if __name__ == "__main__":
 #define PWM_GRIP_OPEN     210    // ~36 mm jaw gap (open)
 #define PWM_GRIP_CLOSE    385    // ~26 mm jaw gap (clamped on 28-32mm cap)
 
-// Safety, Settle &amp; Watchdog Timeouts
-// Worst-case X homing: 370 mm / (800 / 40 = 20 mm/s) = 18.5 s -&gt; 30 s timeout (~1.6x margin).
-#define BIN_SETTLE_MS        120UL  // Stationary XY settle at bin (Z raised) before bin-side camera shutter
-#define COMMS_TIMEOUT_MS    1200UL  // 1.2 s without 0xF0 heartbeat triggers fail-safe halt
-#define HOMING_TIMEOUT_MS  30000UL  // 30.0 s max homing seek duration
-#define BACKOFF_TIMEOUT_MS  3000UL  // 3.0 s max duration for pre-check / switch-release backoff
+// Safety, Homing Bounds, Debounce &amp; Watchdog Timeouts
+// Bounded homing seek: X &lt;= 395 mm (370 + 25 mm margin), Y &lt;= 325 mm (300 + 25 mm margin).
+// Worst-case X seek duration: 395 mm / (800 / 40 = 20 mm/s) = 19.75 s -&gt; derived 23 s timeout.
+#define HOMING_SEEK_MARGIN_MM   25.0f
+#define MAX_HOMING_SEEK_X_MM    (MAX_TRAVEL_X_MM + HOMING_SEEK_MARGIN_MM)
+#define MAX_HOMING_SEEK_Y_MM    (MAX_TRAVEL_Y_MM + HOMING_SEEK_MARGIN_MM)
+#define MAX_HOMING_SEEK_X_STEPS ((long)(MAX_HOMING_SEEK_X_MM * STEPS_PER_MM_X))
+#define MAX_HOMING_SEEK_Y_STEPS ((long)(MAX_HOMING_SEEK_Y_MM * STEPS_PER_MM_Y))
+#define ESTOP_DEBOUNCE_MS        4UL  // Continuous active duration before software fault latch (Pole 1 cuts 12V)
+#define LIMIT_DEBOUNCE_MS        8UL  // Continuous open-circuit duration rejecting contact bounce &amp; EMI
+#define BIN_SETTLE_MS          120UL  // Stationary XY settle at bin (Z raised) before bin-side camera shutter
+#define COMMS_TIMEOUT_MS      1200UL  // 1.2 s without 0xF0 heartbeat triggers fail-safe halt
+#define HOMING_TIMEOUT_MS    23000UL  // Derived from bounded X seek (19.75 s) + 3.25 s margin
+#define BACKOFF_TIMEOUT_MS    3000UL  // 3.0 s max duration for pre-check / switch-release backoff
 
 AccelStepper stepperX(AccelStepper::DRIVER, PIN_X_STEP, PIN_X_DIR);
 AccelStepper stepperY(AccelStepper::DRIVER, PIN_Y_STEP, PIN_Y_DIR);
@@ -4768,14 +5209,17 @@ CapTarget     batchQueue[MAX_BATCH_CAPS];
 CapTarget     currentCap;
 uint8_t       batchTotal        = 0;
 uint8_t       currentIdx        = 0;
-bool          closedLoopMode    = false;
-bool          isHomed           = false;
-bool          hasInFlightCap    = false;
-bool          commsFaultLatched = false;
-uint8_t       limitFaultCount   = 0;
-uint8_t       estopFaultCount   = 0;
-unsigned long stateTimerMs      = 0;
-unsigned long lastHeartbeatMs   = 0;
+bool          closedLoopMode        = false;
+bool          isHomed               = false;
+bool          hasInFlightCap        = false;
+bool          capPossessionVerified = false;
+bool          commsFaultLatched     = false;
+uint8_t       limitFaultCount       = 0;
+uint8_t       estopFaultCount       = 0;
+unsigned long limitOpenSinceMs      = 0;
+unsigned long estopHighSinceMs      = 0;
+unsigned long stateTimerMs          = 0;
+unsigned long lastHeartbeatMs       = 0;
 
 bool isEstopActive() {
   return digitalRead(PIN_ESTOP) == HIGH;
@@ -4802,12 +5246,22 @@ bool isAnyOvertravelLimitOpen() {
   return false;
 }
 
-bool isZRetractedSafeForXY() {
+bool isZSafeForXYMotion() {
 #if !Z_LIMIT_IS_OVERTRAVEL
-  // In retracted-confirmation mode, NC switch opens (HIGH) when Z reaches top stop
+  // Retracted-confirmation mode: NC switch opens (HIGH) when Z physically reaches top retracted stop
   return digitalRead(PIN_Z_HOME) == HIGH;
 #else
+  // Overtravel-only mode: verifies Pin 24 overtravel circuit is intact/closed (LOW);
+  // NOTE: does NOT physically prove the Z servo reached its raised position.
   return !isAxisLimitOpen(PIN_Z_HOME);
+#endif
+}
+
+const __FlashStringHelper *zUnsafeReason() {
+#if !Z_LIMIT_IS_OVERTRAVEL
+  return F("Z-axis retracted-home switch not confirmed before XY travel");
+#else
+  return F("Z overtravel circuit open before XY travel (overtravel-only mode)");
 #endif
 }
 
@@ -4878,11 +5332,12 @@ void triggerHardFault(const __FlashStringHelper *reason) {
   stepperY.moveTo(stepperY.currentPosition());
   digitalWrite(PIN_STEPPER_EN, HIGH); // Disable stepper coils immediately
   digitalWrite(PIN_SERVO_OE, HIGH);   // Disable PCA9685 PWM outputs (no commanded fault motion)
-  closedLoopMode    = false;
-  isHomed           = false;
-  hasInFlightCap    = false;
-  batchTotal        = 0;
-  currentIdx        = 0;
+  closedLoopMode        = false;
+  isHomed               = false;
+  hasInFlightCap        = false;
+  capPossessionVerified = false;
+  batchTotal            = 0;
+  currentIdx            = 0;
   currentState      = STATE_HARD_FAULT;
   Serial1.write(CMD_HARD_FAULT);
   Serial.print(F("[HARD_FAULT] "));
@@ -4902,15 +5357,18 @@ bool waitServicedDelayMs(unsigned long durationMs) {
 }
 
 void homeAxes() {
-  currentState      = STATE_HOMING;
-  closedLoopMode    = false;
-  isHomed           = false;
-  hasInFlightCap    = false;
-  commsFaultLatched = false;
-  limitFaultCount   = 0;
-  estopFaultCount   = 0;
-  batchTotal        = 0;
-  currentIdx        = 0;
+  currentState          = STATE_HOMING;
+  closedLoopMode        = false;
+  isHomed               = false;
+  hasInFlightCap        = false;
+  capPossessionVerified = false;
+  commsFaultLatched     = false;
+  limitFaultCount       = 0;
+  estopFaultCount       = 0;
+  limitOpenSinceMs      = 0;
+  estopHighSinceMs      = 0;
+  batchTotal            = 0;
+  currentIdx            = 0;
 
   // 0. Refuse homing if hardwired E-stop auxiliary contact is active or Z overtravel is open
   if (isEstopActive()) {
@@ -4930,8 +5388,8 @@ void homeAxes() {
   digitalWrite(PIN_SERVO_OE, LOW);    // Enable PCA9685 outputs after latching safe PWM
   if (!waitServicedDelayMs(450UL)) return;
 
-  if (!isZRetractedSafeForXY()) {
-    triggerHardFault(F("Z-axis did not confirm retracted safe state before XY homing"));
+  if (!isZSafeForXYMotion()) {
+    triggerHardFault(zUnsafeReason());
     return;
   }
 
@@ -4957,6 +5415,12 @@ void homeAxes() {
         triggerHardFault(F("E-Stop triggered during pre-homing backoff"));
         return;
       }
+#if ENABLE_MAX_ENDSTOPS
+      if (isAxisLimitOpen(PIN_X_MAX) || isAxisLimitOpen(PIN_Y_MAX)) {
+        triggerHardFault(F("Positive-end limit tripped during pre-homing backoff"));
+        return;
+      }
+#endif
       if (millis() - preStart &gt; BACKOFF_TIMEOUT_MS) {
         triggerHardFault(F("Pre-homing backoff timeout"));
         return;
@@ -4972,7 +5436,10 @@ void homeAxes() {
     }
   }
 
-  // 3. Seek X &amp; Y Normally-Closed home switches at 20 mm/s with 30 s worst-case timeout
+  // 3. Step- &amp; time-bounded seek to X &amp; Y Normally-Closed home switches at 20 mm/s
+  //    Guards against missing switches or belt slip exceeding MAX_TRAVEL + 25 mm margin.
+  stepperX.setCurrentPosition(0);
+  stepperY.setCurrentPosition(0);
   unsigned long homeStartMs = millis();
   while (!isAxisLimitOpen(PIN_X_HOME) || !isAxisLimitOpen(PIN_Y_HOME)) {
     if (isEstopActive()) {
@@ -4985,8 +5452,16 @@ void homeAxes() {
       return;
     }
 #endif
+    if (labs(stepperX.currentPosition()) &gt; MAX_HOMING_SEEK_X_STEPS) {
+      triggerHardFault(F("Homing X seek exceeded MAX_HOMING_SEEK_X_MM (395 mm): switch/belt fault"));
+      return;
+    }
+    if (labs(stepperY.currentPosition()) &gt; MAX_HOMING_SEEK_Y_STEPS) {
+      triggerHardFault(F("Homing Y seek exceeded MAX_HOMING_SEEK_Y_MM (325 mm): switch/belt fault"));
+      return;
+    }
     if (millis() - homeStartMs &gt; HOMING_TIMEOUT_MS) {
-      triggerHardFault(F("Homing seek timeout (&gt;30s): stall, belt slip, or switch failure"));
+      triggerHardFault(F("Homing seek timeout (&gt;23s): stall, belt slip, or switch failure"));
       return;
     }
     if (!isAxisLimitOpen(PIN_X_HOME)) {
@@ -5102,8 +5577,8 @@ void pollVisionHostPackets() {
         Serial1.write(CMD_BATCH_NACK);
         continue;
       }
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before clear-FOV park"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
       closedLoopMode  = true;
@@ -5120,8 +5595,8 @@ void pollVisionHostPackets() {
         Serial1.write(CMD_BATCH_NACK);
         continue;
       }
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before session finish park"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
       closedLoopMode  = false;
@@ -5156,19 +5631,20 @@ void pollVisionHostPackets() {
         return;
       }
 
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before single-target start"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
 
       // Valid closed-loop target! Move directly from current pose (0,0 or bin) to cap
-      closedLoopMode    = true;
-      batchTotal        = 1;
-      currentIdx        = 0;
-      currentCap        = rxCap;
-      hasInFlightCap    = false;
-      commsFaultLatched = false;
-      lastHeartbeatMs   = millis();
+      closedLoopMode        = true;
+      batchTotal            = 1;
+      currentIdx            = 0;
+      currentCap            = rxCap;
+      hasInFlightCap        = false;
+      capPossessionVerified = false;
+      commsFaultLatched     = false;
+      lastHeartbeatMs       = millis();
       Serial1.write(CMD_BATCH_ACK);
 
       moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
@@ -5212,18 +5688,19 @@ void pollVisionHostPackets() {
         }
       }
 
-      if (!isZRetractedSafeForXY()) {
-        triggerHardFault(F("Z-axis not retracted before batch start"));
+      if (!isZSafeForXYMotion()) {
+        triggerHardFault(zUnsafeReason());
         return;
       }
 
       // Valid legacy batch received! Store locally &amp; acknowledge
-      closedLoopMode    = false;
-      batchTotal        = hdr.totalCaps;
-      currentIdx        = 0;
-      hasInFlightCap    = false;
-      commsFaultLatched = false;
-      lastHeartbeatMs   = millis();
+      closedLoopMode        = false;
+      batchTotal            = hdr.totalCaps;
+      currentIdx            = 0;
+      hasInFlightCap        = false;
+      capPossessionVerified = false;
+      commsFaultLatched     = false;
+      lastHeartbeatMs       = millis();
       Serial1.write(CMD_BATCH_ACK);
 
       // Start Step 01 on first target cap
@@ -5237,25 +5714,36 @@ void pollVisionHostPackets() {
 void checkRuntimeSafetyInputs() {
   if (currentState == STATE_HOMING || currentState == STATE_HARD_FAULT) return;
 
-  // Priority 1: Auxiliary NC E-Stop contact (2 consecutive samples)
+  unsigned long nowMs = millis();
+
+  // Priority 1: Auxiliary NC E-Stop contact (timed persistence &gt;= ESTOP_DEBOUNCE_MS + &gt;= 2 samples)
+  // Note: Pole 1 already cuts 12V actuator power directly in hardware independent of loop timing.
   if (isEstopActive()) {
-    estopFaultCount++;
-    if (estopFaultCount &gt;= 2) {
+    if (estopFaultCount == 0) {
+      estopHighSinceMs = nowMs;
+    }
+    if (estopFaultCount &lt; 255) estopFaultCount++;
+    if (estopFaultCount &gt;= 2 &amp;&amp; (nowMs - estopHighSinceMs &gt;= ESTOP_DEBOUNCE_MS)) {
       triggerHardFault(F("Physical E-Stop auxiliary contact open"));
       return;
     }
   } else {
-    estopFaultCount = 0;
+    estopFaultCount  = 0;
+    estopHighSinceMs = 0;
   }
 
-  // Priority 2: Polled NC limit switches for X, Y, and Z (3-sample debounce)
+  // Priority 2: Polled NC limit switches for X, Y, and Z (timed persistence &gt;= LIMIT_DEBOUNCE_MS + &gt;= 3 samples)
   if (isAnyOvertravelLimitOpen()) {
-    limitFaultCount++;
-    if (limitFaultCount &gt;= 3) {
+    if (limitFaultCount == 0) {
+      limitOpenSinceMs = nowMs;
+    }
+    if (limitFaultCount &lt; 255) limitFaultCount++;
+    if (limitFaultCount &gt;= 3 &amp;&amp; (nowMs - limitOpenSinceMs &gt;= LIMIT_DEBOUNCE_MS)) {
       triggerHardFault(F("Runtime X/Y/Z NC limit switch open or broken wire"));
     }
   } else {
-    limitFaultCount = 0;
+    limitFaultCount  = 0;
+    limitOpenSinceMs = 0;
   }
 }
 
@@ -5273,7 +5761,7 @@ void executeSafeCommsLossPolicy() {
   Serial1.write(CMD_RECOVERY_HALT);
 
   // If a single scanned cap has already been dispatched and is currently in its
-  // pick-and-place cycle, finish depositing ONLY that one cap into its bin,
+  // active pick-and-place cycle, finish ONLY that active commanded cycle,
   // then park cleanly at (0, 0) via STATE_FAILSAFE_PARKING and latch halt.
   // (Hardwired E-stop Pin 25 and NC X/Y/Z limits remain active at all times.)
   bool inActiveCapCycle = (currentState == STATE_MOVING_TO_CAP ||
@@ -5287,26 +5775,31 @@ void executeSafeCommsLossPolicy() {
                            currentState == STATE_RETRACT_Z);
   if (inActiveCapCycle) {
     batchTotal = 0; // Do not start any further queued caps after this one
-    Serial.println(F("[COMMS_LOSS] Finishing current scanned cap into bin, then parking at (0,0) to halt."));
+#if HAS_GRIP_SENSOR
+    Serial.println(F("[COMMS_LOSS] Finishing active verified pick-place cycle, then parking at (0,0) to halt."));
+#else
+    Serial.println(F("[COMMS_LOSS] Finishing active commanded pick-place cycle (cap possession unverified without HAS_GRIP_SENSOR), then parking at (0,0) to halt."));
+#endif
     return;
   }
 
   // No cap currently active (e.g., awaiting next target at bin or parking):
-  // Confirm Z is safely retracted, park cleanly at (0, 0), disable steppers,
+  // Confirm Z safety state, park cleanly at (0, 0), disable steppers,
   // and latch STATE_FAILSAFE_HALT until explicit CMD_REARM_HOME + re-home.
   pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
   pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
-  if (!isZRetractedSafeForXY()) {
-    triggerHardFault(F("Z-axis not retracted on comms-loss park"));
+  if (!isZSafeForXYMotion()) {
+    triggerHardFault(zUnsafeReason());
     return;
   }
-  closedLoopMode = false;
-  hasInFlightCap = false;
-  batchTotal     = 0;
-  currentIdx     = 0;
+  closedLoopMode        = false;
+  hasInFlightCap        = false;
+  capPossessionVerified = false;
+  batchTotal            = 0;
+  currentIdx            = 0;
   moveMachineToMm(0.0f, 0.0f);
-  currentState   = STATE_FAILSAFE_PARKING;
-  Serial.println(F("[COMMS_LOSS] No active cap; parking at (0,0) then latching fail-safe halt."));
+  currentState          = STATE_FAILSAFE_PARKING;
+  Serial.println(F("[COMMS_LOSS] No active cycle; parking at (0,0) then latching fail-safe halt."));
 }
 
 void executeMotionStateMachine() {
@@ -5339,20 +5832,52 @@ void executeMotionStateMachine() {
     // Step 03: Clamp Gripper jaws (~26 mm)
     case STATE_GRIP_CAP:
       if (millis() - stateTimerMs &gt;= 300) {
-        hasInFlightCap = true; // Commanded grip complete (unverified unless HAS_GRIP_SENSOR == 1)
+#if HAS_GRIP_SENSOR
+        hasInFlightCap = true;
+        if (isCapVerifiedHeld()) {
+          capPossessionVerified = true;
+          pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+          stateTimerMs = millis();
+          currentState = STATE_LIFT_Z;
+        } else {
+          // Verified empty grasp: open jaws, retract Z, skip false bin drop so vision retries/quarantines
+          hasInFlightCap        = false;
+          capPossessionVerified = false;
+          pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+          pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
+          stateTimerMs = millis();
+          currentState = STATE_RETRACT_Z;
+          Serial.println(F("[GRIP_MISS] Cap-presence sensor not triggered; skipping bin drop."));
+        }
+#else
+        hasInFlightCap        = true; // Commanded grip cycle active (physical cap possession UNVERIFIED)
+        capPossessionVerified = false;
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
         stateTimerMs = millis();
         currentState = STATE_LIFT_Z;
+#endif
       }
       break;
 
     // Step 04: Lift Z linkage back to 0 mm overhead clearance
     case STATE_LIFT_Z:
       if (millis() - stateTimerMs &gt;= 350) {
-        if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F("Z-axis failed retracted check before bin traverse"));
+        if (!isZSafeForXYMotion()) {
+          triggerHardFault(zUnsafeReason());
           return;
         }
+#if HAS_GRIP_SENSOR
+        if (!isCapVerifiedHeld()) {
+          // Cap slipped during Z lift: open jaws and abort bin transit cleanly
+          hasInFlightCap        = false;
+          capPossessionVerified = false;
+          pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
+          stateTimerMs = millis();
+          currentState = STATE_RETRACT_Z;
+          Serial.println(F("[GRIP_SLIP] Cap-presence lost during Z lift; aborting bin transit."));
+          return;
+        }
+#endif
         uint8_t binId = currentCap.targetBinId;
         if (binId &lt; 1 || binId &gt; 4) binId = 1;
         moveMachineToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
@@ -5398,7 +5923,8 @@ void executeMotionStateMachine() {
     // Step 07: Release Gripper jaws (cap drops into bin)
     case STATE_RELEASE_CAP:
       if (millis() - stateTimerMs &gt;= 250) {
-        hasInFlightCap = false;
+        hasInFlightCap        = false;
+        capPossessionVerified = false;
         pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
         stateTimerMs = millis();
         currentState = STATE_RETRACT_Z;
@@ -5408,8 +5934,8 @@ void executeMotionStateMachine() {
     // Step 08: Retract Z to 0 mm, emit progress pulse, await next closed-loop target or finish
     case STATE_RETRACT_Z:
       if (millis() - stateTimerMs &gt;= 300) {
-        if (!isZRetractedSafeForXY()) {
-          triggerHardFault(F("Z-axis failed retracted check after bin release"));
+        if (!isZSafeForXYMotion()) {
+          triggerHardFault(zUnsafeReason());
           return;
         }
 
@@ -5468,11 +5994,12 @@ void executeMotionStateMachine() {
     case STATE_FAILSAFE_PARKING:
       if (isGantryAtTarget()) {
         digitalWrite(PIN_STEPPER_EN, HIGH);
-        closedLoopMode = false;
-        isHomed        = false;
-        hasInFlightCap = false;
-        batchTotal     = 0;
-        currentIdx     = 0;
+        closedLoopMode        = false;
+        isHomed               = false;
+        hasInFlightCap        = false;
+        capPossessionVerified = false;
+        batchTotal            = 0;
+        currentIdx            = 0;
         currentState   = STATE_FAILSAFE_HALT;
         Serial1.write(CMD_RECOVERY_HALT);
         Serial.println(F("[COMMS_LOSS] Parked at (0,0) &amp; halted. Explicit re-arm &amp; re-home required."));
@@ -5513,6 +6040,12 @@ void setup() {
   if (TOOL_OFFSET_X_MM == 0.0f &amp;&amp; TOOL_OFFSET_Y_MM == 0.0f) {
     Serial.println(F("[WARN] TOOL_OFFSET is (0,0) placeholder; measure physical alignment on bench."));
   }
+#if Z_LIMIT_IS_OVERTRAVEL
+  Serial.println(F("[INFO] Z_LIMIT_IS_OVERTRAVEL=1: Pin 24 verifies Z overtravel-circuit health only (not Z retracted position)."));
+#endif
+#if !HAS_GRIP_SENSOR
+  Serial.println(F("[INFO] HAS_GRIP_SENSOR=0: Cap possession is commanded/unverified until a grip sensor is fitted."));
+#endif
 
   Wire.begin();
   pca.begin();

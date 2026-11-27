@@ -1322,7 +1322,7 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
       <div class="card card-emerald" style="margin: 0;">
         <h4 style="color: #34d399;">Normally Closed (NC) Polled Endstops</h4>
         <p style="font-size: 7pt; color: #cbd5e1; line-height: 1.35; margin-top: 1mm;">
-          X, Y, and Z limit switches (Pins 22–24, Port A — no AVR ISR) are polled in <code>loop()</code> with 3-sample debounce. Any open contact or wire break latches <code>STATE_HARD_FAULT</code> and disables stepper &amp; servo outputs.
+          X, Y, and Z limit switches (Pins 22–24, Port A — no AVR ISR) are polled in <code>loop()</code> with timed persistence debounce (<code>8 ms</code> limits / <code>4 ms</code> E-stop) and step-bounded homing (395 mm X / 325 mm Y, 23 s timeout). Any open contact or wire break latches <code>STATE_HARD_FAULT</code> and disables stepper &amp; servo outputs.
         </p>
       </div>
       <div class="card card-red" style="margin: 0;">
@@ -1972,8 +1972,8 @@ HardwareSerial TeensySerial(2);
         <div>
           <strong>GitHub Code Repository:</strong> github.com/Neilboss/CapSorter<br>
           <strong>Safety Architecture:</strong> Hardwired Dual-Pole Actuator E-Stop + Polled X/Y/Z NC Limits<br>
-          <strong>Required Before Sign-Off:</strong> Complete Stages 0–8 in <code>firmware/HARDWARE_BRINGUP_GUIDE.md</code> (28 automated SIL/bring-up tests pass)<br>
-          <strong>Revision Status:</strong> Pre-Build Review Rev 2.6 (Not Yet Bench-Validated)
+          <strong>Required Before Sign-Off:</strong> Complete Stages 0–8 in <code>firmware/HARDWARE_BRINGUP_GUIDE.md</code> (36 automated SIL/bring-up tests pass)<br>
+          <strong>Revision Status:</strong> Pre-Build Review Rev 2.7 (Not Yet Bench-Validated)
         </div>
       </div>
     </div>

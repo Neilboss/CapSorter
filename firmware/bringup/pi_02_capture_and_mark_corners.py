@@ -264,7 +264,7 @@ def run_corners_and_calibration(args):
         print('              --corners "uTL,vTL;uTR,vTR;uBR,vBR;uBL,vBL" --camera-height-mm <H> --out <file.npz>')
         return
 
-    H = fc.compute_homography_from_fiducials(corners_px)
+    H = fc.compute_homography_from_fiducials(corners_px, image_size=image_size)
     corners_json_path = os.path.join(args.out_dir, "corners_px.json")
     with open(corners_json_path, "w", encoding="utf-8") as fh:
         json.dump(corners_px.tolist(), fh, indent=2)

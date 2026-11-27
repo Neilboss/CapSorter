@@ -35,13 +35,20 @@
 #define PWM_GRIP_CLOSE    385
 
 // Initial nominal scaling (update after ruler measurement!)
-#define STEPS_PER_MM_X     40.0f
-#define STEPS_PER_MM_Y     40.0f
-#define JOG_SPEED_STEPS  1000.0f  // Slow, safe 25 mm/s jog speed
-#define JOG_ACCEL_STEPS  2500.0f
-#define HOMING_SPEED      800.0f  // 20 mm/s homing seek speed
-#define MAX_TRAVEL_X_MM   370.0f
-#define MAX_TRAVEL_Y_MM   300.0f
+#define STEPS_PER_MM_X          40.0f
+#define STEPS_PER_MM_Y          40.0f
+#define JOG_SPEED_STEPS       1000.0f  // Slow, safe 25 mm/s jog speed
+#define JOG_ACCEL_STEPS       2500.0f
+#define HOMING_SPEED           800.0f  // 20 mm/s homing seek speed
+#define MAX_TRAVEL_X_MM        370.0f
+#define MAX_TRAVEL_Y_MM        300.0f
+#define HOMING_SEEK_MARGIN_MM   25.0f
+#define MAX_HOMING_SEEK_X_MM   (MAX_TRAVEL_X_MM + HOMING_SEEK_MARGIN_MM) // 395 mm
+#define MAX_HOMING_SEEK_Y_MM   (MAX_TRAVEL_Y_MM + HOMING_SEEK_MARGIN_MM) // 325 mm
+#define MAX_HOMING_SEEK_X_STEPS ((long)(MAX_HOMING_SEEK_X_MM * STEPS_PER_MM_X))
+#define MAX_HOMING_SEEK_Y_STEPS ((long)(MAX_HOMING_SEEK_Y_MM * STEPS_PER_MM_Y))
+#define HOMING_TIMEOUT_MS      23000UL // Derived from 395 mm / 20 mm/s (19.75 s) + 3.25 s margin
+#define MAX_UNHOMED_JOG_MM      50.0f  // Clamp relative jogs when unhomed so typos cannot crash frame
 
 AccelStepper stepperX(AccelStepper::DRIVER, PIN_X_STEP, PIN_X_DIR);
 AccelStepper stepperY(AccelStepper::DRIVER, PIN_Y_STEP, PIN_Y_DIR);
@@ -115,11 +122,21 @@ void runHomeSequence() {
     }
   }
 
-  Serial.println(F("[HOME] Seeking X & Y home switches at 20 mm/s..."));
+  Serial.println(F("[HOME] Seeking X & Y home switches at 20 mm/s (step- & time-bounded)..."));
+  stepperX.setCurrentPosition(0);
+  stepperY.setCurrentPosition(0);
   unsigned long t0 = millis();
   while (!isXHomeOpen() || !isYHomeOpen()) {
     if (isEstop() || isZLimitOpen()) { emergencyStop(F("E-Stop/Z fault during seek")); return; }
-    if (millis() - t0 > 30000UL) { emergencyStop(F("Homing seek timeout (>30s)")); return; }
+    if (labs(stepperX.currentPosition()) > MAX_HOMING_SEEK_X_STEPS) {
+      emergencyStop(F("Homing X seek exceeded 395 mm bound (missing switch or belt slip)"));
+      return;
+    }
+    if (labs(stepperY.currentPosition()) > MAX_HOMING_SEEK_Y_STEPS) {
+      emergencyStop(F("Homing Y seek exceeded 325 mm bound (missing switch or belt slip)"));
+      return;
+    }
+    if (millis() - t0 > HOMING_TIMEOUT_MS) { emergencyStop(F("Homing seek timeout (>23s)")); return; }
     if (!isXHomeOpen()) { stepperX.setSpeed(-HOMING_SPEED); stepperX.runSpeed(); }
     if (!isYHomeOpen()) { stepperY.setSpeed(-HOMING_SPEED); stepperY.runSpeed(); }
   }
@@ -159,6 +176,22 @@ void printHelp() {
   Serial.println(F("  stop            Immediate stop"));
 }
 
+bool canAcceptMotionCmd() {
+  if (isEstop()) {
+    emergencyStop(F("Command blocked: physical E-Stop is active."));
+    return false;
+  }
+  if (faulted) {
+    Serial.println(F("[BLOCKED] Fault is latched. Clear cause and type 'en' or 'home' to recover."));
+    return false;
+  }
+  if (!steppersEnabled) {
+    Serial.println(F("[BLOCKED] Actuators are disabled. Type 'en' (or 'home') first."));
+    return false;
+  }
+  return true;
+}
+
 void handleCommand(String line) {
   line.trim();
   line.toLowerCase();
@@ -167,53 +200,106 @@ void handleCommand(String line) {
   if (line == "help" || line == "?") {
     printHelp();
   } else if (line == "stop") {
+    stepperX.setSpeed(0.0f);
+    stepperY.setSpeed(0.0f);
     stepperX.moveTo(stepperX.currentPosition());
     stepperY.moveTo(stepperY.currentPosition());
     Serial.println(F("[STOP] Motion target cleared."));
   } else if (line == "dis") {
+    stepperX.setSpeed(0.0f);
+    stepperY.setSpeed(0.0f);
+    stepperX.moveTo(stepperX.currentPosition());
+    stepperY.moveTo(stepperY.currentPosition());
     digitalWrite(PIN_STEPPER_EN, HIGH);
+    digitalWrite(PIN_SERVO_OE, HIGH);
     steppersEnabled = false;
     isHomed = false;
-    Serial.println(F("[EN] Steppers DISABLED (free to move by hand)."));
+    Serial.println(F("[EN] Steppers & servos DISABLED; pending motion targets cleared."));
   } else if (line == "en") {
     if (isEstop()) { Serial.println(F("[BLOCKED] Release E-Stop first.")); return; }
+    if (isZLimitOpen()) { Serial.println(F("[BLOCKED] Clear Z limit switch first.")); return; }
+    stepperX.setSpeed(0.0f);
+    stepperY.setSpeed(0.0f);
+    stepperX.moveTo(stepperX.currentPosition());
+    stepperY.moveTo(stepperY.currentPosition());
     faulted = false;
     pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
     pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN);
     digitalWrite(PIN_SERVO_OE, LOW);
     digitalWrite(PIN_STEPPER_EN, LOW);
     steppersEnabled = true;
-    Serial.println(F("[EN] Steppers ENABLED (Z raised, gripper open)."));
+    Serial.println(F("[EN] Steppers ENABLED (targets synced to current pos, Z raised, gripper open)."));
   } else if (line == "home") {
     runHomeSequence();
   } else if (line == "pos") {
     printPosition();
   } else if (line == "zup") {
+    if (!canAcceptMotionCmd()) return;
     pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED); Serial.println(F("[Z] RAISED"));
   } else if (line == "zpick") {
+    if (!canAcceptMotionCmd()) return;
     pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_PICK); Serial.println(F("[Z] LOWER_PICK"));
   } else if (line == "zbin") {
+    if (!canAcceptMotionCmd()) return;
     pca.setPWM(SERVO_Z_CH, 0, PWM_Z_LOWER_BIN); Serial.println(F("[Z] LOWER_BIN"));
   } else if (line == "open") {
+    if (!canAcceptMotionCmd()) return;
     pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_OPEN); Serial.println(F("[GRIP] OPEN"));
   } else if (line == "close") {
+    if (!canAcceptMotionCmd()) return;
     pca.setPWM(SERVO_GRIPPER_CH, 0, PWM_GRIP_CLOSE); Serial.println(F("[GRIP] CLOSE"));
   } else if (line.startsWith("x ")) {
-    if (!steppersEnabled) { Serial.println(F("[WARN] Type 'en' first.")); return; }
+    if (!canAcceptMotionCmd()) return;
     float dx = line.substring(2).toFloat();
-    stepperX.move(lroundf(dx * STEPS_PER_MM_X));
-    Serial.print(F("[JOG X] ")); Serial.print(dx, 2); Serial.println(F(" mm"));
+    if (!isfinite(dx)) { Serial.println(F("[BLOCKED] Invalid X jog value.")); return; }
+    if (isHomed) {
+      float curMm = (float)stepperX.currentPosition() / STEPS_PER_MM_X;
+      float targetMm = constrain(curMm + dx, 0.0f, MAX_TRAVEL_X_MM);
+      if (fabsf((curMm + dx) - targetMm) > 0.01f) {
+        Serial.print(F("[CLAMP] X jog clamped to safe travel [0, "));
+        Serial.print(MAX_TRAVEL_X_MM, 0); Serial.println(F("] mm."));
+      }
+      stepperX.moveTo(lroundf(targetMm * STEPS_PER_MM_X));
+      Serial.print(F("[JOG X] Target = ")); Serial.print(targetMm, 2); Serial.println(F(" mm"));
+    } else {
+      float clampedDx = constrain(dx, -MAX_UNHOMED_JOG_MM, MAX_UNHOMED_JOG_MM);
+      if (fabsf(clampedDx - dx) > 0.01f) {
+        Serial.println(F("[CLAMP] Unhomed relative X jog clamped to +/-50 mm."));
+      }
+      stepperX.move(lroundf(clampedDx * STEPS_PER_MM_X));
+      Serial.print(F("[JOG X] ")); Serial.print(clampedDx, 2); Serial.println(F(" mm (unhomed)"));
+    }
   } else if (line.startsWith("y ")) {
-    if (!steppersEnabled) { Serial.println(F("[WARN] Type 'en' first.")); return; }
+    if (!canAcceptMotionCmd()) return;
     float dy = line.substring(2).toFloat();
-    stepperY.move(lroundf(dy * STEPS_PER_MM_Y));
-    Serial.print(F("[JOG Y] ")); Serial.print(dy, 2); Serial.println(F(" mm"));
+    if (!isfinite(dy)) { Serial.println(F("[BLOCKED] Invalid Y jog value.")); return; }
+    if (isHomed) {
+      float curMm = (float)stepperY.currentPosition() / STEPS_PER_MM_Y;
+      float targetMm = constrain(curMm + dy, 0.0f, MAX_TRAVEL_Y_MM);
+      if (fabsf((curMm + dy) - targetMm) > 0.01f) {
+        Serial.print(F("[CLAMP] Y jog clamped to safe travel [0, "));
+        Serial.print(MAX_TRAVEL_Y_MM, 0); Serial.println(F("] mm."));
+      }
+      stepperY.moveTo(lroundf(targetMm * STEPS_PER_MM_Y));
+      Serial.print(F("[JOG Y] Target = ")); Serial.print(targetMm, 2); Serial.println(F(" mm"));
+    } else {
+      float clampedDy = constrain(dy, -MAX_UNHOMED_JOG_MM, MAX_UNHOMED_JOG_MM);
+      if (fabsf(clampedDy - dy) > 0.01f) {
+        Serial.println(F("[CLAMP] Unhomed relative Y jog clamped to +/-50 mm."));
+      }
+      stepperY.move(lroundf(clampedDy * STEPS_PER_MM_Y));
+      Serial.print(F("[JOG Y] ")); Serial.print(clampedDy, 2); Serial.println(F(" mm (unhomed)"));
+    }
   } else if (line.startsWith("go ")) {
+    if (!canAcceptMotionCmd()) return;
     if (!isHomed) { Serial.println(F("[BLOCKED] Run 'home' first before absolute 'go X Y'.")); return; }
     int sp = line.indexOf(' ', 3);
     if (sp < 0) { Serial.println(F("Usage: go <X_mm> <Y_mm>")); return; }
-    float tx = constrain(line.substring(3, sp).toFloat(), 0.0f, MAX_TRAVEL_X_MM);
-    float ty = constrain(line.substring(sp + 1).toFloat(), 0.0f, MAX_TRAVEL_Y_MM);
+    float rawX = line.substring(3, sp).toFloat();
+    float rawY = line.substring(sp + 1).toFloat();
+    if (!isfinite(rawX) || !isfinite(rawY)) { Serial.println(F("[BLOCKED] Invalid go coordinates.")); return; }
+    float tx = constrain(rawX, 0.0f, MAX_TRAVEL_X_MM);
+    float ty = constrain(rawY, 0.0f, MAX_TRAVEL_Y_MM);
     pca.setPWM(SERVO_Z_CH, 0, PWM_Z_RAISED);
     stepperX.moveTo(lroundf(tx * STEPS_PER_MM_X));
     stepperY.moveTo(lroundf(ty * STEPS_PER_MM_Y));
