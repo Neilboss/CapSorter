@@ -16,7 +16,7 @@
 #define FRAME_PIXELS              (FRAME_WIDTH * FRAME_HEIGHT)
 #define FRAME_BYTES               (FRAME_PIXELS * 2) // 153,600 bytes RGB565
 #define BFS_QUEUE_SIZE            4096
-#define SPLIT_ROI_MAX             112                // Max ROI dim for merged same-color split
+#define SPLIT_ROI_MAX             160                // Max ROI dim for merged same-color split (25.6 KB DMAMEM)
 
 // Continuous 300x300 mm Open Flat Plywood Workspace & X-Axis Gripper Geometry
 #define CAP_RADIUS_MM             15.0f   // Nominal cap radius (28-32 mm diameter)
@@ -208,6 +208,7 @@ bool waitForMegaReady(uint32_t timeoutMs) {
   uint32_t lastPollMs = 0;
   while (timeoutMs == 0 || (millis() - startMs < timeoutMs)) {
     if (lastPollMs == 0 || (millis() - lastPollMs >= READY_POLL_INTERVAL_MS)) {
+      while (Serial1.available() > 0) Serial1.read();
       Serial1.write(CMD_QUERY_STATUS);
       Serial1.flush();
       lastPollMs = millis();

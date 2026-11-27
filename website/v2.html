@@ -2128,6 +2128,7 @@ import math
 import os
 import struct
 import sys
+import threading
 import time
 import cv2
 import numpy as np
@@ -2449,6 +2450,8 @@ class PiZeroVisionController:
             )
 
         self.uart = None
+        self._uart_lock = threading.Lock()
+        self._last_pick_missed = False
         self.picam2 = None
         self.usb_cam = None
 
@@ -2469,7 +2472,20 @@ class PiZeroVisionController:
                 self.picam2.configure(cfg)
                 self.picam2.start()
                 time.sleep(0.8)  # Warm up sensor under diffused LED light plate
-                self.picam2.set_controls({"AeEnable": False, "AwbEnable": False})
+                # Capture converged AE/AWB metadata so disabling auto-loops preserves
+                # true white balance &amp; exposure instead of resetting ColourGains to (1,1).
+                meta = self.picam2.capture_metadata()
+                lock_ctrls = {"AeEnable": False, "AwbEnable": False}
+                if "ExposureTime" in meta:
+                    lock_ctrls["ExposureTime"] = int(meta["ExposureTime"])
+                if "AnalogueGain" in meta:
+                    lock_ctrls["AnalogueGain"] = float(meta["AnalogueGain"])
+                if "ColourGains" in meta and len(meta["ColourGains"]) == 2:
+                    lock_ctrls["ColourGains"] = (
+                        float(meta["ColourGains"][0]),
+                        float(meta["ColourGains"][1]),
+                    )
+                self.picam2.set_controls(lock_ctrls)
             else:
                 self.usb_cam = cv2.VideoCapture(0)
                 if not self.usb_cam.isOpened():
@@ -2799,6 +2815,7 @@ class PiZeroVisionController:
             c["color"] == col and math.hypot(c["boardX_mm"] - tx, c["boardY_mm"] - ty) &lt;= MISSED_PICK_RADIUS_MM
             for c in detected_caps
         )
+        self._last_pick_missed = bool(still_present)
 
         rec = next(
             (r for r in retry_records
@@ -2880,6 +2897,23 @@ class PiZeroVisionController:
             except Exception:
                 pass
 
+    def _close_serial(self):
+        with self._uart_lock:
+            if self.uart is not None:
+                try:
+                    if hasattr(self.uart, "close"):
+                        self.uart.close()
+                except Exception:
+                    pass
+                self.uart = None
+
+    def _uart_write(self, data: bytes):
+        with self._uart_lock:
+            if self.uart is None:
+                raise OSError("Serial port closed")
+            self.uart.write(data)
+            self.uart.flush()
+
     def reconnect_serial(self) -&gt; bool:
         """
         (Re-)opens the USB-to-TTL serial bridge (Micro-USB OTG -&gt; CH9102/CP2102)
@@ -2887,40 +2921,40 @@ class PiZeroVisionController:
         """
         if not HAS_PYSERIAL:
             return False
-        if self.uart is not None:
-            try:
-                self.uart.close()
-            except Exception:
-                pass
-            self.uart = None
+        self._close_serial()
         self.resolved_serial_port = resolve_serial_port(self.serial_port_spec)
         try:
-            self.uart = serial.Serial(self.resolved_serial_port, baudrate=115200, timeout=0.5)
+            new_uart = serial.Serial(self.resolved_serial_port, baudrate=115200, timeout=0.5)
+            with self._uart_lock:
+                self.uart = new_uart
             self._emit_hud("SERIAL_OPEN", {"serial_port": self.resolved_serial_port, "link_status": "WAIT_MEGA"})
             return True
         except SERIAL_EXCEPTIONS as exc:
             print(f"[UART] Failed to open '{self.resolved_serial_port}': {exc}", file=sys.stderr)
-            self.uart = None
+            self._close_serial()
             self._emit_hud("LINK_LOST", {"serial_port": self.resolved_serial_port, "reason": "USB-TTL OFFLINE"})
             return False
 
     def send_rearm_home(self) -&gt; bool:
         """Sends explicit CMD_REARM_HOME (0xB4) triggered by operator touch button."""
-        if self.uart is None:
-            return False
         try:
-            self.uart.write(bytes([CMD_REARM_HOME]))
-            self.uart.flush()
+            with self._uart_lock:
+                if self.uart is None:
+                    raise OSError("Serial port closed")
+                self.uart.reset_input_buffer()
+                self.uart.write(bytes([CMD_REARM_HOME]))
+                self.uart.flush()
+            self._emit_hud("REARMING", {})
             return True
         except SERIAL_EXCEPTIONS:
+            self._close_serial()
             self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
             return False
 
     def write_paced_uart(self, packet: bytes, chunk_size: int = 32, sleep_fn=time.sleep):
         # Pace in 32-byte chunks with 2 ms pause so Mega's 64-byte RX ring buffer never overflows
         for offset in range(0, len(packet), chunk_size):
-            self.uart.write(packet[offset:offset + chunk_size])
-            self.uart.flush()
+            self._uart_write(packet[offset:offset + chunk_size])
             if offset + chunk_size &lt; len(packet):
                 sleep_fn(0.002)
 
@@ -2944,11 +2978,15 @@ class PiZeroVisionController:
             while timeout_s is None or (clock() - start_t &lt; timeout_s):
                 now = clock()
                 if now - last_poll_t &gt;= poll_interval_s:
-                    self.uart.write(bytes([CMD_QUERY_STATUS]))
-                    self.uart.flush()
+                    with self._uart_lock:
+                        if self.uart is None:
+                            raise OSError("Serial port closed")
+                        self.uart.reset_input_buffer()
+                        self.uart.write(bytes([CMD_QUERY_STATUS]))
+                        self.uart.flush()
                     last_poll_t = now
 
-                while self.uart.in_waiting &gt; 0:
+                while self.uart is not None and self.uart.in_waiting &gt; 0:
                     resp = self.uart.read(1)[0]
                     if resp == CMD_STATUS_READY:
                         self._emit_hud("READY", {"serial_port": self.resolved_serial_port})
@@ -2966,6 +3004,7 @@ class PiZeroVisionController:
                 sleep_fn(0.02)
         except SERIAL_EXCEPTIONS as exc:
             print(f"[UART] Serial link error during READY poll: {exc}", file=sys.stderr)
+            self._close_serial()
             self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
             return False
         return False
@@ -2974,9 +3013,12 @@ class PiZeroVisionController:
         packet = self.pack_single_target_packet(cap)
         try:
             for _ in range(3):
-                self.uart.reset_input_buffer()
-                self.uart.write(packet)
-                self.uart.flush()
+                with self._uart_lock:
+                    if self.uart is None:
+                        raise OSError("Serial port closed")
+                    self.uart.reset_input_buffer()
+                    self.uart.write(packet)
+                    self.uart.flush()
                 ack = self.uart.read(1)
                 if ack:
                     code = ack[0]
@@ -2987,6 +3029,7 @@ class PiZeroVisionController:
                 sleep_fn(0.05)
         except SERIAL_EXCEPTIONS as exc:
             print(f"[UART] USB-TTL disconnect during target send: {exc}", file=sys.stderr)
+            self._close_serial()
             return "LINK_LOST"
         return "NACK"
 
@@ -3000,11 +3043,10 @@ class PiZeroVisionController:
         start_t = clock()
         try:
             while True:
-                self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-                self.uart.flush()
+                self._uart_write(bytes([CMD_HEARTBEAT_PING]))
                 sleep_fn(HEARTBEAT_INTERVAL_S)
 
-                while self.uart.in_waiting &gt; 0:
+                while self.uart is not None and self.uart.in_waiting &gt; 0:
                     resp = self.uart.read(1)[0]
                     if resp == target_opcode:
                         return "OK"
@@ -3015,6 +3057,7 @@ class PiZeroVisionController:
                     return "TIMEOUT"
         except SERIAL_EXCEPTIONS as exc:
             print(f"[UART] USB-TTL disconnect awaiting 0x{target_opcode:02X}: {exc}", file=sys.stderr)
+            self._close_serial()
             return "LINK_LOST"
 
     def run_closed_loop_sort_session(
@@ -3089,15 +3132,15 @@ class PiZeroVisionController:
                 cycle_start = clock()
                 scanned_at_bin = False
                 retry_evaluated = False
+                self._last_pick_missed = False
                 await_received = False
                 candidate_next = None
 
                 while not await_received:
-                    self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-                    self.uart.flush()
+                    self._uart_write(bytes([CMD_HEARTBEAT_PING]))
                     sleep_fn(HEARTBEAT_INTERVAL_S)
 
-                    while self.uart.in_waiting &gt; 0:
+                    while self.uart is not None and self.uart.in_waiting &gt; 0:
                         resp = self.uart.read(1)[0]
                         if resp == CMD_SCAN_WINDOW_OPEN and not scanned_at_bin:
                             # Pipelined capture while Mega lowers/drops/retracts at color bin
@@ -3105,8 +3148,7 @@ class PiZeroVisionController:
                             fresh = cap_source()
                             scans += 1
                             scanned_at_bin = True
-                            self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-                            self.uart.flush()
+                            self._uart_write(bytes([CMD_HEARTBEAT_PING]))
 
                             fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
                             out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
@@ -3152,16 +3194,11 @@ class PiZeroVisionController:
                             "out_of_bounds_seen": out_of_bounds_seen,
                         }
 
-                picked += 1
-                self._emit_hud("CAP_SORTED", {"color": last_target["color"], "picked": picked})
-                self._emit_hud("AWAIT_NEXT", {"at_xy": (bin_x, bin_y), "picked": picked})
-
                 # Fallback capture if Mega signaled AWAIT_NEXT without prior SCAN_WINDOW_OPEN
                 if not scanned_at_bin:
                     fresh = cap_source()
                     scans += 1
-                    self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-                    self.uart.flush()
+                    self._uart_write(bytes([CMD_HEARTBEAT_PING]))
                     fresh_caps = self.detect_caps(fresh, occluded_y_mm=bin_y)
                     out_of_bounds_seen += sum(1 for c in fresh_caps if not c.get("in_safe_bounds", True))
                     retry_evaluated = self._update_retry_state(
@@ -3181,14 +3218,40 @@ class PiZeroVisionController:
                         fresh_caps, (bin_x, bin_y), retry_records, quarantined_zones
                     )
 
+                if not self._last_pick_missed:
+                    picked += 1
+                    self._emit_hud("CAP_SORTED", {"color": last_target["color"], "picked": picked})
+                self._emit_hud("AWAIT_NEXT", {"at_xy": (bin_x, bin_y), "picked": picked})
+
+                # Honor operator LCD PAUSE cleanly between caps by parking at (0,0) into STATE_IDLE
+                if self.paused:
+                    self._emit_hud("FINISH_SESSION", {})
+                    self._uart_write(bytes([CMD_FINISH_SESSION]))
+                    done_res = self._await_opcode_with_heartbeat(
+                        CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
+                    )
+                    final_status = "PAUSED" if done_res == "OK" else done_res
+                    self._emit_hud(
+                        "PAUSED" if final_status == "PAUSED" else (
+                            "LINK_LOST" if final_status == "LINK_LOST" else "FAULT"
+                        ),
+                        {"picked": picked, "scans": scans, "reason": final_status},
+                    )
+                    return {
+                        "status": final_status,
+                        "picked": picked,
+                        "scans": scans,
+                        "quarantined": quarantined_zones,
+                        "out_of_bounds_seen": out_of_bounds_seen,
+                    }
+
                 if candidate_next is not None:
                     next_cap = candidate_next
                     continue
 
                 # 0 graspable caps visible outside bridge band -&gt; clear-FOV verification park at (0,0)
                 self._emit_hud("PARK_FOR_SCAN", {})
-                self.uart.write(bytes([CMD_PARK_FOR_SCAN]))
-                self.uart.flush()
+                self._uart_write(bytes([CMD_PARK_FOR_SCAN]))
                 park_res = self._await_opcode_with_heartbeat(
                     CMD_AWAIT_NEXT, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
                 )
@@ -3208,8 +3271,7 @@ class PiZeroVisionController:
                 self._emit_hud("AWAIT_NEXT", {"at_xy": (0.0, 0.0)})
                 verify_frame = cap_source()
                 scans += 1
-                self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-                self.uart.flush()
+                self._uart_write(bytes([CMD_HEARTBEAT_PING]))
                 verify_caps = self.detect_caps(verify_frame, occluded_y_mm=None)
                 out_of_bounds_seen += sum(1 for c in verify_caps if not c.get("in_safe_bounds", True))
                 if not retry_evaluated:
@@ -3235,8 +3297,7 @@ class PiZeroVisionController:
 
                 # Confirmed empty (or only quarantined/out-of-bounds caps remain) -&gt; finish cleanly
                 self._emit_hud("FINISH_SESSION", {})
-                self.uart.write(bytes([CMD_FINISH_SESSION]))
-                self.uart.flush()
+                self._uart_write(bytes([CMD_FINISH_SESSION]))
                 done_res = self._await_opcode_with_heartbeat(
                     CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
                 )
@@ -3257,8 +3318,7 @@ class PiZeroVisionController:
 
             # Reached hard cycle limit -&gt; park safely
             self._emit_hud("FINISH_SESSION", {})
-            self.uart.write(bytes([CMD_FINISH_SESSION]))
-            self.uart.flush()
+            self._uart_write(bytes([CMD_FINISH_SESSION]))
             self._await_opcode_with_heartbeat(
                 CMD_BATCH_COMPLETE, timeout_s=MAX_SINGLE_CAP_S, clock=clock, sleep_fn=sleep_fn
             )
@@ -3272,6 +3332,7 @@ class PiZeroVisionController:
             }
         except SERIAL_EXCEPTIONS as exc:
             print(f"[UART] USB-TTL link dropped mid-session: {exc}", file=sys.stderr)
+            self._close_serial()
             self._emit_hud("LINK_LOST", {"reason": "USB-TTL DISCONNECT"})
             return {
                 "status": "LINK_LOST",
@@ -3321,11 +3382,10 @@ class PiZeroVisionController:
             max_total_s = len(ordered_caps) * PER_CAP_BUDGET_S + BATCH_OVERHEAD_S
 
             while True:
-                self.uart.write(bytes([CMD_HEARTBEAT_PING]))
-                self.uart.flush()
+                self._uart_write(bytes([CMD_HEARTBEAT_PING]))
                 sleep_fn(HEARTBEAT_INTERVAL_S)
 
-                while self.uart.in_waiting &gt; 0:
+                while self.uart is not None and self.uart.in_waiting &gt; 0:
                     resp = self.uart.read(1)[0]
                     if resp == CMD_CAP_PROGRESS:
                         last_progress_t = clock()
@@ -3343,6 +3403,7 @@ class PiZeroVisionController:
                     return "TIMEOUT"
         except SERIAL_EXCEPTIONS as exc:
             print(f"[UART] USB-TTL link dropped during batch supervision: {exc}", file=sys.stderr)
+            self._close_serial()
             return "LINK_LOST"
 
 
@@ -3359,12 +3420,21 @@ def main():
     parser.add_argument("--enable-lcd", action="store_true", help="Enable native 480x320 3.5-inch SPI LCD HUD")
     parser.add_argument("--fb-device", default="/dev/fb0", help="Framebuffer device for 3.5-inch SPI LCD (default: /dev/fb0)")
     parser.add_argument("--touch-device", default="auto", help="XPT2046 evdev input path or 'auto'")
+    parser.add_argument("--touch-swap-xy", action="store_true", help="Swap XPT2046 X/Y touch axes")
+    parser.add_argument("--touch-invert-x", action="store_true", help="Invert XPT2046 X touch axis")
+    parser.add_argument("--touch-invert-y", action="store_true", help="Invert XPT2046 Y touch axis")
     args = parser.parse_args()
 
     hud = None
     if args.enable_lcd:
         from lcd_hud import CapSorterLCDHUD
-        hud = CapSorterLCDHUD(fb_device=args.fb_device, touch_device=args.touch_device)
+        hud = CapSorterLCDHUD(
+            fb_device=args.fb_device,
+            touch_device=args.touch_device,
+            touch_swap_xy=args.touch_swap_xy,
+            touch_invert_x=args.touch_invert_x,
+            touch_invert_y=args.touch_invert_y,
+        )
 
     try:
         controller = PiZeroVisionController(
@@ -3418,6 +3488,12 @@ def main():
                 )
                 controller.reconnect_serial()
                 time.sleep(1.0)
+            elif result["status"] == "PAUSED":
+                print(
+                    f"[V2] Session paused cleanly at (0,0) after {result['picked']} cap(s). "
+                    "Tap RESUME on LCD to continue."
+                )
+                time.sleep(0.5)
             elif result["status"] != "COMPLETE":
                 print(
                     f"[V2] Session ended with status={result['status']} "
@@ -3564,7 +3640,7 @@ def _smoothstep(u: float) -&gt; float:
 def bgr_to_rgb565_bytes(bgr: np.ndarray) -&gt; bytes:
     """
     Packs a 480x320x3 BGR uint8 OpenCV image into little-endian RGB565 bytes
-    for direct Linux framebuffer (/dev/fb0 or /dev/fb1) writes (307,200 B).
+    for 16-bpp Linux framebuffer (/dev/fb0 or /dev/fb1) writes (307,200 B).
     """
     if bgr.shape[:2] != (LCD_HEIGHT, LCD_WIDTH):
         bgr = cv2.resize(bgr, (LCD_WIDTH, LCD_HEIGHT), interpolation=cv2.INTER_AREA)
@@ -3573,6 +3649,17 @@ def bgr_to_rgb565_bytes(bgr: np.ndarray) -&gt; bytes:
     r = bgr[:, :, 2].astype(np.uint16)
     rgb565 = ((r &amp; 0xF8) &lt;&lt; 8) | ((g &amp; 0xFC) &lt;&lt; 3) | (b &gt;&gt; 3)
     return np.ascontiguousarray(rgb565, dtype="&lt;u2").tobytes()
+
+
+def bgr_to_bgra32_bytes(bgr: np.ndarray) -&gt; bytes:
+    """
+    Packs a 480x320x3 BGR uint8 OpenCV image into little-endian XRGB8888/BGRA32 bytes
+    for 32-bpp DRM fbdev emulation (/dev/fb0) writes (614,400 B).
+    """
+    if bgr.shape[:2] != (LCD_HEIGHT, LCD_WIDTH):
+        bgr = cv2.resize(bgr, (LCD_WIDTH, LCD_HEIGHT), interpolation=cv2.INTER_AREA)
+    bgra = cv2.cvtColor(bgr, cv2.COLOR_BGR2BGRA)
+    return np.ascontiguousarray(bgra, dtype=np.uint8).tobytes()
 
 
 def hit_test_touch_button(x_px: int, y_px: int):
@@ -3761,12 +3848,21 @@ class CapSorterLCDHUD:
         fps: float = 15.0,
         on_pause_toggle=None,
         on_rearm=None,
+        touch_cal: tuple = (200, 3900, 200, 3900),
+        touch_swap_xy: bool = False,
+        touch_invert_x: bool = False,
+        touch_invert_y: bool = False,
     ):
         self.fb_device = fb_device
         self.touch_device = touch_device
         self.frame_interval_s = 1.0 / max(1.0, float(fps))
         self.on_pause_toggle = on_pause_toggle
         self.on_rearm = on_rearm
+        self.touch_cal = tuple(float(v) for v in touch_cal)
+        self.touch_swap_xy = bool(touch_swap_xy)
+        self.touch_invert_x = bool(touch_invert_x)
+        self.touch_invert_y = bool(touch_invert_y)
+        self._fb_bpp = self._detect_fb_bpp()
 
         self._lock = threading.Lock()
         self._stop_evt = threading.Event()
@@ -3851,6 +3947,13 @@ class CapSorterLCDHUD:
                 self.state["controller_state"] = "IDLE"
                 self.state["active_target"] = None
                 self.predictor.mark_idle(t)
+            elif event == "PAUSED":
+                self.state["controller_state"] = "PAUSED"
+                self.state["active_target"] = None
+                self.predictor.mark_idle(t)
+            elif event == "REARMING":
+                self.state["controller_state"] = "HOMING"
+                self.state["fault_banner"] = ""
             elif event in ("FAULT", "LINK_LOST", "TIMEOUT"):
                 self.state["controller_state"] = event
                 self.state["link_status"] = "OFFLINE" if event == "LINK_LOST" else "FAULT"
@@ -4067,10 +4170,24 @@ class CapSorterLCDHUD:
 
         return img
 
+    def _detect_fb_bpp(self) -&gt; int:
+        if not self.fb_device:
+            return 16
+        fb_name = os.path.basename(self.fb_device)
+        bpp_path = f"/sys/class/graphics/{fb_name}/bits_per_pixel"
+        try:
+            with open(bpp_path, "r", encoding="utf-8") as fh:
+                val = int(fh.read().strip())
+                if val in (16, 32):
+                    return val
+        except (OSError, ValueError):
+            pass
+        return 16
+
     def _blit_framebuffer(self, frame_bgr: np.ndarray):
-        raw565 = bgr_to_rgb565_bytes(frame_bgr)
+        payload = bgr_to_bgra32_bytes(frame_bgr) if self._fb_bpp == 32 else bgr_to_rgb565_bytes(frame_bgr)
         with open(self.fb_device, "wb") as fb:
-            fb.write(raw565)
+            fb.write(payload)
 
     def _render_loop(self):
         while not self._stop_evt.is_set():
@@ -4119,7 +4236,12 @@ class CapSorterLCDHUD:
                 rlist, _, _ = select.select([fd], [], [], 0.2)
                 if not rlist:
                     continue
-                data = os.read(fd, ev_size * 16)
+                try:
+                    data = os.read(fd, ev_size * 16)
+                except BlockingIOError:
+                    continue
+                except OSError:
+                    break
                 for off in range(0, len(data) - (len(data) % ev_size), ev_size):
                     _, _, ev_type, code, value = struct.unpack(ev_fmt, data[off:off + ev_size])
                     if ev_type == 3:  # EV_ABS
@@ -4128,9 +4250,16 @@ class CapSorterLCDHUD:
                         elif code == 1:  # ABS_Y
                             raw_y = value
                     elif ev_type == 1 and code == 330 and value == 0:  # BTN_TOUCH release
-                        # Default XPT2046 12-bit ADC [200..3900] -&gt; 480x320 landscape mapping
-                        px = int(min(LCD_WIDTH - 1, max(0, (raw_x - 200) * LCD_WIDTH / 3700.0)))
-                        py = int(min(LCD_HEIGHT - 1, max(0, (raw_y - 200) * LCD_HEIGHT / 3700.0)))
+                        ax, ay = (raw_y, raw_x) if self.touch_swap_xy else (raw_x, raw_y)
+                        x_min, x_max, y_min, y_max = self.touch_cal
+                        nx = (ax - x_min) / max(1.0, (x_max - x_min))
+                        ny = (ay - y_min) / max(1.0, (y_max - y_min))
+                        if self.touch_invert_x:
+                            nx = 1.0 - nx
+                        if self.touch_invert_y:
+                            ny = 1.0 - ny
+                        px = int(min(LCD_WIDTH - 1, max(0, nx * LCD_WIDTH)))
+                        py = int(min(LCD_HEIGHT - 1, max(0, ny * LCD_HEIGHT)))
                         self.handle_touch_px(px, py)
         finally:
             os.close(fd)
@@ -4158,11 +4287,20 @@ def main():
     parser = argparse.ArgumentParser(description="CapSorter V2 3.5-inch SPI LCD Native HUD (480x320)")
     parser.add_argument("--fb-device", default="/dev/fb0", help="Linux framebuffer device (default: /dev/fb0)")
     parser.add_argument("--touch-device", default="auto", help="XPT2046 evdev input path or 'auto'")
+    parser.add_argument("--touch-swap-xy", action="store_true", help="Swap XPT2046 X/Y touch axes")
+    parser.add_argument("--touch-invert-x", action="store_true", help="Invert XPT2046 X touch axis")
+    parser.add_argument("--touch-invert-y", action="store_true", help="Invert XPT2046 Y touch axis")
     parser.add_argument("--demo", action="store_true", help="Run standalone animated demo loop on LCD")
     parser.add_argument("--snapshot", help="Write one 480x320 PNG preview frame and exit")
     args = parser.parse_args()
 
-    hud = CapSorterLCDHUD(fb_device=args.fb_device, touch_device=args.touch_device)
+    hud = CapSorterLCDHUD(
+        fb_device=args.fb_device,
+        touch_device=args.touch_device,
+        touch_swap_xy=args.touch_swap_xy,
+        touch_invert_x=args.touch_invert_x,
+        touch_invert_y=args.touch_invert_y,
+    )
     demo_caps = [
         {"capId": 1, "color": COLOR_RED,    "boardX_mm": 64.0,  "boardY_mm": 72.0,  "in_safe_bounds": True},
         {"capId": 2, "color": COLOR_YELLOW, "boardX_mm": 195.0, "boardY_mm": 98.0,  "in_safe_bounds": True},
@@ -4686,15 +4824,25 @@ bool isValidSingleTarget(const CapTarget &amp;cap) {
   if (!isfinite(cap.boardX_mm) || !isfinite(cap.boardY_mm)) return false;
   if (cap.boardX_mm &lt; SAFE_PICK_MIN_X_MM || cap.boardX_mm &gt; SAFE_PICK_MAX_X_MM) return false;
   if (cap.boardY_mm &lt; SAFE_PICK_MIN_Y_MM || cap.boardY_mm &gt; SAFE_PICK_MAX_Y_MM) return false;
+  float machX = cap.boardX_mm + TOOL_OFFSET_X_MM;
+  float machY = cap.boardY_mm + TOOL_OFFSET_Y_MM;
+  if (machX &lt; 0.0f || machX &gt; MAX_TRAVEL_X_MM) return false;
+  if (machY &lt; 0.0f || machY &gt; MAX_TRAVEL_Y_MM) return false;
   if (cap.targetBinId &lt; 1 || cap.targetBinId &gt; 4) return false;
   return true;
 }
 
-void moveGantryToMm(float boardX_mm, float boardY_mm) {
-  float targetX = constrain(boardX_mm + TOOL_OFFSET_X_MM, 0.0f, MAX_TRAVEL_X_MM);
-  float targetY = constrain(boardY_mm + TOOL_OFFSET_Y_MM, 0.0f, MAX_TRAVEL_Y_MM);
+// Raw homed machine-space move (used for (0,0) clear-FOV/home/failsafe parking and bin poses)
+void moveMachineToMm(float machX_mm, float machY_mm) {
+  float targetX = constrain(machX_mm, 0.0f, MAX_TRAVEL_X_MM);
+  float targetY = constrain(machY_mm, 0.0f, MAX_TRAVEL_Y_MM);
   stepperX.moveTo(lroundf(targetX * STEPS_PER_MM_X));
   stepperY.moveTo(lroundf(targetY * STEPS_PER_MM_Y));
+}
+
+// Board-space move (applies bench-measured TOOL_OFFSET_X/Y_MM for cap pickup coordinates)
+void moveBoardToMm(float boardX_mm, float boardY_mm) {
+  moveMachineToMm(boardX_mm + TOOL_OFFSET_X_MM, boardY_mm + TOOL_OFFSET_Y_MM);
 }
 
 bool isGantryAtTarget() {
@@ -4960,7 +5108,7 @@ void pollVisionHostPackets() {
       }
       closedLoopMode  = true;
       lastHeartbeatMs = millis();
-      moveGantryToMm(0.0f, 0.0f);
+      moveMachineToMm(0.0f, 0.0f);
       currentState    = STATE_PARKING_FOR_SCAN;
       continue;
     }
@@ -4978,7 +5126,7 @@ void pollVisionHostPackets() {
       }
       closedLoopMode  = false;
       lastHeartbeatMs = millis();
-      moveGantryToMm(0.0f, 0.0f);
+      moveMachineToMm(0.0f, 0.0f);
       currentState    = STATE_PARKING_HOME;
       continue;
     }
@@ -5023,7 +5171,7 @@ void pollVisionHostPackets() {
       lastHeartbeatMs   = millis();
       Serial1.write(CMD_BATCH_ACK);
 
-      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
       currentState = STATE_MOVING_TO_CAP;
       return;
     }
@@ -5080,7 +5228,7 @@ void pollVisionHostPackets() {
 
       // Start Step 01 on first target cap
       currentCap = batchQueue[0];
-      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
       currentState = STATE_MOVING_TO_CAP;
     }
   }
@@ -5156,7 +5304,7 @@ void executeSafeCommsLossPolicy() {
   hasInFlightCap = false;
   batchTotal     = 0;
   currentIdx     = 0;
-  moveGantryToMm(0.0f, 0.0f);
+  moveMachineToMm(0.0f, 0.0f);
   currentState   = STATE_FAILSAFE_PARKING;
   Serial.println(F("[COMMS_LOSS] No active cap; parking at (0,0) then latching fail-safe halt."));
 }
@@ -5205,8 +5353,9 @@ void executeMotionStateMachine() {
           triggerHardFault(F("Z-axis failed retracted check before bin traverse"));
           return;
         }
-        uint8_t binId = constrain(currentCap.targetBinId, 1, 4);
-        moveGantryToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
+        uint8_t binId = currentCap.targetBinId;
+        if (binId &lt; 1 || binId &gt; 4) binId = 1;
+        moveMachineToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
         currentState = STATE_TRAVERSE_BIN;
       }
       break;
@@ -5272,7 +5421,7 @@ void executeMotionStateMachine() {
           closedLoopMode = false;
           batchTotal     = 0;
           currentIdx     = 0;
-          moveGantryToMm(0.0f, 0.0f);
+          moveMachineToMm(0.0f, 0.0f);
           currentState   = STATE_FAILSAFE_PARKING;
           return;
         }
@@ -5288,11 +5437,11 @@ void executeMotionStateMachine() {
         currentIdx++;
         if (currentIdx &lt; batchTotal) {
           currentCap = batchQueue[currentIdx];
-          moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+          moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
           currentState = STATE_MOVING_TO_CAP;
         } else {
           // Legacy batch finished! Return gantry to (0,0) clear of camera FOV
-          moveGantryToMm(0.0f, 0.0f);
+          moveMachineToMm(0.0f, 0.0f);
           currentState = STATE_PARKING_HOME;
         }
       }
@@ -5366,9 +5515,10 @@ void setup() {
   }
 
   Wire.begin();
-  Wire.setClock(400000);  // 400 kHz Fast-Mode I2C
   pca.begin();
-  pca.setPWMFreq(50);     // 50 Hz analog servo PWM
+  Wire.setClock(400000);            // Re-assert 400 kHz Fast-Mode I2C after pca.begin()
+  Wire.setWireTimeout(3000, true);  // 3 ms AVR I2C bus timeout + auto-reset prevents EMI lockup
+  pca.setPWMFreq(50);               // 50 Hz analog servo PWM
 
   homeAxes();
 }

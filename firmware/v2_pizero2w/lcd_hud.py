@@ -119,7 +119,7 @@ def _smoothstep(u: float) -> float:
 def bgr_to_rgb565_bytes(bgr: np.ndarray) -> bytes:
     """
     Packs a 480x320x3 BGR uint8 OpenCV image into little-endian RGB565 bytes
-    for direct Linux framebuffer (/dev/fb0 or /dev/fb1) writes (307,200 B).
+    for 16-bpp Linux framebuffer (/dev/fb0 or /dev/fb1) writes (307,200 B).
     """
     if bgr.shape[:2] != (LCD_HEIGHT, LCD_WIDTH):
         bgr = cv2.resize(bgr, (LCD_WIDTH, LCD_HEIGHT), interpolation=cv2.INTER_AREA)
@@ -128,6 +128,17 @@ def bgr_to_rgb565_bytes(bgr: np.ndarray) -> bytes:
     r = bgr[:, :, 2].astype(np.uint16)
     rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
     return np.ascontiguousarray(rgb565, dtype="<u2").tobytes()
+
+
+def bgr_to_bgra32_bytes(bgr: np.ndarray) -> bytes:
+    """
+    Packs a 480x320x3 BGR uint8 OpenCV image into little-endian XRGB8888/BGRA32 bytes
+    for 32-bpp DRM fbdev emulation (/dev/fb0) writes (614,400 B).
+    """
+    if bgr.shape[:2] != (LCD_HEIGHT, LCD_WIDTH):
+        bgr = cv2.resize(bgr, (LCD_WIDTH, LCD_HEIGHT), interpolation=cv2.INTER_AREA)
+    bgra = cv2.cvtColor(bgr, cv2.COLOR_BGR2BGRA)
+    return np.ascontiguousarray(bgra, dtype=np.uint8).tobytes()
 
 
 def hit_test_touch_button(x_px: int, y_px: int):
@@ -316,12 +327,21 @@ class CapSorterLCDHUD:
         fps: float = 15.0,
         on_pause_toggle=None,
         on_rearm=None,
+        touch_cal: tuple = (200, 3900, 200, 3900),
+        touch_swap_xy: bool = False,
+        touch_invert_x: bool = False,
+        touch_invert_y: bool = False,
     ):
         self.fb_device = fb_device
         self.touch_device = touch_device
         self.frame_interval_s = 1.0 / max(1.0, float(fps))
         self.on_pause_toggle = on_pause_toggle
         self.on_rearm = on_rearm
+        self.touch_cal = tuple(float(v) for v in touch_cal)
+        self.touch_swap_xy = bool(touch_swap_xy)
+        self.touch_invert_x = bool(touch_invert_x)
+        self.touch_invert_y = bool(touch_invert_y)
+        self._fb_bpp = self._detect_fb_bpp()
 
         self._lock = threading.Lock()
         self._stop_evt = threading.Event()
@@ -406,6 +426,13 @@ class CapSorterLCDHUD:
                 self.state["controller_state"] = "IDLE"
                 self.state["active_target"] = None
                 self.predictor.mark_idle(t)
+            elif event == "PAUSED":
+                self.state["controller_state"] = "PAUSED"
+                self.state["active_target"] = None
+                self.predictor.mark_idle(t)
+            elif event == "REARMING":
+                self.state["controller_state"] = "HOMING"
+                self.state["fault_banner"] = ""
             elif event in ("FAULT", "LINK_LOST", "TIMEOUT"):
                 self.state["controller_state"] = event
                 self.state["link_status"] = "OFFLINE" if event == "LINK_LOST" else "FAULT"
@@ -622,10 +649,24 @@ class CapSorterLCDHUD:
 
         return img
 
+    def _detect_fb_bpp(self) -> int:
+        if not self.fb_device:
+            return 16
+        fb_name = os.path.basename(self.fb_device)
+        bpp_path = f"/sys/class/graphics/{fb_name}/bits_per_pixel"
+        try:
+            with open(bpp_path, "r", encoding="utf-8") as fh:
+                val = int(fh.read().strip())
+                if val in (16, 32):
+                    return val
+        except (OSError, ValueError):
+            pass
+        return 16
+
     def _blit_framebuffer(self, frame_bgr: np.ndarray):
-        raw565 = bgr_to_rgb565_bytes(frame_bgr)
+        payload = bgr_to_bgra32_bytes(frame_bgr) if self._fb_bpp == 32 else bgr_to_rgb565_bytes(frame_bgr)
         with open(self.fb_device, "wb") as fb:
-            fb.write(raw565)
+            fb.write(payload)
 
     def _render_loop(self):
         while not self._stop_evt.is_set():
@@ -674,7 +715,12 @@ class CapSorterLCDHUD:
                 rlist, _, _ = select.select([fd], [], [], 0.2)
                 if not rlist:
                     continue
-                data = os.read(fd, ev_size * 16)
+                try:
+                    data = os.read(fd, ev_size * 16)
+                except BlockingIOError:
+                    continue
+                except OSError:
+                    break
                 for off in range(0, len(data) - (len(data) % ev_size), ev_size):
                     _, _, ev_type, code, value = struct.unpack(ev_fmt, data[off:off + ev_size])
                     if ev_type == 3:  # EV_ABS
@@ -683,9 +729,16 @@ class CapSorterLCDHUD:
                         elif code == 1:  # ABS_Y
                             raw_y = value
                     elif ev_type == 1 and code == 330 and value == 0:  # BTN_TOUCH release
-                        # Default XPT2046 12-bit ADC [200..3900] -> 480x320 landscape mapping
-                        px = int(min(LCD_WIDTH - 1, max(0, (raw_x - 200) * LCD_WIDTH / 3700.0)))
-                        py = int(min(LCD_HEIGHT - 1, max(0, (raw_y - 200) * LCD_HEIGHT / 3700.0)))
+                        ax, ay = (raw_y, raw_x) if self.touch_swap_xy else (raw_x, raw_y)
+                        x_min, x_max, y_min, y_max = self.touch_cal
+                        nx = (ax - x_min) / max(1.0, (x_max - x_min))
+                        ny = (ay - y_min) / max(1.0, (y_max - y_min))
+                        if self.touch_invert_x:
+                            nx = 1.0 - nx
+                        if self.touch_invert_y:
+                            ny = 1.0 - ny
+                        px = int(min(LCD_WIDTH - 1, max(0, nx * LCD_WIDTH)))
+                        py = int(min(LCD_HEIGHT - 1, max(0, ny * LCD_HEIGHT)))
                         self.handle_touch_px(px, py)
         finally:
             os.close(fd)
@@ -713,11 +766,20 @@ def main():
     parser = argparse.ArgumentParser(description="CapSorter V2 3.5-inch SPI LCD Native HUD (480x320)")
     parser.add_argument("--fb-device", default="/dev/fb0", help="Linux framebuffer device (default: /dev/fb0)")
     parser.add_argument("--touch-device", default="auto", help="XPT2046 evdev input path or 'auto'")
+    parser.add_argument("--touch-swap-xy", action="store_true", help="Swap XPT2046 X/Y touch axes")
+    parser.add_argument("--touch-invert-x", action="store_true", help="Invert XPT2046 X touch axis")
+    parser.add_argument("--touch-invert-y", action="store_true", help="Invert XPT2046 Y touch axis")
     parser.add_argument("--demo", action="store_true", help="Run standalone animated demo loop on LCD")
     parser.add_argument("--snapshot", help="Write one 480x320 PNG preview frame and exit")
     args = parser.parse_args()
 
-    hud = CapSorterLCDHUD(fb_device=args.fb_device, touch_device=args.touch_device)
+    hud = CapSorterLCDHUD(
+        fb_device=args.fb_device,
+        touch_device=args.touch_device,
+        touch_swap_xy=args.touch_swap_xy,
+        touch_invert_x=args.touch_invert_x,
+        touch_invert_y=args.touch_invert_y,
+    )
     demo_caps = [
         {"capId": 1, "color": COLOR_RED,    "boardX_mm": 64.0,  "boardY_mm": 72.0,  "in_safe_bounds": True},
         {"capId": 2, "color": COLOR_YELLOW, "boardX_mm": 195.0, "boardY_mm": 98.0,  "in_safe_bounds": True},

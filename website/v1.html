@@ -2024,7 +2024,7 @@
 #define FRAME_PIXELS              (FRAME_WIDTH * FRAME_HEIGHT)
 #define FRAME_BYTES               (FRAME_PIXELS * 2) // 153,600 bytes RGB565
 #define BFS_QUEUE_SIZE            4096
-#define SPLIT_ROI_MAX             112                // Max ROI dim for merged same-color split
+#define SPLIT_ROI_MAX             160                // Max ROI dim for merged same-color split (25.6 KB DMAMEM)
 
 // Continuous 300x300 mm Open Flat Plywood Workspace &amp; X-Axis Gripper Geometry
 #define CAP_RADIUS_MM             15.0f   // Nominal cap radius (28-32 mm diameter)
@@ -2216,6 +2216,7 @@ bool waitForMegaReady(uint32_t timeoutMs) {
   uint32_t lastPollMs = 0;
   while (timeoutMs == 0 || (millis() - startMs &lt; timeoutMs)) {
     if (lastPollMs == 0 || (millis() - lastPollMs &gt;= READY_POLL_INTERVAL_MS)) {
+      while (Serial1.available() &gt; 0) Serial1.read();
       Serial1.write(CMD_QUERY_STATUS);
       Serial1.flush();
       lastPollMs = millis();
@@ -3182,15 +3183,25 @@ bool isValidSingleTarget(const CapTarget &amp;cap) {
   if (!isfinite(cap.boardX_mm) || !isfinite(cap.boardY_mm)) return false;
   if (cap.boardX_mm &lt; SAFE_PICK_MIN_X_MM || cap.boardX_mm &gt; SAFE_PICK_MAX_X_MM) return false;
   if (cap.boardY_mm &lt; SAFE_PICK_MIN_Y_MM || cap.boardY_mm &gt; SAFE_PICK_MAX_Y_MM) return false;
+  float machX = cap.boardX_mm + TOOL_OFFSET_X_MM;
+  float machY = cap.boardY_mm + TOOL_OFFSET_Y_MM;
+  if (machX &lt; 0.0f || machX &gt; MAX_TRAVEL_X_MM) return false;
+  if (machY &lt; 0.0f || machY &gt; MAX_TRAVEL_Y_MM) return false;
   if (cap.targetBinId &lt; 1 || cap.targetBinId &gt; 4) return false;
   return true;
 }
 
-void moveGantryToMm(float boardX_mm, float boardY_mm) {
-  float targetX = constrain(boardX_mm + TOOL_OFFSET_X_MM, 0.0f, MAX_TRAVEL_X_MM);
-  float targetY = constrain(boardY_mm + TOOL_OFFSET_Y_MM, 0.0f, MAX_TRAVEL_Y_MM);
+// Raw homed machine-space move (used for (0,0) clear-FOV/home/failsafe parking and bin poses)
+void moveMachineToMm(float machX_mm, float machY_mm) {
+  float targetX = constrain(machX_mm, 0.0f, MAX_TRAVEL_X_MM);
+  float targetY = constrain(machY_mm, 0.0f, MAX_TRAVEL_Y_MM);
   stepperX.moveTo(lroundf(targetX * STEPS_PER_MM_X));
   stepperY.moveTo(lroundf(targetY * STEPS_PER_MM_Y));
+}
+
+// Board-space move (applies bench-measured TOOL_OFFSET_X/Y_MM for cap pickup coordinates)
+void moveBoardToMm(float boardX_mm, float boardY_mm) {
+  moveMachineToMm(boardX_mm + TOOL_OFFSET_X_MM, boardY_mm + TOOL_OFFSET_Y_MM);
 }
 
 bool isGantryAtTarget() {
@@ -3456,7 +3467,7 @@ void pollVisionHostPackets() {
       }
       closedLoopMode  = true;
       lastHeartbeatMs = millis();
-      moveGantryToMm(0.0f, 0.0f);
+      moveMachineToMm(0.0f, 0.0f);
       currentState    = STATE_PARKING_FOR_SCAN;
       continue;
     }
@@ -3474,7 +3485,7 @@ void pollVisionHostPackets() {
       }
       closedLoopMode  = false;
       lastHeartbeatMs = millis();
-      moveGantryToMm(0.0f, 0.0f);
+      moveMachineToMm(0.0f, 0.0f);
       currentState    = STATE_PARKING_HOME;
       continue;
     }
@@ -3519,7 +3530,7 @@ void pollVisionHostPackets() {
       lastHeartbeatMs   = millis();
       Serial1.write(CMD_BATCH_ACK);
 
-      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
       currentState = STATE_MOVING_TO_CAP;
       return;
     }
@@ -3576,7 +3587,7 @@ void pollVisionHostPackets() {
 
       // Start Step 01 on first target cap
       currentCap = batchQueue[0];
-      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
       currentState = STATE_MOVING_TO_CAP;
     }
   }
@@ -3652,7 +3663,7 @@ void executeSafeCommsLossPolicy() {
   hasInFlightCap = false;
   batchTotal     = 0;
   currentIdx     = 0;
-  moveGantryToMm(0.0f, 0.0f);
+  moveMachineToMm(0.0f, 0.0f);
   currentState   = STATE_FAILSAFE_PARKING;
   Serial.println(F("[COMMS_LOSS] No active cap; parking at (0,0) then latching fail-safe halt."));
 }
@@ -3701,8 +3712,9 @@ void executeMotionStateMachine() {
           triggerHardFault(F("Z-axis failed retracted check before bin traverse"));
           return;
         }
-        uint8_t binId = constrain(currentCap.targetBinId, 1, 4);
-        moveGantryToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
+        uint8_t binId = currentCap.targetBinId;
+        if (binId &lt; 1 || binId &gt; 4) binId = 1;
+        moveMachineToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
         currentState = STATE_TRAVERSE_BIN;
       }
       break;
@@ -3768,7 +3780,7 @@ void executeMotionStateMachine() {
           closedLoopMode = false;
           batchTotal     = 0;
           currentIdx     = 0;
-          moveGantryToMm(0.0f, 0.0f);
+          moveMachineToMm(0.0f, 0.0f);
           currentState   = STATE_FAILSAFE_PARKING;
           return;
         }
@@ -3784,11 +3796,11 @@ void executeMotionStateMachine() {
         currentIdx++;
         if (currentIdx &lt; batchTotal) {
           currentCap = batchQueue[currentIdx];
-          moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+          moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
           currentState = STATE_MOVING_TO_CAP;
         } else {
           // Legacy batch finished! Return gantry to (0,0) clear of camera FOV
-          moveGantryToMm(0.0f, 0.0f);
+          moveMachineToMm(0.0f, 0.0f);
           currentState = STATE_PARKING_HOME;
         }
       }
@@ -3862,9 +3874,10 @@ void setup() {
   }
 
   Wire.begin();
-  Wire.setClock(400000);  // 400 kHz Fast-Mode I2C
   pca.begin();
-  pca.setPWMFreq(50);     // 50 Hz analog servo PWM
+  Wire.setClock(400000);            // Re-assert 400 kHz Fast-Mode I2C after pca.begin()
+  Wire.setWireTimeout(3000, true);  // 3 ms AVR I2C bus timeout + auto-reset prevents EMI lockup
+  pca.setPWMFreq(50);               // 50 Hz analog servo PWM
 
   homeAxes();
 }
@@ -4012,8 +4025,13 @@ void loop() {
         };
         TeensySerial.write(header, 6);
 
-        // 2. Stream raw RGB565 framebuffer bytes (153,600 bytes)
-        TeensySerial.write(fb-&gt;buf, frameLen);
+        // 2. Stream raw RGB565 framebuffer bytes in 4 KB chunks with yield() for WDT safety
+        const uint32_t CHUNK_BYTES = 4096;
+        for (uint32_t offset = 0; offset &lt; frameLen; offset += CHUNK_BYTES) {
+          uint32_t n = (frameLen - offset &lt; CHUNK_BYTES) ? (frameLen - offset) : CHUNK_BYTES;
+          TeensySerial.write(fb-&gt;buf + offset, n);
+          yield();
+        }
 
         // 3. Send 2-byte CRC16-CCITT trailer [CrcHigh, CrcLow]
         TeensySerial.write((uint8_t)((crc16 &gt;&gt; 8) &amp; 0xFF));

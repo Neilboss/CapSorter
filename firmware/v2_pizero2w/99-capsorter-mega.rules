@@ -8,6 +8,7 @@
 
 # WCH CH9102 / CH343 / CH340 USB-to-UART converters (ttyUSB* or ttyACM*)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", SYMLINK+="capsorter_mega", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d3", SYMLINK+="capsorter_mega", GROUP="dialout", MODE="0660"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="capsorter_mega", GROUP="dialout", MODE="0660"
 
 # Genuine Silicon Labs CP2102 / CP2102N USB-to-UART bridge

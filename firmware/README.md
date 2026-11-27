@@ -7,6 +7,16 @@
 ```
 firmware/
 ├── README.md                 # Firmware documentation, pinned toolchain, safety & validation checklist
+├── HARDWARE_BRINGUP_GUIDE.md # Step-by-step physical bench testing manual (Stages 0-8)
+├── bringup/                  # Staged bench-test sketches & Python vision/UART/LCD tools
+│   ├── mega_01_switches_estop/       # Stage 1: Zero-motion NC limit switch & E-stop verifier
+│   ├── mega_02_servo_calibration/    # Stage 2: Interactive PCA9685 Z-axis & gripper tick calibrator
+│   ├── mega_03_stepper_homing_test/  # Stage 3: Stepper polarity, homing, STEPS_PER_MM, offsets & bins
+│   ├── pi_01_camera_detect_preview.py     # Stage 4: Live camera cap bounding-box & HSV preview
+│   ├── pi_02_capture_and_mark_corners.py  # Stage 5: Checkerboard capture & 4-corner coordinate marker
+│   ├── pi_03_verify_mm_coordinates.py     # Stage 6: Calibrated (X, Y) mm, parallax & clearance verifier
+│   ├── pi_04_uart_link_test.py            # Stage 7A: Pi <-> Mega binary UART ping, 1-cap & cut tester
+│   └── pi_05_lcd_touch_test.py            # Stage 7B: 3.5" SPI LCD framebuffer & XPT2046 touch calibrator
 ├── common/
 │   └── packet_protocol.h     # Shared binary packet structures, handshake opcodes, CRC16-CCITT & limits
 ├── mega_motion/
@@ -22,7 +32,7 @@ firmware/
 │   ├── fisheye_calibrate.py  # Checkerboard intrinsic (fisheye / pinhole) + 4-corner homography calibration CLI
 │   └── calibration.npz       # Explicitly marked uncalibrated placeholder (fails closed until bench calibrated)
 └── tests/
-    └── test_validation.py    # Automated protocol, USB-TTL, LCD HUD, calibration fail-closed & doc-sync tests
+    └── test_validation.py    # Automated protocol, USB-TTL, LCD HUD, end-to-end sim, bringup & doc-sync tests
 ```
 
 ## Target Hardware & Pin Mapping Summary

@@ -919,6 +919,618 @@ class TestV2USBSerialAndLCDHUD(unittest.TestCase):
         self.assertEqual(paused_calls, [True])
         self.assertEqual(rearm_calls, [True])
         self.assertEqual(hud.view_mode, "CAM")
+        bgra32 = hud_mod.bgr_to_bgra32_bytes(frame_bin)
+        self.assertEqual(len(bgra32), hud_mod.LCD_WIDTH * hud_mod.LCD_HEIGHT * 4)
+
+
+class SimulatedMega2560:
+    """
+    Faithful discrete-time mirror of firmware/mega_motion/mega_motion.ino for
+    end-to-end closed-loop UART, coordinate-frame, UART-cut finish-and-park,
+    E-stop, and NC limit switch simulation against PiZeroVisionController.
+    """
+
+    BIN_X = {1: 355.0, 2: 355.0, 3: 355.0, 4: 355.0}
+    BIN_Y = {1: 55.0, 2: 130.0, 3: 205.0, 4: 280.0}
+
+    def __init__(self, tool_offset_xy=(0.0, 0.0), max_travel_xy=(370.0, 300.0)):
+        self.tool_offset_x, self.tool_offset_y = float(tool_offset_xy[0]), float(tool_offset_xy[1])
+        self.max_travel_x, self.max_travel_y = float(max_travel_xy[0]), float(max_travel_xy[1])
+        self.state = "IDLE"
+        self.is_homed = True
+        self.closed_loop = False
+        self.comms_fault = False
+        self.steppers_enabled = True
+        self.servos_enabled = True
+        self.estop_active = False
+        self.limit_open = False
+        self.estop_count = 0
+        self.limit_count = 0
+        self.mach_x = 0.0
+        self.mach_y = 0.0
+        self.target_x = 0.0
+        self.target_y = 0.0
+        self.current_cap = None
+        self.state_until = 0.0
+        self.last_heartbeat = 0.0
+        self.rx_buf = bytearray()
+        self.tx_out = deque()
+        self.pick_log = []      # (mach_x, mach_y, board_x, board_y, color)
+        self.deposit_log = []   # (mach_x, mach_y, bin_id, color)
+        self.park_log = []      # (mach_x, mach_y, reason_state)
+        self.on_pick_world = None
+
+    def _move_machine(self, mx, my, now):
+        self.target_x = min(self.max_travel_x, max(0.0, float(mx)))
+        self.target_y = min(self.max_travel_y, max(0.0, float(my)))
+        dt = max(0.05, hud_mod.compute_xy_move_time(self.target_x - self.mach_x, self.target_y - self.mach_y))
+        self.state_until = now + dt
+
+    def _is_valid_target(self, bx, by, bin_id):
+        if not (math.isfinite(bx) and math.isfinite(by)):
+            return False
+        if not (pzv.SAFE_PICK_MIN_X_MM <= bx <= pzv.SAFE_PICK_MAX_X_MM):
+            return False
+        if not (pzv.SAFE_PICK_MIN_Y_MM <= by <= pzv.SAFE_PICK_MAX_Y_MM):
+            return False
+        mx = bx + self.tool_offset_x
+        my = by + self.tool_offset_y
+        if not (0.0 <= mx <= self.max_travel_x and 0.0 <= my <= self.max_travel_y):
+            return False
+        return 1 <= bin_id <= 4
+
+    def _trigger_hard_fault(self):
+        self.steppers_enabled = False
+        self.servos_enabled = False
+        self.closed_loop = False
+        self.is_homed = False
+        self.state = "HARD_FAULT"
+        self.tx_out.append(pzv.CMD_HARD_FAULT)
+
+    def feed_host_bytes(self, data: bytes, now: float):
+        self.rx_buf.extend(data)
+        while self.rx_buf:
+            b = self.rx_buf[0]
+            if b == pzv.CMD_QUERY_STATUS:
+                self.rx_buf.pop(0)
+                if self.state == "IDLE" and self.is_homed and not self.comms_fault and not self.estop_active:
+                    self.tx_out.append(pzv.CMD_STATUS_READY)
+                elif self.state in ("FAILSAFE_HALT", "HARD_FAULT"):
+                    self.tx_out.append(pzv.CMD_STATUS_FAULT)
+                else:
+                    self.tx_out.append(pzv.CMD_STATUS_BUSY)
+            elif b == pzv.CMD_HEARTBEAT_PING:
+                self.rx_buf.pop(0)
+                self.last_heartbeat = now
+            elif b == pzv.CMD_REARM_HOME:
+                self.rx_buf.pop(0)
+                if self.state in ("FAILSAFE_HALT", "HARD_FAULT"):
+                    if self.estop_active:
+                        self.tx_out.append(pzv.CMD_STATUS_FAULT)
+                    else:
+                        self.mach_x = 0.0
+                        self.mach_y = 0.0
+                        self.steppers_enabled = True
+                        self.servos_enabled = True
+                        self.is_homed = True
+                        self.comms_fault = False
+                        self.closed_loop = False
+                        self.estop_count = 0
+                        self.limit_count = 0
+                        self.last_heartbeat = now
+                        self.state = "IDLE"
+                        self.tx_out.append(pzv.CMD_STATUS_READY)
+                else:
+                    self.tx_out.append(pzv.CMD_STATUS_READY if self.state == "IDLE" else pzv.CMD_STATUS_BUSY)
+            elif b == pzv.CMD_PARK_FOR_SCAN:
+                self.rx_buf.pop(0)
+                if self.state not in ("AWAIT_NEXT_TARGET", "IDLE") or not self.is_homed or self.comms_fault:
+                    self.tx_out.append(pzv.CMD_BATCH_NACK)
+                else:
+                    self.closed_loop = True
+                    self.last_heartbeat = now
+                    self._move_machine(0.0, 0.0, now)
+                    self.state = "PARKING_FOR_SCAN"
+            elif b == pzv.CMD_FINISH_SESSION:
+                self.rx_buf.pop(0)
+                if self.state not in ("AWAIT_NEXT_TARGET", "IDLE") or not self.is_homed or self.comms_fault:
+                    self.tx_out.append(pzv.CMD_BATCH_NACK)
+                else:
+                    self.closed_loop = False
+                    self.last_heartbeat = now
+                    self._move_machine(0.0, 0.0, now)
+                    self.state = "PARKING_HOME"
+            elif b == pzv.PROTOCOL_SINGLE_MAGIC:
+                if len(self.rx_buf) < 18:
+                    break
+                pkt = bytes(self.rx_buf[:18])
+                del self.rx_buf[:18]
+                if self.state not in ("IDLE", "AWAIT_NEXT_TARGET") or not self.is_homed or self.comms_fault:
+                    self.tx_out.append(pzv.CMD_BATCH_NACK)
+                    continue
+                payload = pkt[1:16]
+                rx_crc = struct.unpack("<H", pkt[16:18])[0]
+                if pzv.crc16_ccitt(payload) != rx_crc:
+                    self.tx_out.append(pzv.CMD_BATCH_NACK)
+                    continue
+                cap_id, color, px, py, bx, by, bin_id = struct.unpack("<BBHHffB", payload)
+                if not self._is_valid_target(bx, by, bin_id):
+                    self.tx_out.append(pzv.CMD_BATCH_NACK)
+                    continue
+                self.closed_loop = True
+                self.current_cap = {
+                    "capId": cap_id, "color": color, "boardX_mm": bx, "boardY_mm": by, "targetBinId": bin_id
+                }
+                self.last_heartbeat = now
+                self.tx_out.append(pzv.CMD_BATCH_ACK)
+                self._move_machine(bx + self.tool_offset_x, by + self.tool_offset_y, now)
+                self.state = "MOVING_TO_CAP"
+            else:
+                self.rx_buf.pop(0)
+
+    def step(self, now: float):
+        if self.state != "HARD_FAULT":
+            if self.estop_active:
+                self.estop_count += 1
+                if self.estop_count >= 2:
+                    self._trigger_hard_fault()
+                    return
+            else:
+                self.estop_count = 0
+            if self.limit_open:
+                self.limit_count += 1
+                if self.limit_count >= 3:
+                    self._trigger_hard_fault()
+                    return
+            else:
+                self.limit_count = 0
+
+        # Watchdog: 1.2 s heartbeat timeout (mirrors checkCommunicationLoss + executeSafeCommsLossPolicy)
+        if (
+            self.state not in ("IDLE", "FAILSAFE_PARKING", "FAILSAFE_HALT", "HARD_FAULT")
+            and not self.comms_fault
+            and (now - self.last_heartbeat > 1.2)
+        ):
+            self.comms_fault = True
+            self.tx_out.append(pzv.CMD_RECOVERY_HALT)
+            in_active = self.state in (
+                "MOVING_TO_CAP", "LOWER_Z", "GRIP_CAP", "LIFT_Z",
+                "TRAVERSE_BIN", "BIN_SETTLE", "LOWER_BIN", "RELEASE_CAP", "RETRACT_Z",
+            )
+            if not in_active:
+                self.closed_loop = False
+                self._move_machine(0.0, 0.0, now)
+                self.state = "FAILSAFE_PARKING"
+
+        if now < self.state_until:
+            return
+
+        if self.state == "MOVING_TO_CAP":
+            self.mach_x, self.mach_y = self.target_x, self.target_y
+            self.state_until = now + 0.35
+            self.state = "LOWER_Z"
+        elif self.state == "LOWER_Z":
+            self.state_until = now + 0.30
+            self.state = "GRIP_CAP"
+        elif self.state == "GRIP_CAP":
+            cap = self.current_cap
+            self.pick_log.append((self.mach_x, self.mach_y, cap["boardX_mm"], cap["boardY_mm"], cap["color"]))
+            if self.on_pick_world is not None:
+                self.on_pick_world(cap["boardX_mm"], cap["boardY_mm"], cap["color"])
+            self.state_until = now + 0.35
+            self.state = "LIFT_Z"
+        elif self.state == "LIFT_Z":
+            b = self.current_cap["targetBinId"]
+            self._move_machine(self.BIN_X[b], self.BIN_Y[b], now)
+            self.state = "TRAVERSE_BIN"
+        elif self.state == "TRAVERSE_BIN":
+            self.mach_x, self.mach_y = self.target_x, self.target_y
+            if self.closed_loop and not self.comms_fault:
+                self.state_until = now + 0.12
+                self.state = "BIN_SETTLE"
+            else:
+                self.state_until = now + 0.25
+                self.state = "LOWER_BIN"
+        elif self.state == "BIN_SETTLE":
+            if not self.comms_fault:
+                self.tx_out.append(pzv.CMD_SCAN_WINDOW_OPEN)
+            self.state_until = now + 0.25
+            self.state = "LOWER_BIN"
+        elif self.state == "LOWER_BIN":
+            self.state_until = now + 0.25
+            self.state = "RELEASE_CAP"
+        elif self.state == "RELEASE_CAP":
+            cap = self.current_cap
+            self.deposit_log.append((self.mach_x, self.mach_y, cap["targetBinId"], cap["color"]))
+            self.state_until = now + 0.30
+            self.state = "RETRACT_Z"
+        elif self.state == "RETRACT_Z":
+            self.tx_out.append(pzv.CMD_CAP_PROGRESS)
+            if self.comms_fault:
+                self.tx_out.append(pzv.CMD_RECOVERY_HALT)
+                self.closed_loop = False
+                self._move_machine(0.0, 0.0, now)
+                self.state = "FAILSAFE_PARKING"
+            else:
+                self.tx_out.append(pzv.CMD_AWAIT_NEXT)
+                self.state = "AWAIT_NEXT_TARGET"
+        elif self.state == "PARKING_FOR_SCAN":
+            self.mach_x, self.mach_y = self.target_x, self.target_y
+            self.park_log.append((self.mach_x, self.mach_y, "PARKING_FOR_SCAN"))
+            self.tx_out.append(pzv.CMD_AWAIT_NEXT)
+            self.state = "AWAIT_NEXT_TARGET"
+        elif self.state == "PARKING_HOME":
+            self.mach_x, self.mach_y = self.target_x, self.target_y
+            self.park_log.append((self.mach_x, self.mach_y, "PARKING_HOME"))
+            self.closed_loop = False
+            self.tx_out.append(pzv.CMD_BATCH_COMPLETE)
+            self.state = "IDLE"
+        elif self.state == "FAILSAFE_PARKING":
+            self.mach_x, self.mach_y = self.target_x, self.target_y
+            self.park_log.append((self.mach_x, self.mach_y, "FAILSAFE_PARKING"))
+            self.steppers_enabled = False
+            self.is_homed = False
+            self.closed_loop = False
+            self.state = "FAILSAFE_HALT"
+            self.tx_out.append(pzv.CMD_RECOVERY_HALT)
+
+
+class TestEndToEndFirmwareSimulation(unittest.TestCase):
+    def _make_controller(self, td, state_callback=None):
+        cal_path = os.path.join(td, "cal.npz")
+        H = fc.compute_homography_from_fiducials([[92, 34], [548, 34], [548, 446], [92, 446]])
+        fc.save_validated_calibration(
+            cal_path,
+            np.array([[320.0, 0, 320.0], [0, 320.0, 240.0], [0, 0, 1.0]]),
+            np.zeros((4, 1)), H, "picamera2_imx219", "fisheye", (640, 480), 0.1,
+        )
+        return pzv.PiZeroVisionController(
+            calib_file=cal_path, camera_type="picamera2_imx219",
+            init_hardware=False, state_callback=state_callback,
+        )
+
+    def _wire_mega_uart(self, ctrl, mega, now_ref, cut_at_time=None):
+        """Connects PiZeroVisionController <-> SimulatedMega2560 via paired virtual UART."""
+
+        class PairedUART:
+            def __init__(self):
+                self.closed = False
+
+            @property
+            def in_waiting(self):
+                if cut_at_time is not None and now_ref[0] >= cut_at_time[0]:
+                    return 0
+                return len(mega.tx_out)
+
+            def write(self, data: bytes):
+                if cut_at_time is not None and now_ref[0] >= cut_at_time[0]:
+                    raise OSError("Simulated UART cut")
+                mega.feed_host_bytes(bytes(data), now_ref[0])
+                mega.step(now_ref[0])
+                return len(data)
+
+            def flush(self):
+                pass
+
+            def reset_input_buffer(self):
+                mega.tx_out.clear()
+
+            def read(self, n: int = 1) -> bytes:
+                if cut_at_time is not None and now_ref[0] >= cut_at_time[0]:
+                    raise OSError("Simulated UART cut")
+                out = bytearray()
+                for _ in range(n):
+                    if not mega.tx_out:
+                        break
+                    out.append(mega.tx_out.popleft())
+                return bytes(out)
+
+            def close(self):
+                self.closed = True
+
+        def sleep_fn(dt):
+            steps = max(1, int(math.ceil(dt / 0.05)))
+            sub_dt = dt / steps
+            for _ in range(steps):
+                now_ref[0] += sub_dt
+                mega.step(now_ref[0])
+
+        ctrl.uart = PairedUART()
+        return sleep_fn
+
+    def test_nonzero_tool_offset_separates_board_picks_from_bins_and_home_park(self):
+        with tempfile.TemporaryDirectory() as td:
+            hud = hud_mod.CapSorterLCDHUD(fb_device="")
+            ctrl = self._make_controller(td, state_callback=hud.update_state)
+            mega = SimulatedMega2560(tool_offset_xy=(16.5, 11.0), max_travel_xy=(370.0, 300.0))
+            now = [0.0]
+            sleep_fn = self._wire_mega_uart(ctrl, mega, now)
+
+            world_caps = [
+                [80.0, 95.0, pzv.COLOR_RED],
+                [210.0, 190.0, pzv.COLOR_BLUE],
+            ]
+
+            def on_pick(bx, by, col):
+                for i, c in enumerate(world_caps):
+                    if c[2] == col and math.hypot(c[0] - bx, c[1] - by) < 10.0:
+                        world_caps.pop(i)
+                        break
+
+            mega.on_pick_world = on_pick
+            self.assertTrue(ctrl.wait_for_mega_ready(timeout_s=5.0, clock=lambda: now[0], sleep_fn=sleep_fn))
+            res = ctrl.run_closed_loop_sort_session(
+                capture_fn=lambda: _draw_synthetic_board(ctrl.H_inv, [(c[0], c[1], c[2]) for c in world_caps]),
+                clock=lambda: now[0],
+                sleep_fn=sleep_fn,
+            )
+            self.assertEqual(res["status"], "COMPLETE")
+            self.assertEqual(res["picked"], 2)
+            self.assertEqual(len(world_caps), 0)
+            self.assertEqual(mega.state, "IDLE")
+
+            # Verify board pick positions added TOOL_OFFSET (+16.5, +11.0)
+            for mx, my, bx, by, _ in mega.pick_log:
+                self.assertAlmostEqual(mx, bx + 16.5, delta=0.1)
+                self.assertAlmostEqual(my, by + 11.0, delta=0.1)
+
+            # Verify external bins stayed in exact machine space (NO double tool-offset!)
+            for mx, my, bin_id, _ in mega.deposit_log:
+                self.assertAlmostEqual(mx, mega.BIN_X[bin_id], delta=0.1)
+                self.assertAlmostEqual(my, mega.BIN_Y[bin_id], delta=0.1)
+
+            # Verify all parks returned to true machine (0.0, 0.0) (NOT 16.5, 11.0!)
+            self.assertGreaterEqual(len(mega.park_log), 2)
+            for mx, my, _ in mega.park_log:
+                self.assertAlmostEqual(mx, 0.0, delta=0.05)
+                self.assertAlmostEqual(my, 0.0, delta=0.05)
+
+            self.assertEqual(hud.state["bin_counts"][pzv.COLOR_RED], 1)
+            self.assertEqual(hud.state["bin_counts"][pzv.COLOR_BLUE], 1)
+
+    def test_uart_cut_mid_cap_finishes_active_cap_parks_zero_halts_and_rearms(self):
+        with tempfile.TemporaryDirectory() as td:
+            ctrl = self._make_controller(td)
+            mega = SimulatedMega2560(tool_offset_xy=(12.0, 8.0))
+            now = [0.0]
+            cut_time = [1.0]  # Cut UART 1.0 s into Cap #1 while gantry is moving to Cap #1
+            sleep_fn = self._wire_mega_uart(ctrl, mega, now, cut_at_time=cut_time)
+
+            world_caps = [
+                [85.0, 110.0, pzv.COLOR_RED],
+                [220.0, 210.0, pzv.COLOR_GREEN],
+            ]
+
+            def on_pick(bx, by, col):
+                for i, c in enumerate(world_caps):
+                    if c[2] == col and math.hypot(c[0] - bx, c[1] - by) < 10.0:
+                        world_caps.pop(i)
+                        break
+
+            mega.on_pick_world = on_pick
+            res = ctrl.run_closed_loop_sort_session(
+                capture_fn=lambda: _draw_synthetic_board(ctrl.H_inv, [(c[0], c[1], c[2]) for c in world_caps]),
+                clock=lambda: now[0],
+                sleep_fn=sleep_fn,
+            )
+            # Pi cleanly detects LINK_LOST and closes stale fd so main() can reconnect
+            self.assertEqual(res["status"], "LINK_LOST")
+            self.assertIsNone(ctrl.uart)
+
+            # Advance Mega independently for 20 s after UART cut
+            for _ in range(400):
+                now[0] += 0.05
+                mega.step(now[0])
+
+            # Mega MUST finish ONLY Cap #1 into Bin 1, park at true machine (0,0), disable steppers & halt!
+            self.assertEqual(len(mega.deposit_log), 1)
+            self.assertEqual(mega.deposit_log[0][2], 1)  # Red -> Bin 1
+            self.assertEqual(len(world_caps), 1)         # Green Cap #2 untouched!
+            self.assertEqual(world_caps[0][2], pzv.COLOR_GREEN)
+            self.assertEqual(mega.state, "FAILSAFE_HALT")
+            self.assertFalse(mega.steppers_enabled)
+            self.assertAlmostEqual(mega.mach_x, 0.0, delta=0.05)
+            self.assertAlmostEqual(mega.mach_y, 0.0, delta=0.05)
+
+            # Reconnect link: heartbeats alone must NOT clear halt; explicit CMD_REARM_HOME must recover!
+            cut_time[0] = 1e9
+            sleep_fn = self._wire_mega_uart(ctrl, mega, now, cut_at_time=cut_time)
+            self.assertFalse(ctrl.wait_for_mega_ready(timeout_s=1.0, clock=lambda: now[0], sleep_fn=sleep_fn))
+            self.assertTrue(ctrl.send_rearm_home())
+            self.assertTrue(ctrl.wait_for_mega_ready(timeout_s=2.0, clock=lambda: now[0], sleep_fn=sleep_fn))
+            self.assertEqual(mega.state, "IDLE")
+
+    def test_mid_session_lcd_pause_parks_cleanly_without_fault_and_missed_pick_not_counted(self):
+        with tempfile.TemporaryDirectory() as td:
+            hud = hud_mod.CapSorterLCDHUD(fb_device="")
+            ctrl = self._make_controller(td, state_callback=hud.update_state)
+            mega = SimulatedMega2560()
+            now = [0.0]
+            sleep_fn = self._wire_mega_uart(ctrl, mega, now)
+
+            world_caps = [
+                [90.0, 90.0, pzv.COLOR_YELLOW],
+                [210.0, 210.0, pzv.COLOR_BLUE],
+            ]
+
+            def pick_and_pause(bx, by, col):
+                for i, c in enumerate(world_caps):
+                    if c[2] == col and math.hypot(c[0] - bx, c[1] - by) < 10.0:
+                        world_caps.pop(i)
+                        break
+                # Operator taps PAUSE on 3.5" LCD during Cap #1!
+                ctrl.paused = True
+
+            mega.on_pick_world = pick_and_pause
+            res = ctrl.run_closed_loop_sort_session(
+                capture_fn=lambda: _draw_synthetic_board(ctrl.H_inv, [(c[0], c[1], c[2]) for c in world_caps]),
+                clock=lambda: now[0],
+                sleep_fn=sleep_fn,
+            )
+            self.assertEqual(res["status"], "PAUSED")
+            self.assertEqual(res["picked"], 1)
+            self.assertEqual(len(world_caps), 1)
+            self.assertEqual(mega.state, "IDLE")
+            self.assertAlmostEqual(mega.mach_x, 0.0, delta=0.05)
+
+            # Also verify stuck cap does NOT falsely increment picked or HUD bin count
+            ctrl.paused = False
+            mega2 = SimulatedMega2560()
+            now2 = [0.0]
+            sleep_fn2 = self._wire_mega_uart(ctrl, mega2, now2)
+            stuck_world = [[140.0, 140.0, pzv.COLOR_RED]]
+            mega2.on_pick_world = lambda bx, by, col: None  # Glued down!
+            hud2 = hud_mod.CapSorterLCDHUD(fb_device="")
+            ctrl.state_callback = hud2.update_state
+            res2 = ctrl.run_closed_loop_sort_session(
+                capture_fn=lambda: _draw_synthetic_board(ctrl.H_inv, [(c[0], c[1], c[2]) for c in stuck_world]),
+                clock=lambda: now2[0],
+                sleep_fn=sleep_fn2,
+            )
+            self.assertEqual(res2["status"], "COMPLETE")
+            self.assertEqual(res2["picked"], 0)
+            self.assertEqual(len(res2["quarantined"]), 1)
+            self.assertEqual(hud2.state["bin_counts"][pzv.COLOR_RED], 0)
+
+    def test_cpp_and_ino_structural_and_safety_checks(self):
+        files = [
+            "firmware/common/packet_protocol.h",
+            "firmware/mega_motion/mega_motion.ino",
+            "firmware/v1_teensy41/teensy_vision.cpp",
+            "firmware/v1_esp32cam/esp32cam_uart.ino",
+        ]
+        for rel in files:
+            src = _read_text(os.path.join(REPO_ROOT, rel))
+            # Strip comments & string literals to verify exact brace/paren balance
+            cleaned = re.sub(r"//.*?$|/\*.*?\*/|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'", "", src, flags=re.S | re.M)
+            self.assertEqual(cleaned.count("{"), cleaned.count("}"), f"Unbalanced braces in {rel}")
+            self.assertEqual(cleaned.count("("), cleaned.count(")"), f"Unbalanced parens in {rel}")
+
+        mega = _read_text(os.path.join(REPO_ROOT, "firmware/mega_motion/mega_motion.ino"))
+        self.assertIn("moveMachineToMm", mega)
+        self.assertIn("moveBoardToMm", mega)
+        self.assertIn("Wire.setWireTimeout(3000, true);", mega)
+        esp = _read_text(os.path.join(REPO_ROOT, "firmware/v1_esp32cam/esp32cam_uart.ino"))
+        self.assertIn("yield();", esp)
+        teensy = _read_text(os.path.join(REPO_ROOT, "firmware/v1_teensy41/teensy_vision.cpp"))
+        self.assertIn("#define SPLIT_ROI_MAX             160", teensy)
+
+    def test_bringup_sketches_and_scripts_compile_and_execute(self):
+        import py_compile
+        import subprocess
+
+        # 1. Verify all 3 Mega bring-up Arduino sketches have balanced syntax & safety guards
+        bringup_inos = [
+            "firmware/bringup/mega_01_switches_estop/mega_01_switches_estop.ino",
+            "firmware/bringup/mega_02_servo_calibration/mega_02_servo_calibration.ino",
+            "firmware/bringup/mega_03_stepper_homing_test/mega_03_stepper_homing_test.ino",
+        ]
+        for rel in bringup_inos:
+            src = _read_text(os.path.join(REPO_ROOT, rel))
+            cleaned = re.sub(r"//.*?$|/\*.*?\*/|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'", "", src, flags=re.S | re.M)
+            self.assertEqual(cleaned.count("{"), cleaned.count("}"), f"Unbalanced braces in {rel}")
+            self.assertEqual(cleaned.count("("), cleaned.count(")"), f"Unbalanced parens in {rel}")
+            self.assertIn("PIN_ESTOP", src)
+
+        # 2. Syntax-compile every Python file in v2_pizero2w and bringup
+        py_files = [
+            "firmware/v2_pizero2w/pi_zero_vision.py",
+            "firmware/v2_pizero2w/lcd_hud.py",
+            "firmware/v2_pizero2w/fisheye_calibrate.py",
+            "firmware/bringup/pi_01_camera_detect_preview.py",
+            "firmware/bringup/pi_02_capture_and_mark_corners.py",
+            "firmware/bringup/pi_03_verify_mm_coordinates.py",
+            "firmware/bringup/pi_04_uart_link_test.py",
+            "firmware/bringup/pi_05_lcd_touch_test.py",
+        ]
+        for rel in py_files:
+            py_compile.compile(os.path.join(REPO_ROOT, rel), doraise=True)
+
+        # 3. Smoke-execute Stage 4, Stage 5, Stage 6, and Stage 7B bring-up tools on synthetic data!
+        with tempfile.TemporaryDirectory() as td:
+            # Generate 10 synthetic fisheye checkerboards + 1 synthetic 4-cap board image
+            cb_dir = os.path.join(td, "cbs")
+            os.makedirs(cb_dir)
+            _render_synthetic_checkerboards(cb_dir, lens_model="fisheye", count=10)
+            H_ref = fc.compute_homography_from_fiducials([[92, 34], [548, 34], [548, 446], [92, 446]])
+            board_img = _draw_synthetic_board(np.linalg.inv(H_ref), [
+                (70.0, 80.0, pzv.COLOR_RED),
+                (101.0, 80.0, pzv.COLOR_RED),
+                (210.0, 140.0, pzv.COLOR_YELLOW),
+                (120.0, 230.0, pzv.COLOR_GREEN),
+                (240.0, 240.0, pzv.COLOR_BLUE),
+            ])
+            board_png = os.path.join(td, "board.png")
+            cv2.imwrite(board_png, board_img)
+
+            # Stage 4: pi_01_camera_detect_preview.py --image --once
+            s4_dir = os.path.join(td, "s4")
+            r4 = subprocess.run(
+                [sys.executable, os.path.join(REPO_ROOT, "firmware/bringup/pi_01_camera_detect_preview.py"),
+                 "--image", board_png, "--once", "--out-dir", s4_dir],
+                capture_output=True, text=True, check=True,
+            )
+            self.assertIn("Detected 4 cap region", r4.stdout)  # 2 touching reds = 1 raw cluster + 3 others
+            self.assertTrue(os.path.isfile(os.path.join(s4_dir, "stage4_boxes.png")))
+
+            # Stage 5: pi_02_capture_and_mark_corners.py --mode corners -> produces validated .npz!
+            s5_dir = os.path.join(td, "s5")
+            out_npz = os.path.join(td, "cal_bench.npz")
+            subprocess.run(
+                [sys.executable, os.path.join(REPO_ROOT, "firmware/bringup/pi_02_capture_and_mark_corners.py"),
+                 "--mode", "corners", "--camera-type", "picamera2_imx219", "--lens-model", "fisheye",
+                 "--checkerboard-glob", os.path.join(cb_dir, "*.png"),
+                 "--image", board_png, "--corners", "92,34;548,34;548,446;92,446",
+                 "--camera-height-mm", "350", "--out-dir", s5_dir, "--out", out_npz],
+                capture_output=True, text=True, check=True,
+            )
+            self.assertTrue(os.path.isfile(out_npz))
+            self.assertTrue(os.path.isfile(os.path.join(s5_dir, "stage5_rectified_ruler_grid.png")))
+            self.assertTrue(os.path.isfile(os.path.join(s5_dir, "stage5_corners_verified.png")))
+
+            # Stage 6: pi_03_verify_mm_coordinates.py --calib --image --already-rectified --once
+            s6_dir = os.path.join(td, "s6")
+            r6 = subprocess.run(
+                [sys.executable, os.path.join(REPO_ROOT, "firmware/bringup/pi_03_verify_mm_coordinates.py"),
+                 "--calib", out_npz, "--camera-type", "picamera2_imx219",
+                 "--image", board_png, "--already-rectified", "--once", "--out-dir", s6_dir],
+                capture_output=True, text=True, check=True,
+            )
+            self.assertIn("Detected 5 calibrated cap(s)", r6.stdout)  # Touching red pair split into 2!
+            self.assertTrue(os.path.isfile(os.path.join(s6_dir, "stage6_mm_verified.png")))
+
+            # Stage 7B: pi_05_lcd_touch_test.py --snapshot
+            s7_png = os.path.join(td, "stage7_lcd.png")
+            subprocess.run(
+                [sys.executable, os.path.join(REPO_ROOT, "firmware/bringup/pi_05_lcd_touch_test.py"),
+                 "--snapshot", s7_png],
+                capture_output=True, text=True, check=True,
+            )
+            self.assertTrue(os.path.isfile(s7_png))
+
+        # 3b. Smoke-test Stage 7A (pi_04_uart_link_test.py) packet packing, ping & rearm
+        bringup_dir = os.path.join(REPO_ROOT, "firmware", "bringup")
+        if bringup_dir not in sys.path:
+            sys.path.insert(0, bringup_dir)
+        import pi_04_uart_link_test as u4
+        pkt = u4.pack_single_target(150.0, 150.0, 1)
+        self.assertEqual(len(pkt), 18)
+        self.assertEqual(pkt[0], pzv.PROTOCOL_SINGLE_MAGIC)
+        self.assertEqual(struct.unpack("<H", pkt[16:18])[0], pzv.crc16_ccitt(pkt[1:16]))
+        ping_uart = FakeUART(lambda raw, rx: rx.append(pzv.CMD_STATUS_READY) if raw == bytes([pzv.CMD_QUERY_STATUS]) else None)
+        self.assertEqual(u4.run_ping(ping_uart, timeout_s=1.0), 0)
+        rearm_uart = FakeUART(lambda raw, rx: rx.append(pzv.CMD_STATUS_READY) if raw == bytes([pzv.CMD_REARM_HOME]) else None)
+        self.assertEqual(u4.run_rearm(rearm_uart, timeout_s=1.0), 0)
+
+        # 4. Verify HARDWARE_BRINGUP_GUIDE.md exists and has zero banned claims
+        guide = _read_text(os.path.join(REPO_ROOT, "firmware/HARDWARE_BRINGUP_GUIDE.md"))
+        self.assertIn("Stage 0", guide)
+        self.assertIn("Stage 8", guide)
+        self.assertIn("pi_01_camera_detect_preview.py", guide)
+        self.assertIn("pi_02_capture_and_mark_corners.py", guide)
+        self.assertIn("pi_03_verify_mm_coordinates.py", guide)
+        self.assertIn("pi_04_uart_link_test.py", guide)
+        self.assertIn("pi_05_lcd_touch_test.py", guide)
 
 
 class TestHTMLCodeVaultSyncAndDocsAudit(unittest.TestCase):
@@ -966,8 +1578,9 @@ class TestHTMLCodeVaultSyncAndDocsAudit(unittest.TestCase):
             (r"completes depositing|in-flight pickup", "unverified-cap comms recovery claim"),
         ]
         doc_files = [
-            "README.md", "firmware/README.md", "website/index.html",
-            "website/v1.html", "website/v2.html", "website/pdf_dossier.html", "website/pdf_dossier_v2.html",
+            "README.md", "firmware/README.md", "firmware/HARDWARE_BRINGUP_GUIDE.md",
+            "website/index.html", "website/v1.html", "website/v2.html",
+            "website/pdf_dossier.html", "website/pdf_dossier_v2.html",
         ]
         for fn in doc_files:
             text = _read_text(os.path.join(REPO_ROOT, fn))

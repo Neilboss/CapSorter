@@ -116,8 +116,13 @@ void loop() {
         };
         TeensySerial.write(header, 6);
 
-        // 2. Stream raw RGB565 framebuffer bytes (153,600 bytes)
-        TeensySerial.write(fb->buf, frameLen);
+        // 2. Stream raw RGB565 framebuffer bytes in 4 KB chunks with yield() for WDT safety
+        const uint32_t CHUNK_BYTES = 4096;
+        for (uint32_t offset = 0; offset < frameLen; offset += CHUNK_BYTES) {
+          uint32_t n = (frameLen - offset < CHUNK_BYTES) ? (frameLen - offset) : CHUNK_BYTES;
+          TeensySerial.write(fb->buf + offset, n);
+          yield();
+        }
 
         // 3. Send 2-byte CRC16-CCITT trailer [CrcHigh, CrcLow]
         TeensySerial.write((uint8_t)((crc16 >> 8) & 0xFF));

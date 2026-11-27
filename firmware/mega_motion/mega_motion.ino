@@ -167,15 +167,25 @@ bool isValidSingleTarget(const CapTarget &cap) {
   if (!isfinite(cap.boardX_mm) || !isfinite(cap.boardY_mm)) return false;
   if (cap.boardX_mm < SAFE_PICK_MIN_X_MM || cap.boardX_mm > SAFE_PICK_MAX_X_MM) return false;
   if (cap.boardY_mm < SAFE_PICK_MIN_Y_MM || cap.boardY_mm > SAFE_PICK_MAX_Y_MM) return false;
+  float machX = cap.boardX_mm + TOOL_OFFSET_X_MM;
+  float machY = cap.boardY_mm + TOOL_OFFSET_Y_MM;
+  if (machX < 0.0f || machX > MAX_TRAVEL_X_MM) return false;
+  if (machY < 0.0f || machY > MAX_TRAVEL_Y_MM) return false;
   if (cap.targetBinId < 1 || cap.targetBinId > 4) return false;
   return true;
 }
 
-void moveGantryToMm(float boardX_mm, float boardY_mm) {
-  float targetX = constrain(boardX_mm + TOOL_OFFSET_X_MM, 0.0f, MAX_TRAVEL_X_MM);
-  float targetY = constrain(boardY_mm + TOOL_OFFSET_Y_MM, 0.0f, MAX_TRAVEL_Y_MM);
+// Raw homed machine-space move (used for (0,0) clear-FOV/home/failsafe parking and bin poses)
+void moveMachineToMm(float machX_mm, float machY_mm) {
+  float targetX = constrain(machX_mm, 0.0f, MAX_TRAVEL_X_MM);
+  float targetY = constrain(machY_mm, 0.0f, MAX_TRAVEL_Y_MM);
   stepperX.moveTo(lroundf(targetX * STEPS_PER_MM_X));
   stepperY.moveTo(lroundf(targetY * STEPS_PER_MM_Y));
+}
+
+// Board-space move (applies bench-measured TOOL_OFFSET_X/Y_MM for cap pickup coordinates)
+void moveBoardToMm(float boardX_mm, float boardY_mm) {
+  moveMachineToMm(boardX_mm + TOOL_OFFSET_X_MM, boardY_mm + TOOL_OFFSET_Y_MM);
 }
 
 bool isGantryAtTarget() {
@@ -441,7 +451,7 @@ void pollVisionHostPackets() {
       }
       closedLoopMode  = true;
       lastHeartbeatMs = millis();
-      moveGantryToMm(0.0f, 0.0f);
+      moveMachineToMm(0.0f, 0.0f);
       currentState    = STATE_PARKING_FOR_SCAN;
       continue;
     }
@@ -459,7 +469,7 @@ void pollVisionHostPackets() {
       }
       closedLoopMode  = false;
       lastHeartbeatMs = millis();
-      moveGantryToMm(0.0f, 0.0f);
+      moveMachineToMm(0.0f, 0.0f);
       currentState    = STATE_PARKING_HOME;
       continue;
     }
@@ -504,7 +514,7 @@ void pollVisionHostPackets() {
       lastHeartbeatMs   = millis();
       Serial1.write(CMD_BATCH_ACK);
 
-      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
       currentState = STATE_MOVING_TO_CAP;
       return;
     }
@@ -561,7 +571,7 @@ void pollVisionHostPackets() {
 
       // Start Step 01 on first target cap
       currentCap = batchQueue[0];
-      moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+      moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
       currentState = STATE_MOVING_TO_CAP;
     }
   }
@@ -637,7 +647,7 @@ void executeSafeCommsLossPolicy() {
   hasInFlightCap = false;
   batchTotal     = 0;
   currentIdx     = 0;
-  moveGantryToMm(0.0f, 0.0f);
+  moveMachineToMm(0.0f, 0.0f);
   currentState   = STATE_FAILSAFE_PARKING;
   Serial.println(F("[COMMS_LOSS] No active cap; parking at (0,0) then latching fail-safe halt."));
 }
@@ -686,8 +696,9 @@ void executeMotionStateMachine() {
           triggerHardFault(F("Z-axis failed retracted check before bin traverse"));
           return;
         }
-        uint8_t binId = constrain(currentCap.targetBinId, 1, 4);
-        moveGantryToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
+        uint8_t binId = currentCap.targetBinId;
+        if (binId < 1 || binId > 4) binId = 1;
+        moveMachineToMm(BIN_X_MM[binId], BIN_Y_MM[binId]);
         currentState = STATE_TRAVERSE_BIN;
       }
       break;
@@ -753,7 +764,7 @@ void executeMotionStateMachine() {
           closedLoopMode = false;
           batchTotal     = 0;
           currentIdx     = 0;
-          moveGantryToMm(0.0f, 0.0f);
+          moveMachineToMm(0.0f, 0.0f);
           currentState   = STATE_FAILSAFE_PARKING;
           return;
         }
@@ -769,11 +780,11 @@ void executeMotionStateMachine() {
         currentIdx++;
         if (currentIdx < batchTotal) {
           currentCap = batchQueue[currentIdx];
-          moveGantryToMm(currentCap.boardX_mm, currentCap.boardY_mm);
+          moveBoardToMm(currentCap.boardX_mm, currentCap.boardY_mm);
           currentState = STATE_MOVING_TO_CAP;
         } else {
           // Legacy batch finished! Return gantry to (0,0) clear of camera FOV
-          moveGantryToMm(0.0f, 0.0f);
+          moveMachineToMm(0.0f, 0.0f);
           currentState = STATE_PARKING_HOME;
         }
       }
@@ -847,9 +858,10 @@ void setup() {
   }
 
   Wire.begin();
-  Wire.setClock(400000);  // 400 kHz Fast-Mode I2C
   pca.begin();
-  pca.setPWMFreq(50);     // 50 Hz analog servo PWM
+  Wire.setClock(400000);            // Re-assert 400 kHz Fast-Mode I2C after pca.begin()
+  Wire.setWireTimeout(3000, true);  // 3 ms AVR I2C bus timeout + auto-reset prevents EMI lockup
+  pca.setPWMFreq(50);               // 50 Hz analog servo PWM
 
   homeAxes();
 }
