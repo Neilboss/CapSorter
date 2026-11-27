@@ -481,7 +481,7 @@
         <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
           <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Workspace Area</div>
           <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">300×300 mm</div>
-          <div style="color: #38bdf8; font-size: 6.5pt;">10×10 Grid (30mm Pitch)</div>
+          <div style="color: #38bdf8; font-size: 6.5pt;">Continuous Open Plywood</div>
         </div>
         <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
           <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Pick Cycle Time (Est.)</div>
@@ -528,7 +528,7 @@
       <div class="card card-cyan" style="margin: 0;">
         <h4>Edge Vision</h4>
         <p style="font-size: 7pt; margin-top: 1mm; color: #94a3b8;">
-          Detects Ø 28–32 mm plastic caps across 100 grid cells (30× 30 mm) with sub-millimeter precision.
+          Detects Ø 28–32 mm plastic caps anywhere on a continuous 300×300 mm open plywood plate with parallax compensation and chamfer splitting.
         </p>
       </div>
       <div class="card card-emerald" style="margin: 0;">
@@ -677,12 +677,12 @@
                 <td class="font-mono" style="color: #38bdf8;">300 × 300 mm</td>
               </tr>
               <tr>
-                <td>Workspace Discretization</td>
-                <td class="font-mono">10 × 10 cells (100 discrete positions)</td>
+                <td>Workspace Coordinate Mode</td>
+                <td class="font-mono">Continuous (X, Y) mm • Safe Pick 18–282 mm</td>
               </tr>
               <tr>
-                <td>Grid Cell Pitch</td>
-                <td class="font-mono">30 × 30 mm</td>
+                <td>Optional Visual Grid</td>
+                <td class="font-mono">10 × 10 reference markings (30 mm pitch)</td>
               </tr>
               <tr>
                 <td>Bottle Cap Diameter Range</td>
@@ -774,7 +774,7 @@
       <div class="card" style="margin: 0;">
         <h4 style="color: #ff9142; margin-bottom: 1.5mm;">Baseplate & Illumination Engineering</h4>
         <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-          The sorting board is manufactured from a <strong>300 × 300 mm matte white non-reflective acrylic plate</strong>. Dark grid lines (0.5 mm width) are silkscreened at 30 mm pitch. Four physical calibration crosshairs are precisely printed at the four corners of the active grid, allowing the top-down camera system to compute perspective homography matrices dynamically. Four external color collection bins are mounted along the positive X-rail, completely clear of active board space.
+          The sorting workspace is an <strong>open flat 300 × 300 mm matte plywood plate</strong> with no raised pockets or dividers so caps can be placed anywhere within the safe reach zone (18–282 mm). Four high-contrast corner fiducial markers at (0,0), (300,0), (300,300), and (0,300) mm allow the top-center overhead ESP32-CAM + Teensy 4.1 pipeline to compute exact 4-point planar homography, while closed-loop bin-side re-imaging recovers from neighbor cap nudges.
         </p>
       </div>
     </div>
@@ -1587,10 +1587,10 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
           <span class="badge badge-orange">Next</span>
         </div>
         <p style="font-size: 6.8pt; color: #94a3b8; margin-top: 1mm;">
-          Connect Teensy Serial1 to Mega Serial1 via logic shifter. Test framed packet batch transfers and simulate cable loss.
+          Connect Teensy Serial1 to Mega Serial1 via bidirectional level shifter. Verify READY handshake, 18B CRC16 targets (<code>0x5B</code>), and UART-cut park-and-halt recovery.
         </p>
         <div style="font-size: 6.5pt; color: #ff9142; font-weight: bold; margin-top: 1.5mm;">
-          Milestone: Mega completes in-flight cap safely when UART connection is severed.
+          Milestone: Mega finishes active cap into bin, parks at (0,0), and latches halt on link cut.
         </div>
       </div>
 
@@ -1630,12 +1630,11 @@ Time to stream full QVGA frame: ~1.67 seconds (Wired, reliable, no packet drop)<
 
     <!-- Implementation Priorities Callout -->
     <div class="card" style="margin: 0;">
-      <h4 style="color: #ff9142; margin-bottom: 1.5mm;">Recommended Engineering Execution Order</h4>
+      <h4 style="color: #ff9142; margin-bottom: 1.5mm;">Recommended Staged Bench Bring-Up Order (<code>firmware/HARDWARE_BRINGUP_GUIDE.md</code>)</h4>
       <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-        <strong>Step 1:</strong> Confirm that the Teensy 4.1 receives and decodes raw QVGA frames from the ESP32-CAM reliably.<br>
-        <strong>Step 2:</strong> Assemble the XY gantry and confirm TMC2208 stepper steps/mm calibration.<br>
-        <strong>Step 3:</strong> Validate that the MG90S Z-axis vertical linkage reliably lifts the gripper assembly without gear slipping.<br>
-        <strong>Step 4:</strong> Interconnect Teensy and Mega, validating the fail-safe communication recovery protocol under active motion.
+        <strong>Stages 0–3 (Mega Bench):</strong> Verify 12V/5V rails, E-Stop Pole 1 cut, level shifter, and TMC2208 V_ref; run <code>mega_01_switches_estop</code>, <code>mega_02_servo_calibration</code>, and <code>mega_03_stepper_homing_test</code> to record PWM ticks, <code>STEPS_PER_MM</code>, <code>TOOL_OFFSET_X/Y</code>, and bin poses.<br>
+        <strong>Stage 4 (V1 Vision):</strong> Flash <code>esp32cam_uart.ino</code> (PSRAM enabled), verify 921,600-baud RGB565 frames on Teensy 4.1, measure 4 board corners into <code>BOARD_FIDUCIALS_PX</code> + <code>CAMERA_HEIGHT_MM</code>, then set <code>V1_CALIBRATION_VERIFIED 1</code>.<br>
+        <strong>Stage 5 (Full Integration):</strong> Upload calibrated <code>mega_motion.ino</code> and verify closed-loop <code>0x5B</code>/<code>0xA5</code> sorting, UART-cut finish-and-park, and explicit <code>0xB4</code> re-arm.
       </p>
     </div>
 
@@ -1786,23 +1785,26 @@ Verify actual phase current &amp; heatsink temperature on the bench.</div>
           <h4 style="color: #ff9142;">packet_protocol.h — Wire Protocol</h4>
           <span class="badge badge-orange">Header</span>
         </div>
-        <div class="code-box" style="font-size: 6.2pt; line-height: 1.3;">
+        <div class="code-box" style="font-size: 6.0pt; line-height: 1.26;">
 <span class="code-comment">// packet_protocol.h - Shared V1 &amp; V2 Definitions</span>
 #ifndef PACKET_PROTOCOL_H
 #define PACKET_PROTOCOL_H
 #define MAX_BATCH_CAPS        100
-#define PROTOCOL_MAGIC_BYTE   0x5A
+#define SAFE_PICK_MIN_X_MM    18.0f  <span class="code-comment">// 18..282 mm safe bounds</span>
+#define PROTOCOL_MAGIC_BYTE   0x5A   <span class="code-comment">// Legacy multi-cap batch</span>
+#define PROTOCOL_SINGLE_MAGIC 0x5B   <span class="code-comment">// Closed-loop 18B target</span>
 #define CMD_CAPTURE_FRAME     0xAA
 #define CMD_BATCH_ACK         0xA1
 #define CMD_BATCH_NACK        0xA2
 #define CMD_BATCH_COMPLETE    0xA3
 #define CMD_CAP_PROGRESS      0xA4
-#define CMD_QUERY_STATUS      0xB0
-#define CMD_STATUS_READY      0xB1
-#define CMD_STATUS_BUSY       0xB2
-#define CMD_STATUS_FAULT      0xB3
-#define CMD_REARM_HOME        0xB4
-#define CMD_HEARTBEAT_PING    0xF0
+#define CMD_SCAN_WINDOW_OPEN  0xA5   <span class="code-comment">// Parallel bin-side scan</span>
+#define CMD_AWAIT_NEXT        0xA6   <span class="code-comment">// Ready for next target</span>
+#define CMD_QUERY_STATUS      0xB0   <span class="code-comment">// READY/BUSY/FAULT: B1-B3</span>
+#define CMD_REARM_HOME        0xB4   <span class="code-comment">// Explicit re-arm &amp; home</span>
+#define CMD_PARK_FOR_SCAN     0xB5   <span class="code-comment">// Clear-FOV park at (0,0)</span>
+#define CMD_FINISH_SESSION    0xB6   <span class="code-comment">// Park (0,0) -&gt; IDLE</span>
+#define CMD_HEARTBEAT_PING    0xF0   <span class="code-comment">// 250ms keep-alive</span>
 #define CMD_RECOVERY_HALT     0xEE
 #define CMD_HARD_FAULT        0xEF
 
@@ -1812,10 +1814,6 @@ Verify actual phase current &amp; heatsink temperature on the bench.</div>
   <span class="code-type">uint16_t</span> pixelX, pixelY;
   <span class="code-type">float</span>    boardX_mm, boardY_mm;
   <span class="code-type">uint8_t</span>  targetBinId;
-};
-<span class="code-keyword">struct</span> BatchHeader { <span class="code-comment">// 6B (&lt;BHBH)</span>
-  <span class="code-type">uint8_t</span>  magic;   <span class="code-type">uint16_t</span> batchId;
-  <span class="code-type">uint8_t</span>  totalCaps; <span class="code-type">uint16_t</span> crc16;
 };
 #pragma pack(pop)
 #endif</div>
@@ -1895,21 +1893,21 @@ HardwareSerial TeensySerial(2);
           <h4 style="color: #38bdf8;">teensy_vision.cpp — Vision Planner</h4>
           <span class="badge badge-cyan">Teensy 4.1</span>
         </div>
-        <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
-<span class="code-comment">// teensy_vision.cpp - Cortex-M7 @ 600 MHz (3.3V ONLY)</span>
+        <div class="code-box" style="font-size: 5.7pt; line-height: 1.24;">
+<span class="code-comment">// teensy_vision.cpp - Cortex-M7 @ 600 MHz (3.3V ONLY, 358.9 KiB DMAMEM)</span>
 #include &lt;Arduino.h&gt;
 #include "packet_protocol.h"
-#define V1_CALIBRATION_VERIFIED 0 <span class="code-comment">// Fail-closed guard</span>
+#define V1_CALIBRATION_VERIFIED 0  <span class="code-comment">// Fail-closed guard</span>
+#define SPLIT_ROI_MAX         160  <span class="code-comment">// 25.6 KiB chamfer ROI</span>
 
-<span class="code-comment">// 4-pt fiducial DLT homography solver + area-sorted NMS</span>
 <span class="code-type">void</span> setup() {
   Serial.begin(115200);
-  Serial1.begin(115200); <span class="code-comment">// Shifter &lt;-&gt; Mega</span>
+  Serial1.begin(115200); <span class="code-comment">// Bidirectional Shifter &lt;-&gt; Mega</span>
   Serial2.addMemoryForRead(serial2RxBuf, 16384);
-  Serial2.begin(921600); <span class="code-comment">// ESP32-CAM Link</span>
+  Serial2.begin(921600); <span class="code-comment">// ESP32-CAM 4 KB chunked + yield()</span>
   homographyOk = computeHomography4Pt(
       BOARD_FIDUCIALS_PX, BOARD_FIDUCIALS_MM, H);
-  waitForMegaReady(0); <span class="code-comment">// Poll CMD_QUERY_STATUS</span>
+  waitForMegaReady(0); <span class="code-comment">// Flushes stale RX before CMD_QUERY_STATUS</span>
 }
 
 <span class="code-type">void</span> loop() {
@@ -1917,15 +1915,8 @@ HardwareSerial TeensySerial(2);
   delay(1000); <span class="code-keyword">return</span>;
 #endif
   <span class="code-keyword">if</span> (!homographyOk || megaFaulted || !waitForMegaReady(2000)) <span class="code-keyword">return</span>;
-  Serial2.write(CMD_CAPTURE_FRAME);
-  <span class="code-keyword">if</span> (receiveFrame(imageBuffer, FRAME_BYTES)) {
-    segmentCapsHSV(imageBuffer, detectedCaps, &amp;capCount);
-    <span class="code-keyword">if</span> (capCount &gt; 0) {
-      optimizeSortingPath(detectedCaps, capCount);
-      <span class="code-keyword">if</span> (sendPlanBatchToMega(detectedCaps, capCount))
-        superviseMegaExecutionWithHeartbeat(capCount);
-    }
-  }
+  <span class="code-comment">// Closed-loop 0x5B single-target + 0xA5 bin scan + 250 ms heartbeat</span>
+  runClosedLoopSortSession();
 }</div>
       </div>
 
@@ -1935,33 +1926,30 @@ HardwareSerial TeensySerial(2);
           <h4 style="color: #34d399;">mega_motion.ino — Motion Sequencer</h4>
           <span class="badge badge-emerald">Arduino Mega</span>
         </div>
-        <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
+        <div class="code-box" style="font-size: 5.7pt; line-height: 1.24;">
 <span class="code-comment">// mega_motion.ino - ATmega2560 @ 16 MHz (70 mm/s, 150 mm/s^2)</span>
 #define MAX_SPEED_STEPS    2800.0f <span class="code-comment">// 70 mm/s nominal</span>
 #define ACCEL_STEPS        6000.0f <span class="code-comment">// 150 mm/s^2</span>
 #define HOMING_TIMEOUT_MS 30000UL  <span class="code-comment">// 370mm@20mm/s + margin</span>
-#define PIN_Z_HOME 24  <span class="code-comment">// NC Z limit (polled)</span>
-#define PIN_ESTOP  25  <span class="code-comment">// NC E-Stop aux contact</span>
+<span class="code-comment">// Machine space (0,0 parks &amp; bins) vs Board space (+ TOOL_OFFSET)</span>
+<span class="code-type">void</span> moveMachineToMm(<span class="code-type">float</span> mx, <span class="code-type">float</span> my);
+<span class="code-type">void</span> moveBoardToMm(<span class="code-type">float</span> bx, <span class="code-type">float</span> by);
 
 <span class="code-type">void</span> setup() {
   pinMode(PIN_SERVO_OE, OUTPUT);   digitalWrite(PIN_SERVO_OE, HIGH);
   pinMode(PIN_STEPPER_EN, OUTPUT); digitalWrite(PIN_STEPPER_EN, HIGH);
-  pinMode(PIN_X_HOME, INPUT_PULLUP); pinMode(PIN_Y_HOME, INPUT_PULLUP);
-  pinMode(PIN_Z_HOME, INPUT_PULLUP); pinMode(PIN_ESTOP,  INPUT_PULLUP);
   Serial.begin(115200); Serial1.begin(115200);
-  Wire.begin(); Wire.setClock(400000);
-  pca.begin(); pca.setPWMFreq(50);
+  Wire.begin(); pca.begin();
+  Wire.setClock(400000); Wire.setWireTimeout(3000, <span class="code-keyword">true</span>);
+  pca.setPWMFreq(50);
   homeAxes(); <span class="code-comment">// Emits CMD_STATUS_READY on success</span>
 }
-
 <span class="code-type">void</span> loop() {
-  checkRuntimeSafetyInputs(); <span class="code-comment">// E-Stop + X/Y/Z NC limits</span>
-  <span class="code-keyword">if</span> (currentState != STATE_HARD_FAULT &amp;&amp;
-      currentState != STATE_FAILSAFE_HALT) {
-    stepperX.run(); stepperY.run();
-  }
-  pollVisionHostPackets();   <span class="code-comment">// READY/BUSY/REARM/CRC16</span>
-  executeMotionStateMachine(); <span class="code-comment">// Emits CMD_CAP_PROGRESS</span>
+  checkRuntimeSafetyInputs();  <span class="code-comment">// E-Stop + X/Y/Z NC limits</span>
+  <span class="code-keyword">if</span> (currentState != STATE_HARD_FAULT &amp;&amp; currentState != STATE_FAILSAFE_HALT)
+    { stepperX.run(); stepperY.run(); }
+  pollVisionHostPackets();     <span class="code-comment">// 0x5B, 0xB4/B5/B6, READY, 0xF0</span>
+  executeMotionStateMachine(); <span class="code-comment">// 0xA5 bin scan + 0xA6 await next</span>
   <span class="code-keyword">if</span> (checkCommunicationLoss()) executeSafeCommsLossPolicy();
 }</div>
       </div>
@@ -1984,8 +1972,8 @@ HardwareSerial TeensySerial(2);
         <div>
           <strong>GitHub Code Repository:</strong> github.com/Neilboss/CapSorter<br>
           <strong>Safety Architecture:</strong> Hardwired Dual-Pole Actuator E-Stop + Polled X/Y/Z NC Limits<br>
-          <strong>Required Before Sign-Off:</strong> SKU verification, power/thermal tests, E-stop/limit tests, camera fiducial calibration &amp; endurance run<br>
-          <strong>Revision Status:</strong> Pre-Build Review Rev 2.5 (Not Yet Production-Validated)
+          <strong>Required Before Sign-Off:</strong> Complete Stages 0–8 in <code>firmware/HARDWARE_BRINGUP_GUIDE.md</code> (28 automated SIL/bring-up tests pass)<br>
+          <strong>Revision Status:</strong> Pre-Build Review Rev 2.6 (Not Yet Bench-Validated)
         </div>
       </div>
     </div>

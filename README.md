@@ -9,7 +9,8 @@
 *Main development & documentation by Neil Shettigar*
 
 [![Live Website (Vercel)](https://img.shields.io/badge/Live_Website-capsorter.vercel.app-ff6b00?style=for-the-badge&logo=vercel&logoColor=white)](https://capsorter.vercel.app)
-[![GitHub Pages Mirror](https://img.shields.io/badge/GitHub_Pages-Mirror-00d2ff?style=for-the-badge&logo=github&logoColor=white)](https://neilboss.github.io/CapSorter/)
+[![Research Paper PDF](https://img.shields.io/badge/Research_Paper-CVPR_PDF-6366f1?style=for-the-badge&logo=latex&logoColor=white)](research_paper/CapSorter_Research_Paper.pdf)
+[![Hardware Bring-Up Guide](https://img.shields.io/badge/Bring--Up_Guide-Stages_0--8-00d2ff?style=for-the-badge&logo=checklist&logoColor=white)](firmware/HARDWARE_BRINGUP_GUIDE.md)
 [![Technical Report PDF](https://img.shields.io/badge/Technical_Report-12--Page_PDF-10b981?style=for-the-badge&logo=adobeacrobatreader&logoColor=white)](website/Autonomous_Bottle_Cap_Sorting_Machine_Technical_Report.pdf)
 
 </div>
@@ -34,7 +35,7 @@ The system operates **100% offline** without external laptops, Wi-Fi, or cloud c
 - **Version 1 ([`website/v1.html`](website/v1.html))**: **Teensy 4.1 + ESP32-CAM (OV2640) + Arduino Mega 2560** — Bare-metal C++ dual-MCU + dedicated UART camera streamer architecture.
 - **Version 2 ([`website/v2.html`](website/v2.html))**: **Raspberry Pi Zero 2 W (16 GB microSD) + 3.5" SPI Touch LCD (480×320 Native HUD) + 8MP Sony IMX219 160° CSI Camera + Arduino Mega 2560** — Consolidated offline Linux + Python OpenCV vision SBC with local framebuffer HMI, bridged over Micro-USB OTG → CH9102/CP2102 USB-to-TTL → 3.3V/5V level shifter to deterministic real-time Mega motion control.
 
-> **Engineering Status:** Pre-validation engineering firmware and technical documentation. Static review fixes and 20 automated validation test cases are verified in [`firmware/tests/test_validation.py`](firmware/tests/test_validation.py); physical bench validation on target hardware is required before production sign-off (see [`firmware/README.md`](firmware/README.md)).
+> **Engineering Status:** Pre-validation engineering firmware and technical documentation. Static review fixes, full Mega+Pi+LCD end-to-end SIL simulations, and **28 automated validation test cases** are verified in [`firmware/tests/test_validation.py`](firmware/tests/test_validation.py). Follow the staged bench manual in [`firmware/HARDWARE_BRINGUP_GUIDE.md`](firmware/HARDWARE_BRINGUP_GUIDE.md) (Stages 0–8) before enabling autonomous motion.
 
 ---
 
@@ -169,6 +170,11 @@ Because caps rest freely on an open flat 300 × 300 mm plywood plate (not trappe
 CapSorter/
 ├── README.md                                  # Master project documentation (V1 & V2)
 ├── vercel.json                                # Vercel deployment config (outputDirectory: "website")
+├── research_paper/                            # Conference-format technical paper & figures
+│   ├── main.tex                               # Full CVPR/IEEE two-column LaTeX manuscript
+│   ├── CapSorter_Research_Paper.pdf           # Compiled publication-grade research paper PDF
+│   ├── references.bib                         # BibTeX bibliography
+│   └── figures/                               # System diagrams, calibration, cluster & SIL plots
 ├── website/                                   # Standalone interactive web portal & technical dossiers
 │   ├── index.html                             # V1 vs. V2 architecture selector landing portal
 │   ├── v1.html                                # Version 1 engineering specification, 2D simulator & C++ vault
@@ -181,17 +187,19 @@ CapSorter/
 │   └── assets/                                # High-res 4K system posters, CAD renders & brand logos
 └── firmware/                                  # Embedded C/C++ & Python OpenCV firmware vault
     ├── README.md                              # Pinned toolchains, calibration CLI guide & bench checklist
+    ├── HARDWARE_BRINGUP_GUIDE.md              # Step-by-step physical bench testing manual (Stages 0-8)
+    ├── bringup/                               # 8 standalone staged Mega sketches & Pi vision/UART/LCD test scripts
     ├── common/packet_protocol.h               # Shared binary packet structs, opcodes & CRC16-CCITT
     ├── mega_motion/mega_motion.ino            # Arduino Mega 2560 motion FSM, homing & safety watchdog
     ├── v1_esp32cam/esp32cam_uart.ino          # ESP32-CAM OV2640 QVGA RGB565 frame streamer
     ├── v1_teensy41/teensy_vision.cpp          # Teensy 4.1 HSV vision, 4-pt DLT homography & closed-loop planner
     ├── v2_pizero2w/
     │   ├── pi_zero_vision.py                  # Pi Zero 2 W OpenCV pipeline, USB-TTL link & closed-loop planner
-    │   ├── lcd_hud.py                         # Native 480x320 SPI LCD RGB565 HUD & XPT2046 touch controller
-    │   ├── 99-capsorter-mega.rules            # Persistent udev rule (/dev/capsorter_mega) for CH9102/CP2102
+    │   ├── lcd_hud.py                         # Native 480x320 SPI LCD 16/32-bpp HUD & XPT2046 touch controller
+    │   ├── 99-capsorter-mega.rules            # Persistent udev rule (/dev/capsorter_mega) for CH9102/CH343/CP2102
     │   ├── fisheye_calibrate.py               # Dual-model (fisheye / pinhole) checkerboard & fiducial calibration CLI
     │   └── calibration.npz                    # Fail-closed uncalibrated placeholder archive
-    └── tests/test_validation.py               # Automated tests for protocol, vision, LCD HUD, closed-loop & doc sync
+    └── tests/test_validation.py               # 28 automated tests for protocol, SIL sim, bring-up, LCD HUD & doc sync
 ```
 
 ---
@@ -231,7 +239,7 @@ python -m http.server 8000 --directory website
 ```
 
 ### 2. Run the Automated Firmware & Documentation Validation Suite
-Execute all 20 automated unit tests covering CRC16-CCITT protocol parity, OpenCV fisheye/pinhole checkerboard calibration, fail-closed startup guards, touching-cap splitting, radial parallax compensation, X-jaw clearance peeling, closed-loop bin-side re-imaging, and HTML code-vault synchronization:
+Execute all **28 automated unit & end-to-end SIL tests** covering CRC16-CCITT protocol parity, OpenCV fisheye/pinhole checkerboard calibration, fail-closed startup guards, touching-cap splitting, radial parallax compensation, X-jaw clearance peeling, closed-loop bin-side re-imaging, non-zero `TOOL_OFFSET` separation, mid-cap UART-cut finish-and-park-and-rearm, mid-session LCD pause, staged bring-up script smoke tests, and verbatim HTML code-vault synchronization:
 
 ```bash
 python -m unittest discover -s firmware/tests -v

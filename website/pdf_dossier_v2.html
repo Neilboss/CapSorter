@@ -482,7 +482,7 @@
         <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
           <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Workspace Area</div>
           <div style="font-weight: bold; color: #ffffff; font-size: 9pt;">300×300 mm</div>
-          <div style="color: #38bdf8; font-size: 6.5pt;">10×10 Grid (30mm Pitch)</div>
+          <div style="color: #38bdf8; font-size: 6.5pt;">Continuous Open Plywood</div>
         </div>
         <div style="background: rgba(255,255,255,0.02); padding: 2mm; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
           <div style="color: #94a3b8; font-size: 6.5pt; text-transform: uppercase;">Pick Cycle Time (Est.)</div>
@@ -529,7 +529,7 @@
       <div class="card card-cyan" style="margin: 0;">
         <h4>Edge Vision</h4>
         <p style="font-size: 7pt; margin-top: 1mm; color: #94a3b8;">
-          Detects Ø 28–32 mm plastic caps across 100 grid cells (30× 30 mm) with sub-millimeter precision.
+          Detects Ø 28–32 mm plastic caps anywhere on a continuous 300×300 mm open plywood plate with parallax compensation and cluster splitting.
         </p>
       </div>
       <div class="card card-emerald" style="margin: 0;">
@@ -684,12 +684,12 @@
                 <td class="font-mono" style="color: #38bdf8;">300 × 300 mm</td>
               </tr>
               <tr>
-                <td>Workspace Discretization</td>
-                <td class="font-mono">10 × 10 cells (100 discrete positions)</td>
+                <td>Workspace Coordinate Mode</td>
+                <td class="font-mono">Continuous (X, Y) mm • Safe Pick 18–282 mm</td>
               </tr>
               <tr>
-                <td>Grid Cell Pitch</td>
-                <td class="font-mono">30 × 30 mm</td>
+                <td>Optional Visual Grid</td>
+                <td class="font-mono">10 × 10 reference markings (30 mm pitch)</td>
               </tr>
               <tr>
                 <td>Bottle Cap Diameter Range</td>
@@ -781,7 +781,7 @@
       <div class="card" style="margin: 0;">
         <h4 style="color: #ff9142; margin-bottom: 1.5mm;">Baseplate & Illumination Engineering</h4>
         <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-          The sorting board is manufactured from a <strong>300 × 300 mm matte white non-reflective acrylic plate</strong>. Dark grid lines (0.5 mm width) are silkscreened at 30 mm pitch. Four physical calibration crosshairs are precisely printed at the four corners of the active grid, allowing the top-down camera system to compute perspective homography matrices dynamically. Four external color collection bins are mounted along the positive X-rail, completely clear of active board space.
+          The sorting workspace is an <strong>open flat 300 × 300 mm matte plywood plate</strong> with no raised pockets or dividers so caps can be scattered freely anywhere within the safe reach zone (18–282 mm). Four high-contrast corner fiducial markers at (0,0), (300,0), (300,300), and (0,300) mm allow the top-center overhead camera to solve exact 3×3 planar homography, while closed-loop bin-side re-imaging recovers from any neighbor cap nudges.
         </p>
       </div>
     </div>
@@ -1673,15 +1673,14 @@ x_mm, y_mm = float(board_pt[0]), float(board_pt[1])</div>
     </div>
 
     <!-- Implementation Priorities Callout -->
-    <div class="card" style="margin: 0;">
-      <h4 style="color: #ff9142; margin-bottom: 1.5mm;">Recommended Engineering Execution Order</h4>
-      <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
-        <strong>Step 1:</strong> Calibrate the exact installed camera (8MP IMX219 CSI fisheye or USB pinhole webcam) via <code>fisheye_calibrate.py</code> and verify grid error across board edges.<br>
-        <strong>Step 2:</strong> Assemble the XY gantry, confirm TMC2208 carrier R_sense &amp; V_ref, and measure actual steps/mm and homing from max travel.<br>
-        <strong>Step 3:</strong> Validate MG90S Z-axis counterbalance, servo SKU voltage, and safe Z settle when hardwired E-stop cuts actuator power.<br>
-        <strong>Step 4:</strong> Enable <code>dtoverlay=piscreen,drm</code> on OS Lite, install <code>99-capsorter-mega.rules</code>, wire OTG → CH9102/CP2102 → bidirectional level shifter → Mega Serial1 (with converter <code>+5V</code> disconnected), and validate live HUD, READY handshake, USB disconnect recovery, and touch Re-Arm.
-      </p>
-    </div>
+      <div class="card" style="margin: 0;">
+        <h4 style="color: #ff9142; margin-bottom: 1.5mm;">Recommended Staged Bench Bring-Up Order (<code>firmware/HARDWARE_BRINGUP_GUIDE.md</code>)</h4>
+        <p style="font-size: 7.5pt; color: #cbd5e1; line-height: 1.4;">
+          <strong>Stages 0–3 (Mega Bench):</strong> Verify 12V/5V rails, E-Stop Pole 1 cut, level shifter, and TMC2208 V_ref; upload <code>mega_01_switches_estop</code>, <code>mega_02_servo_calibration</code>, and <code>mega_03_stepper_homing_test</code> to record PWM ticks, <code>STEPS_PER_MM</code>, <code>TOOL_OFFSET_X/Y</code>, and bin poses.<br>
+          <strong>Stages 4–6 (Pi Vision):</strong> Run <code>pi_01_camera_detect_preview.py</code> (live boxes), <code>pi_02_capture_and_mark_corners.py</code> (checkerboard + 4 corners + <code>--camera-height-mm</code>), and <code>pi_03_verify_mm_coordinates.py</code> (&lt; ±2.5 mm ruler check).<br>
+          <strong>Stages 7–8 (Full Link &amp; Launch):</strong> Flash final <code>mega_motion.ino</code>, validate <code>pi_04_uart_link_test.py</code> (ping, single-pick, UART-cut finish-and-park, re-arm) and <code>pi_05_lcd_touch_test.py</code>, then launch <code>pi_zero_vision.py --enable-lcd</code>.
+        </p>
+      </div>
 
     <div class="doc-footer">
       <span>CapSorter Engineering Dossier</span>
@@ -1835,22 +1834,25 @@ Verify actual phase current &amp; heatsink temperature on the bench.</div>
           <h4 style="color: #ff9142;">packet_protocol.h — Wire Protocol</h4>
           <span class="badge badge-orange">Header</span>
         </div>
-        <div class="code-box" style="font-size: 6.2pt; line-height: 1.3;">
+        <div class="code-box" style="font-size: 6.0pt; line-height: 1.26;">
 <span class="code-comment">// packet_protocol.h - Shared V1 &amp; V2 Definitions</span>
 #ifndef PACKET_PROTOCOL_H
 #define PACKET_PROTOCOL_H
 #define MAX_BATCH_CAPS        100
-#define PROTOCOL_MAGIC_BYTE   0x5A
+#define SAFE_PICK_MIN_X_MM    18.0f  <span class="code-comment">// 18..282 mm safe bounds</span>
+#define PROTOCOL_MAGIC_BYTE   0x5A   <span class="code-comment">// Legacy multi-cap batch</span>
+#define PROTOCOL_SINGLE_MAGIC 0x5B   <span class="code-comment">// Closed-loop 18B target</span>
 #define CMD_BATCH_ACK         0xA1
 #define CMD_BATCH_NACK        0xA2
 #define CMD_BATCH_COMPLETE    0xA3
 #define CMD_CAP_PROGRESS      0xA4
-#define CMD_QUERY_STATUS      0xB0
-#define CMD_STATUS_READY      0xB1
-#define CMD_STATUS_BUSY       0xB2
-#define CMD_STATUS_FAULT      0xB3
-#define CMD_REARM_HOME        0xB4
-#define CMD_HEARTBEAT_PING    0xF0
+#define CMD_SCAN_WINDOW_OPEN  0xA5   <span class="code-comment">// Parallel bin-side scan</span>
+#define CMD_AWAIT_NEXT        0xA6   <span class="code-comment">// Ready for next target</span>
+#define CMD_QUERY_STATUS      0xB0   <span class="code-comment">// READY/BUSY/FAULT: B1-B3</span>
+#define CMD_REARM_HOME        0xB4   <span class="code-comment">// Explicit re-arm &amp; home</span>
+#define CMD_PARK_FOR_SCAN     0xB5   <span class="code-comment">// Clear-FOV park at (0,0)</span>
+#define CMD_FINISH_SESSION    0xB6   <span class="code-comment">// Park (0,0) -&gt; IDLE</span>
+#define CMD_HEARTBEAT_PING    0xF0   <span class="code-comment">// 250ms keep-alive</span>
 #define CMD_RECOVERY_HALT     0xEE
 #define CMD_HARD_FAULT        0xEF
 
@@ -1860,10 +1862,6 @@ Verify actual phase current &amp; heatsink temperature on the bench.</div>
   <span class="code-type">uint16_t</span> pixelX, pixelY;
   <span class="code-type">float</span>    boardX_mm, boardY_mm;
   <span class="code-type">uint8_t</span>  targetBinId;
-};
-<span class="code-keyword">struct</span> BatchHeader { <span class="code-comment">// 6B (&lt;BHBH)</span>
-  <span class="code-type">uint8_t</span>  magic;   <span class="code-type">uint16_t</span> batchId;
-  <span class="code-type">uint8_t</span>  totalCaps; <span class="code-type">uint16_t</span> crc16;
 };
 #pragma pack(pop)
 #endif</div>
@@ -1928,24 +1926,23 @@ save_validated_calibration(
           <h4 style="color: #38bdf8;">pi_zero_vision.py — OpenCV Vision Planner</h4>
           <span class="badge badge-cyan">Pi Zero 2 W</span>
         </div>
-        <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
-<span class="code-comment"># pi_zero_vision.py - Fail-closed calibration &amp; dynamic heartbeat</span>
+        <div class="code-box" style="font-size: 5.7pt; line-height: 1.24;">
+<span class="code-comment"># pi_zero_vision.py - Closed-loop vision, LCD HUD &amp; thread-safe UART</span>
 cal = load_and_validate_calibration(
-    calib_file, expected_camera_type=camera_type,
-    expected_size=(640, 480)
-) <span class="code-comment"># Raises CalibrationError on missing/mismatched/placeholder .npz</span>
+    calib_file, expected_camera_type=camera_type, expected_size=(640, 480)
+) <span class="code-comment"># Fail-closed + parallax (camera_height_mm, cap_height_mm)</span>
 
-<span class="code-comment"># Picamera2 full-sensor 1640x1232 binning + RGB888 ([B,G,R] in memory)</span>
-cfg = picam2.create_still_configuration(
-    main={"size": (640, 480), "format": "RGB888"},
-    raw={"size": (1640, 1232)},
-)
-<span class="code-comment"># Wait for Mega CMD_STATUS_READY (never fixed 1.5s sleep)</span>
+<span class="code-comment"># Picamera2 full-sensor 1640x1232 binning + metadata-locked AE/AWB</span>
+meta = picam2.capture_metadata()
+picam2.set_controls({
+    "AeEnable": False, "AwbEnable": False,
+    "ExposureTime": meta["ExposureTime"], "ColourGains": meta["ColourGains"],
+})
+<span class="code-comment"># Wait for Mega CMD_STATUS_READY (flushes stale RX fault bytes)</span>
 <span class="code-keyword">while not</span> controller.wait_for_mega_ready(timeout_s=5.0):
     time.sleep(1.0)
-
-<span class="code-comment"># Paced 32B/2ms CRC16 batch + 250ms heartbeat until COMPLETE/FAULT</span>
-status = controller.transmit_batch_and_supervise(caps)</div>
+<span class="code-comment"># Closed-loop 0x5B single-cap sort + 0xA5 bin-side scan + LCD PAUSE</span>
+res = controller.run_closed_loop_sort_session()</div>
       </div>
 
       <!-- mega_motion.ino -->
@@ -1954,33 +1951,30 @@ status = controller.transmit_batch_and_supervise(caps)</div>
           <h4 style="color: #34d399;">mega_motion.ino — Motion Sequencer</h4>
           <span class="badge badge-emerald">Arduino Mega</span>
         </div>
-        <div class="code-box" style="font-size: 5.8pt; line-height: 1.25;">
+        <div class="code-box" style="font-size: 5.7pt; line-height: 1.24;">
 <span class="code-comment">// mega_motion.ino - ATmega2560 @ 16 MHz (70 mm/s, 150 mm/s^2)</span>
 #define MAX_SPEED_STEPS    2800.0f <span class="code-comment">// 70 mm/s nominal</span>
 #define ACCEL_STEPS        6000.0f <span class="code-comment">// 150 mm/s^2</span>
 #define HOMING_TIMEOUT_MS 30000UL  <span class="code-comment">// 370mm@20mm/s + margin</span>
-#define PIN_Z_HOME 24  <span class="code-comment">// NC Z limit (polled)</span>
-#define PIN_ESTOP  25  <span class="code-comment">// NC E-Stop aux contact</span>
+<span class="code-comment">// Machine space (0,0 parks &amp; bins) vs Board space (+ TOOL_OFFSET)</span>
+<span class="code-type">void</span> moveMachineToMm(<span class="code-type">float</span> mx, <span class="code-type">float</span> my);
+<span class="code-type">void</span> moveBoardToMm(<span class="code-type">float</span> bx, <span class="code-type">float</span> by);
 
 <span class="code-type">void</span> setup() {
   pinMode(PIN_SERVO_OE, OUTPUT);   digitalWrite(PIN_SERVO_OE, HIGH);
   pinMode(PIN_STEPPER_EN, OUTPUT); digitalWrite(PIN_STEPPER_EN, HIGH);
-  pinMode(PIN_X_HOME, INPUT_PULLUP); pinMode(PIN_Y_HOME, INPUT_PULLUP);
-  pinMode(PIN_Z_HOME, INPUT_PULLUP); pinMode(PIN_ESTOP,  INPUT_PULLUP);
   Serial.begin(115200); Serial1.begin(115200);
-  Wire.begin(); Wire.setClock(400000);
-  pca.begin(); pca.setPWMFreq(50);
+  Wire.begin(); pca.begin();
+  Wire.setClock(400000); Wire.setWireTimeout(3000, <span class="code-keyword">true</span>);
+  pca.setPWMFreq(50);
   homeAxes(); <span class="code-comment">// Emits CMD_STATUS_READY on success</span>
 }
-
 <span class="code-type">void</span> loop() {
-  checkRuntimeSafetyInputs(); <span class="code-comment">// E-Stop + X/Y/Z NC limits</span>
-  <span class="code-keyword">if</span> (currentState != STATE_HARD_FAULT &amp;&amp;
-      currentState != STATE_FAILSAFE_HALT) {
-    stepperX.run(); stepperY.run();
-  }
-  pollVisionHostPackets();   <span class="code-comment">// READY/BUSY/REARM/CRC16</span>
-  executeMotionStateMachine(); <span class="code-comment">// Emits CMD_CAP_PROGRESS</span>
+  checkRuntimeSafetyInputs();  <span class="code-comment">// E-Stop + X/Y/Z NC limits</span>
+  <span class="code-keyword">if</span> (currentState != STATE_HARD_FAULT &amp;&amp; currentState != STATE_FAILSAFE_HALT)
+    { stepperX.run(); stepperY.run(); }
+  pollVisionHostPackets();     <span class="code-comment">// 0x5B, 0xB4/B5/B6, READY, 0xF0</span>
+  executeMotionStateMachine(); <span class="code-comment">// 0xA5 bin scan + 0xA6 await next</span>
   <span class="code-keyword">if</span> (checkCommunicationLoss()) executeSafeCommsLossPolicy();
 }</div>
       </div>
@@ -2003,8 +1997,8 @@ status = controller.transmit_batch_and_supervise(caps)</div>
         <div>
           <strong>GitHub Code Repository:</strong> github.com/Neilboss/CapSorter<br>
           <strong>Safety Architecture:</strong> Hardwired Dual-Pole Actuator E-Stop + Polled X/Y/Z NC Limits<br>
-          <strong>Required Before Sign-Off:</strong> SKU verification, power/thermal tests, E-stop/limit tests, camera checkerboard/fiducial calibration &amp; endurance run<br>
-          <strong>Revision Status:</strong> Pre-Build Review Rev 2.5 (Not Yet Production-Validated)
+          <strong>Required Before Sign-Off:</strong> Complete Stages 0–8 in <code>firmware/HARDWARE_BRINGUP_GUIDE.md</code> (28 automated SIL/bring-up tests pass)<br>
+          <strong>Revision Status:</strong> Pre-Build Review Rev 2.6 (Not Yet Bench-Validated)
         </div>
       </div>
     </div>
